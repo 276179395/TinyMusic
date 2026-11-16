@@ -17,6 +17,7 @@ export interface AudioState {
 
 interface TmAudioModule {
   load(url: string, title: string, artist: string, cover: string, duration: number): void;
+  loadLocal(path: string, title: string, artist: string): void;
   play(): void;
   pause(): void;
   seek(seconds: number): void;
@@ -63,6 +64,9 @@ export function audioAvailable(): boolean {
 export const audio = {
   load(url: string, title: string, artist: string, cover: string, duration: number): void {
     module()?.load(url, title, artist, cover, duration);
+  },
+  loadLocal(path: string, title: string, artist: string): void {
+    module()?.loadLocal(path, title, artist);
   },
   play(): void {
     module()?.play();

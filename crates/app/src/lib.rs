@@ -1097,7 +1097,30 @@ pub fn ext_for(content_type: &str) -> &'static str {
 
 
 pub fn download_list(state: &AppState) -> Result<Vec<DownloadRow>, String> {
-    state.storage.list_downloads().map_err(|e| e.to_string())
+    let mut rows = state.storage.list_downloads().map_err(|e| e.to_string())?;
+    // iOS 的沙盒容器路径会随重装/更新变化，库里存的是当时的绝对路径。
+    // 原路径不存在时，按文件名到当前下载目录里找一遍，避免"下载了却播不了"。
+    for row in rows.iter_mut() {
+        let dir = std::path::PathBuf::from(state.settings_snapshot().download_dir);
+        row.path = resolve_download_path(&row.path, &dir);
+    }
+    Ok(rows)
+}
+
+
+/// 把库里的下载路径修到当前环境下真实存在的位置。
+fn resolve_download_path(stored: &str, download_dir: &std::path::Path) -> String {
+    let path = std::path::Path::new(stored);
+    if path.exists() {
+        return stored.to_string();
+    }
+    if let Some(name) = path.file_name() {
+        let candidate = download_dir.join(name);
+        if candidate.exists() {
+            return candidate.to_string_lossy().to_string();
+        }
+    }
+    stored.to_string()
 }
 
 

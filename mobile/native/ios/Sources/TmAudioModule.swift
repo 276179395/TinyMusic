@@ -15,6 +15,7 @@ final class TmAudioModule: NSObject, LynxModule {
     @objc class var methodLookup: [String: String] {
         [
             "load": NSStringFromSelector(#selector(load(_:title:artist:cover:duration:))),
+            "loadLocal": NSStringFromSelector(#selector(loadLocal(_:title:artist:))),
             "play": NSStringFromSelector(#selector(play)),
             "pause": NSStringFromSelector(#selector(pause)),
             "seek": NSStringFromSelector(#selector(seek(_:))),
@@ -96,6 +97,35 @@ final class TmAudioModule: NSObject, LynxModule {
                 self.loadArtwork(coverUrl)
             }
 
+            self.endObserver.map { NotificationCenter.default.removeObserver($0) }
+            self.endObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
+            ) { [weak self] _ in
+                self?.pendingEnded = true
+                self?.status = "paused"
+            }
+        }
+    }
+
+    /// 播放本机文件（已下载的音频）：路径直接交给 URL(fileURLWithPath:)，
+    /// 空格/中文不需要 JS 侧做百分号编码。
+    func loadLocal(_ path: String, title: String, artist: String) {
+        onMain {
+            self.pendingEnded = false
+            self.pendingError = nil
+            let fileURL = URL(fileURLWithPath: path)
+            guard FileManager.default.fileExists(atPath: path) else {
+                self.pendingError = "文件不存在：" + path
+                return
+            }
+            let item = AVPlayerItem(url: fileURL)
+            self.player.replaceCurrentItem(with: item)
+            self.status = "loading"
+            self.nowPlaying = [
+                MPMediaItemPropertyTitle: title,
+                MPMediaItemPropertyArtist: artist,
+            ]
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = self.nowPlaying
             self.endObserver.map { NotificationCenter.default.removeObserver($0) }
             self.endObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main

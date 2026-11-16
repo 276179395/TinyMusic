@@ -30,8 +30,12 @@ export function App() {
   const direct: HostProps = readGlobalPropsDirect();
   const props: HostProps = { ...direct, ...reactive };
   if (!props.apiBase) props.apiBase = direct.apiBase;
-  if (props.autoPlay === undefined) props.autoPlay = direct.autoPlay;
-  if (props.openPlayer === undefined) props.openPlayer = direct.openPlayer;
+  // 冒烟/宿主标志以「任一来源为真」为准（reactive 首帧可能给 false）
+  props.autoPlay = Boolean(props.autoPlay) || Boolean(direct.autoPlay);
+  props.autoDownload = Boolean(props.autoDownload) || Boolean(direct.autoDownload);
+  props.playLocal = Boolean(props.playLocal) || Boolean(direct.playLocal);
+  props.openPlayer = Boolean(props.openPlayer) || Boolean(direct.openPlayer);
+  if (!props.initialTab || props.initialTab === 'home') props.initialTab = direct.initialTab ?? props.initialTab;
   const [ready, setReady] = useState(false);
   const snapshot = usePlayer();
   const [showPlayer, setShowPlayer] = useState(false);
@@ -97,7 +101,7 @@ export function App() {
                   onOpenPlaylist={(p) => setPlaylist(p)}
                 />
               ) : null}
-              {tab === 'downloads' ? <Downloads iconColor={iconColor} /> : null}
+              {tab === 'downloads' ? <Downloads iconColor={iconColor} playLocal={props.playLocal === true} /> : null}
               {tab === 'cloud' ? <Cloud iconColor={iconColor} /> : null}
               {tab === 'account' ? <Account onOpenPlaylist={(p) => setPlaylist(p)} /> : null}
               {tab === 'settings' ? <Settings /> : null}

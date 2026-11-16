@@ -61,6 +61,7 @@ final class RootViewController: UIViewController {
             "openPlayer": ProcessInfo.processInfo.environment["TM_OPEN_PLAYER"] == "1",
             "initialTab": ProcessInfo.processInfo.environment["TM_TAB"] ?? "home",
             "autoDownload": ProcessInfo.processInfo.environment["TM_DOWNLOAD"] == "1",
+            "playLocal": ProcessInfo.processInfo.environment["TM_PLAY_LOCAL"] == "1",
         ]
         if let baseUrl = backend.baseUrl { props["apiBase"] = baseUrl }
         if let token = backend.token { props["apiToken"] = token }

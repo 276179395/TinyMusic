@@ -1,6 +1,6 @@
 import { useEffect, useState } from '@lynx-js/react';
 import { api } from '@tinymusic/shared/api';
-import type { LyricLine, Quality, Track } from '@tinymusic/shared/types';
+import type { DownloadRow, LyricLine, Quality, Track } from '@tinymusic/shared/types';
 import { nextIndexManual, nextIndexOnEnded, prevIndexManual, type RepeatMode } from '@tinymusic/shared/player/queue';
 
 import { audio, startAudioPolling, type AudioState } from '../native/audio.js';
@@ -171,6 +171,41 @@ class PlayerStore {
       else this.patch({ queue: [...this.state.queue, track], index: this.state.queue.length });
     }
     await this.startAt(this.state.index);
+  }
+
+  /**
+   * 播放已下载到本机的文件（离线播放）。
+   * iOS 沙盒内直接用 file:// 交给 AVPlayer，不走后端流代理。
+   */
+  playLocal(row: DownloadRow): void {
+    const track = {
+      provider: row.provider || 'local',
+      id: row.id,
+      title: row.title,
+      artist: row.artist,
+      album: '',
+      cover: '',
+      duration_sec: 0,
+      availability: 'unknown',
+      available_qualities: [],
+    } as unknown as Track;
+
+    this.playToken += 1;
+    this.patch({
+      queue: [track],
+      index: 0,
+      current: track,
+      status: 'loading',
+      position: 0,
+      duration: 0,
+      error: '',
+      lyrics: [],
+      lyricsError: '',
+    });
+    audio.loadLocal(row.path, row.title, row.artist);
+    audio.setVolume(this.state.volume);
+    audio.play();
+    this.patch({ status: 'playing' });
   }
 
   resume(): void {

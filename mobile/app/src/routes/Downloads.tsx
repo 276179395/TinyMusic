@@ -1,6 +1,7 @@
-import { useCallback } from '@lynx-js/react';
+import { useCallback, useEffect } from '@lynx-js/react';
 
 import { downloads, useDownloads } from '../state/downloads.js';
+import { player } from '../state/player.js';
 
 function fmtBytes(n: number): string {
   if (!n || n <= 0) return '';
@@ -12,8 +13,16 @@ function fmtBytes(n: number): string {
 /**
  * 下载页：已下载列表 + 失败记录（可重试/忽略）。
  */
-export function Downloads({ iconColor }: { iconColor: string }) {
+export function Downloads({ iconColor, playLocal }: { iconColor: string; playLocal?: boolean }) {
   const d = useDownloads();
+
+  // 冒烟钩子：TM_PLAY_LOCAL=1 时自动播第一条已下载
+  useEffect(() => {
+    'background only';
+    if (!playLocal || d.rows.length === 0) return;
+    if (player.snapshot().current) return;
+    player.playLocal(d.rows[0]);
+  }, [playLocal, d.rows]);
 
   const onRetryAll = useCallback(() => {
     'background only';
@@ -70,7 +79,14 @@ export function Downloads({ iconColor }: { iconColor: string }) {
       <scroll-view className="results" scroll-orientation="vertical">
         {d.rows.length === 0 ? <text className="home-hint">还没有下载完成的曲目</text> : null}
         {d.rows.map((r) => (
-          <view className="row" key={r.task_id}>
+          <view
+            className="row"
+            key={r.task_id}
+            bindtap={() => {
+              'background only';
+              player.playLocal(r);
+            }}
+          >
             <view className="row-meta">
               <text className="row-title">{r.title}</text>
               <text className="row-sub">{r.artist}</text>
