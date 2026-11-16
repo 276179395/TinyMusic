@@ -12,19 +12,21 @@ export interface HostProps {
   screenWidth?: number;
   screenHeight?: number;
   autoPlay?: boolean | number;
+  openPlayer?: boolean | number;
 }
 
-export function hostProps(): HostProps {
-  try {
-    const raw = ((lynx as unknown as { __globalProps?: Record<string, unknown> }).__globalProps ??
-      {}) as Record<string, unknown>;
-    // Lynx 会把 globalProps 里的 boolean 变成 1/0，这里统一回 boolean
-    const props = raw as HostProps;
-    if (props.autoPlay !== undefined) props.autoPlay = Boolean(props.autoPlay);
-    return props;
-  } catch {
-    return {};
-  }
+/**
+ * 归一化宿主全局属性：
+ * Lynx 会把 boolean 变成 1/0，这里统一回 boolean，界面层只处理干净的类型。
+ */
+export function normalizeHostProps(raw: Record<string, unknown> | null | undefined): HostProps {
+  const src = raw ?? {};
+  const props = { ...src } as HostProps;
+  props.autoPlay = Boolean(src.autoPlay);
+  props.openPlayer = Boolean(src.openPlayer);
+  props.safeAreaTop = Number(src.safeAreaTop ?? 0) || 0;
+  props.safeAreaBottom = Number(src.safeAreaBottom ?? 0) || 0;
+  return props;
 }
 
 let inited = false;
@@ -34,9 +36,8 @@ export let transportError = '';
 /**
  * 把共享库的传输层接到本机后端上。必须在使用 api 之前调用（App 启动时一次）。
  */
-export function ensureTransport(): boolean {
+export function ensureTransport(props: HostProps): boolean {
   if (inited) return true;
-  const props = hostProps();
   if (!props.apiBase) {
     transportError = 'globalProps 里没有 apiBase';
     return false;
@@ -52,7 +53,7 @@ export function ensureTransport(): boolean {
     transportError = '';
     return true;
   } catch (e) {
-    transportError = `传输层初始化失败：${String(e)}（typeof fetch=${typeof fetch}）`;
+    transportError = '传输层初始化失败：' + String(e);
     return false;
   }
 }

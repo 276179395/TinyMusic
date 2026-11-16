@@ -14,6 +14,8 @@ interface HomeProps {
   ready: boolean;
   /** 自动化冒烟：拿到结果后自动播第一首 */
   autoPlay?: boolean;
+  /** 点播放条展开全屏播放页 */
+  onOpenPlayer: () => void;
 }
 
 function fmt(sec: number): string {
@@ -26,7 +28,7 @@ function fmt(sec: number): string {
 /**
  * 首页 = 搜索 + 结果列表 + 底部播放条（P3 浏览骨架 + P5 播放的最小闭环）。
  */
-export function Home({ iconColor, inkIconColor, ready, autoPlay }: HomeProps) {
+export function Home({ iconColor, inkIconColor, ready, autoPlay, onOpenPlayer }: HomeProps) {
   const [kw, setKw] = useState('周杰伦');
   const [items, setItems] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
@@ -110,7 +112,9 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay }: HomeProps) {
         ))}
       </scroll-view>
 
-      <PlayerBar iconColor={iconColor} inkIconColor={inkIconColor} />
+      <view bindtap={onOpenPlayer}>
+        <PlayerBar iconColor={iconColor} inkIconColor={inkIconColor} />
+      </view>
     </view>
   );
 }

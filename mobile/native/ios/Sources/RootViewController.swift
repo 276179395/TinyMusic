@@ -57,6 +57,8 @@ final class RootViewController: UIViewController {
             "screenHeight": Double(view.bounds.height),
             // 自动化冒烟：TM_AUTOPLAY=1 时前端自动播第一条搜索结果
             "autoPlay": ProcessInfo.processInfo.environment["TM_AUTOPLAY"] == "1",
+            // 自动化冒烟：TM_OPEN_PLAYER=1 时播放开始后自动展开全屏播放页
+            "openPlayer": ProcessInfo.processInfo.environment["TM_OPEN_PLAYER"] == "1",
         ]
         if let baseUrl = backend.baseUrl { props["apiBase"] = baseUrl }
         if let token = backend.token { props["apiToken"] = token }

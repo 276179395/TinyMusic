@@ -1,6 +1,6 @@
 import { useEffect, useState } from '@lynx-js/react';
 import { api } from '@tinymusic/shared/api';
-import type { Track } from '@tinymusic/shared/types';
+import type { LyricLine, Quality, Track } from '@tinymusic/shared/types';
 import { nextIndexManual, nextIndexOnEnded, prevIndexManual, type RepeatMode } from '@tinymusic/shared/player/queue';
 
 import { audio, startAudioPolling, type AudioState } from '../native/audio.js';
@@ -18,6 +18,14 @@ export interface PlayerSnapshot {
   shuffle: boolean;
   repeat: RepeatMode;
   error: string;
+  /** 当前选择的音质；切歌/切音质都会走同一个取流口 */
+  quality: Quality;
+  /** 这首能播哪些档位（列表接口给的 MINFO） */
+  availableQualities: Quality[];
+  /** 歌词（详情接口拿） */
+  lyrics: LyricLine[];
+  lyricsLoading: boolean;
+  lyricsError: string;
 }
 
 type Listener = () => void;
@@ -40,6 +48,11 @@ class PlayerStore {
     shuffle: false,
     repeat: 'off',
     error: '',
+    quality: 'super',
+    availableQualities: [],
+    lyrics: [],
+    lyricsLoading: false,
+    lyricsError: '',
   };
 
   private listeners = new Set<Listener>();
@@ -123,13 +136,17 @@ class PlayerStore {
       position: 0,
       duration: track.duration_sec || 0,
       error: '',
+      availableQualities: track.available_qualities ?? [],
+      lyrics: [],
+      lyricsError: '',
     });
+    void this.loadLyrics(track);
 
     try {
-      let src = await api.playerOpen(track, 'super' as never, false, true);
+      let src = await api.playerOpen(track, this.state.quality, false, true);
       if (token !== this.playToken) return;
       if (!src?.url) {
-        src = await api.playerOpen(track, 'super' as never, true, true);
+        src = await api.playerOpen(track, this.state.quality, true, true);
       }
       if (token !== this.playToken) return;
       audio.load(src.url, track.title, track.artist, track.cover ?? '', track.duration_sec || 0);
@@ -186,6 +203,45 @@ class PlayerStore {
   prev(): void {
     const i = prevIndexManual(this.navState());
     if (i !== null) void this.startAt(i);
+  }
+
+  /** 拉歌词：详情接口顺带返回，失败不阻塞播放 */
+  async loadLyrics(track: Track): Promise<void> {
+    this.patch({ lyricsLoading: true, lyricsError: '' });
+    try {
+      const detail = await api.detail(track.provider, track);
+      if (this.state.current?.id !== track.id) return;
+      this.patch({ lyrics: detail.lyrics ?? [], lyricsLoading: false });
+    } catch (e) {
+      if (this.state.current?.id !== track.id) return;
+      this.patch({ lyricsLoading: false, lyricsError: String(e) });
+    }
+  }
+
+  /** 切音质：保留当前进度，重新取流 */
+  async setQuality(q: Quality): Promise<void> {
+    if (q === this.state.quality) return;
+    const track = this.state.current;
+    const at = this.state.position;
+    const wasPlaying = this.state.status === 'playing';
+    this.patch({ quality: q });
+    if (!track) return;
+    try {
+      await api.qualitySet(q);
+    } catch {
+      /* 设置写入失败不影响本次播放 */
+    }
+    this.patch({ status: 'loading' });
+    try {
+      const src = await api.playerOpen(track, q, true, true);
+      audio.load(src.url, track.title, track.artist, track.cover ?? '', track.duration_sec || 0);
+      audio.setVolume(this.state.volume);
+      if (at > 0) audio.seek(at);
+      if (wasPlaying) audio.play();
+      this.patch({ status: wasPlaying ? 'playing' : 'paused', error: '' });
+    } catch (e) {
+      this.patch({ status: 'error', error: String(e) });
+    }
   }
 
   setVolume(v: number): void {

@@ -56,3 +56,14 @@ P4 结束，进入 P5（播放闭环）。
 2. 原生模块的方法只能在 **JS 线程**上回调 JS；AVPlayer 的 KVO/通知都在主线程 → 用轮询状态替代推送。
 3. `LynxModule` 协议必须实现 `init(param:)`（ObjC 的 optional 初始器会变成 Swift 必需）。
 4. `config.register(Module.self)` 配 `LynxEnv.prepareConfig(config)` 才进全局模块表；视图里再传 config 会覆盖。
+
+
+## P5.2 全屏播放页 + 歌词 + 音质（同日）
+
+| 项 | 结果 | 说明 |
+|---|---|---|
+| useGlobalProps | ✅ | 改用官方钩子，globalProps 变化会重渲染；boolean 仍要归一化（1/0） |
+| 全屏播放页 | ✅ | 封面 / 标题歌手 / 进度条 / 随机-上一首-播放-下一首-循环 / 音质条 / 歌词（见 `p5-player-page.png`） |
+| 音质切换 | ✅ | 档位门控来自 `packages/shared/quality`（与桌面同一份）；高级三档禁用，切档保留进度重新取流 |
+| 歌词 | ✅ | `api.detail()` 拿 LRC，逐行高亮 + 自动滚动 + 点句跳播（行定位逻辑后续可切到 shared/lyrics） |
+| 自动化钩子 | ✅ | `TM_AUTOPLAY=1` 自动播第一首、`TM_OPEN_PLAYER=1` 自动展开播放页，便于无人值守验证 |
