@@ -60,6 +60,7 @@ final class RootViewController: UIViewController {
             // 自动化冒烟：TM_OPEN_PLAYER=1 时播放开始后自动展开全屏播放页
             "openPlayer": ProcessInfo.processInfo.environment["TM_OPEN_PLAYER"] == "1",
             "initialTab": ProcessInfo.processInfo.environment["TM_TAB"] ?? "home",
+            "autoDownload": ProcessInfo.processInfo.environment["TM_DOWNLOAD"] == "1",
         ]
         if let baseUrl = backend.baseUrl { props["apiBase"] = baseUrl }
         if let token = backend.token { props["apiToken"] = token }

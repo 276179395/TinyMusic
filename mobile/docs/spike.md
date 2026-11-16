@@ -77,3 +77,14 @@ P4 结束，进入 P5（播放闭环）。
 | 下载页 | ✅ | 已下载列表 + 未完成（重试/忽略）+ 刷新；截图 `p6-downloads.png` |
 | 设置页 | ✅ | 下载目录（iOS Documents 路径）、默认音质、同时下载数、关于；截图 `p6-settings.png` |
 | 自动化钩子 | ✅/⚠️ | `TM_TAB=downloads|settings` 可直达页面；`TM_AUTOPLAY` 仍偶发不触发（不影响手动点播） |
+
+
+## P6.2 下载端到端（同日）
+
+实测：`TM_DOWNLOAD=1` 触发下载第一首 → 45 秒后
+- DB：`t1-79479 | 东风破 | super | 12,629,387 bytes | done`
+- 文件：`Documents/TinyMusic/周杰伦 - 东风破.mp3` + `.lrc`
+
+**同时修掉一个跨端 bug**：`packages/shared/src/api.ts` 里 6 个进度命令残留了 Channel 时代的
+`onProgress: ch`（`ch` 已不存在）→ `downloadStart` 一调用就抛 `ch is not defined`。
+桌面从 P3 起下载也是坏的，这次一起修好。

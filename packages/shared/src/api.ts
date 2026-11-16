@@ -45,7 +45,7 @@ export const api = {
     invoke<PlayerSource>('player_open', { track, quality, forceRefresh, allowLocal }),
 
   downloadStart: (track: Track, quality: Quality, onProgress: (p: Progress) => void) => {
-    return invokeTask<string>('download_start', { track, quality, onProgress: ch }, onProgress as ProgressCallback);
+    return invokeTask<string>('download_start', { track, quality }, onProgress as ProgressCallback);
   },
 
   downloads: () => invoke<DownloadRow[]>('download_list'),
@@ -88,7 +88,7 @@ export const api = {
     quality: Quality,
     onProgress: (p: Progress) => void
   ) => {
-    return invokeTask<string[]>('download_batch', { tracks, quality, onProgress: ch }, onProgress as ProgressCallback);
+    return invokeTask<string[]>('download_batch', { tracks, quality }, onProgress as ProgressCallback);
   },
 
   /** 打开酷我网页登录窗口 */
@@ -175,8 +175,8 @@ export const api = {
     onProgress: (p: S3FixProgress) => void
   ) => {
     return invokeTask<S3IntegrityReport>('s3_integrity_fix', { playlist,
-      ids,
-      onProgress: ch }, onProgress as ProgressCallback);
+      ids
+    }, onProgress as ProgressCallback);
   },
   s3TrackDelete: (key: string) => invoke<void>('s3_track_delete', { key }),
   s3Download: (
@@ -185,7 +185,7 @@ export const api = {
     playlist: string,
     onProgress: (p: Progress) => void
   ) => {
-    return invokeTask<string>('s3_download', { track, quality, playlist, onProgress: ch }, onProgress as ProgressCallback);
+    return invokeTask<string>('s3_download', { track, quality, playlist }, onProgress as ProgressCallback);
   },
   s3DownloadBatch: (
     tracks: Track[],
@@ -193,7 +193,7 @@ export const api = {
     playlist: string,
     onProgress: (p: Progress) => void
   ) => {
-    return invokeTask<string[]>('s3_download_batch', { tracks, quality, playlist, onProgress: ch }, onProgress as ProgressCallback);
+    return invokeTask<string[]>('s3_download_batch', { tracks, quality, playlist }, onProgress as ProgressCallback);
   },
 
   /** 把一个平台歌单整张导入到网盘（后台逐首下载 + 上传） */
@@ -207,8 +207,8 @@ export const api = {
     return invokeTask<S3ImportResult>('s3_import_playlist', { provider,
       playlistId,
       name,
-      target,
-      onProgress: ch }, onProgress as ProgressCallback);
+      target
+    }, onProgress as ProgressCallback);
   },
 
   /** 把主窗口收进托盘（播放不中断） */

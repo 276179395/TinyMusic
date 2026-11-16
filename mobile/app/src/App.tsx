@@ -10,7 +10,7 @@ import { PlayerPage } from './routes/PlayerPage.js';
 import { TabBar, type TabKey } from './components/TabBar.js';
 import { PlayerBar } from './components/PlayerBar.js';
 import { player } from './state/player.js';
-import { ensureTransport, normalizeHostProps, transportError, type HostProps } from './platform.js';
+import { ensureTransport, normalizeHostProps, readGlobalPropsDirect, transportError, type HostProps } from './platform.js';
 import { usePlayer } from './state/player.js';
 
 /**
@@ -18,9 +18,16 @@ import { usePlayer } from './state/player.js';
  */
 export function App() {
   // 官方钩子：globalProps 变化会触发重新渲染（不用手动读 lynx.__globalProps）
-  const props: HostProps = normalizeHostProps(
+  // 两个来源合并：useGlobalProps 是响应式的，但首帧可能是空对象；
+  // lynx.__globalProps 首帧就绪，但不触发重渲染。两边取并集最稳。
+  const reactive: HostProps = normalizeHostProps(
     (useGlobalProps() ?? {}) as Record<string, unknown>
   );
+  const direct: HostProps = readGlobalPropsDirect();
+  const props: HostProps = { ...direct, ...reactive };
+  if (!props.apiBase) props.apiBase = direct.apiBase;
+  if (props.autoPlay === undefined) props.autoPlay = direct.autoPlay;
+  if (props.openPlayer === undefined) props.openPlayer = direct.openPlayer;
   const [ready, setReady] = useState(false);
   const snapshot = usePlayer();
   const [showPlayer, setShowPlayer] = useState(false);
@@ -70,6 +77,7 @@ export function App() {
                   inkIconColor={inkIconColor}
                   ready={ready}
                   autoPlay={props.autoPlay === true}
+                  autoDownload={props.autoDownload === true}
                   onOpenPlayer={() => setShowPlayer(true)}
                 />
               ) : null}

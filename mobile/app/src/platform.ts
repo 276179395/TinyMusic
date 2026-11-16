@@ -14,6 +14,7 @@ export interface HostProps {
   autoPlay?: boolean | number;
   openPlayer?: boolean | number;
   initialTab?: string;
+  autoDownload?: boolean | number;
 }
 
 /**
@@ -25,9 +26,20 @@ export function normalizeHostProps(raw: Record<string, unknown> | null | undefin
   const props = { ...src } as HostProps;
   props.autoPlay = Boolean(src.autoPlay);
   props.openPlayer = Boolean(src.openPlayer);
+  props.autoDownload = Boolean(src.autoDownload);
   props.safeAreaTop = Number(src.safeAreaTop ?? 0) || 0;
   props.safeAreaBottom = Number(src.safeAreaBottom ?? 0) || 0;
   return props;
+}
+
+/** 直接读引擎全局属性：useGlobalProps 在首帧可能还是空对象 */
+export function readGlobalPropsDirect(): HostProps {
+  try {
+    const raw = (lynx as unknown as { __globalProps?: Record<string, unknown> }).__globalProps;
+    return normalizeHostProps(raw);
+  } catch {
+    return {};
+  }
 }
 
 let inited = false;

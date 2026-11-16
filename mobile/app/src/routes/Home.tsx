@@ -5,6 +5,7 @@ import type { Track } from '@tinymusic/shared/types';
 
 import { Icon } from '../components/Icon.js';
 import { player } from '../state/player.js';
+import { downloads } from '../state/downloads.js';
 import { ensureTransport } from '../platform.js';
 
 interface HomeProps {
@@ -13,6 +14,8 @@ interface HomeProps {
   ready: boolean;
   /** 自动化冒烟：拿到结果后自动播第一首 */
   autoPlay?: boolean;
+  /** 自动化冒烟：拿到结果后下载第一首 */
+  autoDownload?: boolean;
   /** 点播放条展开全屏播放页（保留参数，播放条在 App 层） */
   onOpenPlayer?: () => void;
 }
@@ -27,7 +30,7 @@ function fmt(sec: number): string {
 /**
  * 首页 = 搜索 + 结果列表 + 底部播放条（P3 浏览骨架 + P5 播放的最小闭环）。
  */
-export function Home({ iconColor, inkIconColor, ready, autoPlay, onOpenPlayer }: HomeProps) {
+export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, onOpenPlayer }: HomeProps) {
   const [kw, setKw] = useState('周杰伦');
   const [items, setItems] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
@@ -78,6 +81,19 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, onOpenPlayer }:
     };
     setTimeout(attempt, 300);
   }, [autoPlay, items]);
+
+  // 冒烟钩子：自动下载第一首（验证下载全链路）
+  useEffect(() => {
+    'background only';
+    if (!autoDownload || items.length === 0) return;
+    let tries = 0;
+    const attempt = () => {
+      if (tries >= 3) return;
+      tries += 1;
+      void downloads.start(items[0], 'super');
+    };
+    setTimeout(attempt, 500);
+  }, [autoDownload, items]);
 
   const onTapTrack = useCallback((track: Track) => {
     'background only';
