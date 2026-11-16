@@ -254,3 +254,24 @@ P4 结束，进入 P5（播放闭环）。
 
 配合 round 7 的「读出来按文件名重找」，写入和读取两侧都稳了。实测修复后：
 记录路径 = `/Application/E5A27A30-…/Documents/TinyMusic/…`（当前容器），文件也在。
+
+
+## Round 16：真机启动即闪退（iOS 27 强制 Scene 生命周期）
+
+真机上装好点开立刻退出。用 `devicectl` 拉设备崩溃日志拿到真因：
+
+    "exception": {"type":"EXC_BREAKPOINT","signal":"SIGTRAP"}
+    崩溃栈: __UIApplicationEvaluateRuntimeIssueForNoSceneLifecycleAdoption_block_invoke
+            -[UIApplication workspace:didCreateScene:...]
+
+也就是说：App 还是老式「在 AppDelegate 里 makeKeyAndVisible」的写法，iOS 26/27 会把
+「未采用 UIScene 生命周期」当成致命运行时问题直接 SIGTRAP。
+模拟器是 iOS 18.5，对老写法仍然宽容，所以之前一直没暴露。
+
+修法：
+- 新增 `Sources/SceneDelegate.swift`，窗口改在 `scene(_:willConnectTo:options:)` 里创建
+- `Info.plist` 加 `UIApplicationSceneManifest`（单个 scene，指向 SceneDelegate）
+- `AppDelegate` 去掉 window，只保留 Lynx 初始化 + Rust 后端启动
+
+验证：重装后启动，`xcrun devicectl device capture screenshot` 能截到完整 UI（首页/网盘/迷你播放条），
+崩溃日志不再新增；模拟器回归（冒烟脚本）仍然 `audio.play()` 正常。

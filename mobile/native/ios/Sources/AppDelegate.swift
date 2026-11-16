@@ -2,7 +2,8 @@ import UIKit
 
 @main
 final class AppDelegate: UIResponder, UIApplicationDelegate {
-    var window: UIWindow?
+    // iOS 13+ 起窗口由 SceneDelegate 建；这里不再持有 window。
+    // 不采用 Scene 生命周期的 App 在 iOS 26/27 上会直接被系统 SIGTRAP 掉。
 
     func application(
         _ application: UIApplication,
@@ -29,10 +30,15 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         // 起本地 Rust 后端（业务逻辑全在 crates/app，这里只拿 baseUrl/token）
         RustBackend.shared.start()
 
-        let window = UIWindow(frame: UIScreen.main.bounds)
-        window.rootViewController = RootViewController()
-        window.makeKeyAndVisible()
-        self.window = window
         return true
+    }
+
+    // 告诉系统用我们的 SceneDelegate（Info.plist 里也配了一份）
+    func application(
+        _ application: UIApplication,
+        configurationForConnecting connectingSceneSession: UISceneSession,
+        options: UIScene.ConnectionOptions
+    ) -> UISceneConfiguration {
+        UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
     }
 }
