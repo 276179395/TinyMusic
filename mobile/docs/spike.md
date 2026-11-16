@@ -183,3 +183,13 @@ P4 结束，进入 P5（播放闭环）。
 - UI：设置 → 均衡器；开关 + 10 段 ±按钮 + 预设（平直/流行/摇滚/…）。
 - 实测：开启「流行」预设后播放正常推进（0:10/2:42），无 tap 创建失败日志；截图 `p8-equalizer.png`、`p8-eq-playing.png`。
 - 已知：EQ 目前是内存态（重开 App 回默认），要持久化得给 `Settings` 加字段。
+
+
+## Round 11
+
+- **均衡器持久化**：Rust `Settings` 加 `eq_enabled / eq_gains / eq_preamp`（serde default，老配置自动兼容），
+  启动 `hydrate()` 读回、改动 600ms 防抖写回。实测：套「流行」后 settings.json 写入，冷启动恢复。
+  踩坑：hydrate 与冒烟预设会打架（异步覆盖），要等 transport 就绪再延迟应用。
+- **歌单导入网盘**：歌单页「导入网盘」按钮 → `s3_import_playlist`，进度从后端推回。
+- **完整性修复**：网盘页校验后列出问题，点「修复」→ `s3_integrity_fix`（带 done/total 进度）。
+- **内测包文档**：`mobile/docs/内测包.md`（能做什么/没做什么/两种安装方式/已知限制/验收清单）。

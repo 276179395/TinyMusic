@@ -3,6 +3,7 @@ import { api } from '@tinymusic/shared/api';
 import type { PlaylistDetail, PlaylistRef, Track } from '@tinymusic/shared/types';
 
 import { player } from '../state/player.js';
+import { api } from '@tinymusic/shared/api';
 
 interface PlaylistPageProps {
   playlist: PlaylistRef;
@@ -17,6 +18,8 @@ export function PlaylistPage({ playlist, onBack }: PlaylistPageProps) {
   const [detail, setDetail] = useState<PlaylistDetail | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState('');
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
     'background only';
@@ -27,6 +30,20 @@ export function PlaylistPage({ playlist, onBack }: PlaylistPageProps) {
       .catch((e: unknown) => setError(String(e)))
       .finally(() => setLoading(false));
   }, [playlist.provider, playlist.id]);
+
+  /** 把当前歌单导入网盘（桶里的目录），进度从后端推回 */
+  const onImport = useCallback(() => {
+    'background only';
+    setImporting('准备中…');
+    setMessage('');
+    api
+      .s3ImportPlaylist('kuwo', playlist.id, playlist.name, (p: { done?: number; total?: number }) => {
+        setImporting('导入中 ' + String(p.done ?? 0) + '/' + String(p.total ?? '?'));
+      })
+      .then((r) => setMessage('导入完成：成功 ' + r.uploaded + ' 首，失败 ' + r.failed + ' 首'))
+      .catch((e: unknown) => setMessage(String(e)))
+      .finally(() => setImporting(''));
+  }, [playlist.id, playlist.name]);
 
   const playAll = useCallback(() => {
     'background only';
@@ -47,8 +64,13 @@ export function PlaylistPage({ playlist, onBack }: PlaylistPageProps) {
         <view className="page-head-action" bindtap={onBack}>
           <text className="page-head-action-text">返回</text>
         </view>
-        <view className="page-head-action" bindtap={playAll}>
-          <text className="page-head-action-text">播放全部</text>
+        <view className="row-actions">
+          <view className="page-head-action" bindtap={onImport}>
+            <text className="page-head-action-text">{importing || '导入网盘'}</text>
+          </view>
+          <view className="page-head-action" bindtap={playAll}>
+            <text className="page-head-action-text">播放全部</text>
+          </view>
         </view>
       </view>
 
@@ -64,6 +86,7 @@ export function PlaylistPage({ playlist, onBack }: PlaylistPageProps) {
       </view>
 
       {loading ? <text className="home-hint">读取中…</text> : null}
+      {message ? <text className="home-hint">{message}</text> : null}
       {error ? <text className="home-error">{error}</text> : null}
 
       <scroll-view className="results" scroll-orientation="vertical">

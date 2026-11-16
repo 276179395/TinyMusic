@@ -18,6 +18,7 @@ export function Cloud({ iconColor }: CloudProps) {
   const [report, setReport] = useState<S3IntegrityReport | null>(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [message, setMessage] = useState('');
 
   const loadPlaylists = useCallback(() => {
     'background only';
@@ -62,6 +63,25 @@ export function Cloud({ iconColor }: CloudProps) {
       .finally(() => setBusy(''));
   }, []);
 
+  const onFix = useCallback(() => {
+    'background only';
+    if (!report) return;
+    const ids = report.issues.map((i) => i.id).filter(Boolean);
+    setBusy('修复中…');
+    setError('');
+    api
+      .s3IntegrityFix(current, ids, (p: { done?: number; total?: number }) => {
+        setBusy('修复中 ' + String(p.done ?? 0) + '/' + String(p.total ?? ids.length));
+      })
+      .then(() => {
+        setMessage('修复完成');
+        return api.s3IntegrityCheck(current);
+      })
+      .then((r) => setReport(r))
+      .catch((e: unknown) => setError(String(e)))
+      .finally(() => setBusy(''));
+  }, [current, report]);
+
   const onIntegrity = useCallback(() => {
     'background only';
     setBusy('检查完整性…');
@@ -102,10 +122,25 @@ export function Cloud({ iconColor }: CloudProps) {
       {busy ? <text className="home-hint">{busy}</text> : null}
       {error ? <text className="home-error">{error}</text> : null}
       {report ? (
-        <text className="home-hint">
-          {'检查 ' + report.checked + ' 项，问题 ' + report.issues.length + ' 个'}
-        </text>
+        <view className="failure-head">
+          <text className="home-hint">
+            {'检查 ' + report.checked + ' 项，问题 ' + report.issues.length + ' 个'}
+          </text>
+          {report.issues.length > 0 ? (
+            <view bindtap={onFix}>
+              <text className="link-text">修复</text>
+            </view>
+          ) : null}
+        </view>
       ) : null}
+      {report && report.issues.length > 0
+        ? report.issues.slice(0, 5).map((i) => (
+            <text className="section-hint" key={i.id}>
+              {i.title + (i.missing && i.missing.length ? ' · 缺 ' + i.missing.join('/') : '')}
+            </text>
+          ))
+        : null}
+      {message ? <text className="home-hint">{message}</text> : null}
 
       {current ? (
         <view className="page-head-action" bindtap={() => { setCurrent(null); setTracks([]); }}>
