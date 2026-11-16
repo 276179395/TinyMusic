@@ -18,6 +18,9 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         LynxEnv.sharedInstance().logBoxEnabled = true
         #endif
 
+        // 起本地 Rust 后端（业务逻辑全在 crates/app，这里只拿 baseUrl/token）
+        RustBackend.shared.start()
+
         let window = UIWindow(frame: UIScreen.main.bounds)
         window.rootViewController = RootViewController()
         window.makeKeyAndVisible()

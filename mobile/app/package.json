@@ -12,7 +12,8 @@
   "dependencies": {
     "@lynx-js/react": "^0.129.3",
     "@tinymusic/shared": "workspace:*",
-    "@tinymusic/theme": "workspace:*"
+    "@tinymusic/theme": "workspace:*",
+    "@hugeicons/core-free-icons": "^4.4.0"
   },
   "devDependencies": {
     "@lynx-js/react-rsbuild-plugin": "^0.22.3",

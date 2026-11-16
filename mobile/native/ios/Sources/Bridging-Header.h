@@ -7,3 +7,6 @@
 #import <Lynx/LynxConfig.h>
 #import <Lynx/LynxTemplateProvider.h>
 #import <Lynx/LynxModule.h>
+
+// 本进程内的 Rust 后端（crates/ffi）
+#import "tinymusic_ffi.h"

@@ -9,3 +9,4 @@ native/ios/*.xcodeproj/
 native/ios/*.xcworkspace/
 native/ios/DerivedData/
 native/ios/Resources/*.bundle
+native/ios/Rust/

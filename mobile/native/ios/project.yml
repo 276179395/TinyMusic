@@ -21,10 +21,39 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"
         ENABLE_USER_SCRIPT_SANDBOXING: "NO"
         CLANG_ENABLE_MODULES: "YES"
-        OTHER_LDFLAGS: ["$(inherited)", "-ObjC"]
+        OTHER_LDFLAGS: ["$(inherited)", "-ObjC", "-ltinymusic_ffi"]
+        LIBRARY_SEARCH_PATHS: ["$(inherited)", "$(SRCROOT)/Rust/lib"]
         # 本地调试不需要签名；真机/TestFlight 时再覆盖
         CODE_SIGNING_ALLOWED: "NO"
+    dependencies:
+      - sdk: Security.framework
+      - sdk: SystemConfiguration.framework
+      - sdk: CFNetwork.framework
     preBuildScripts:
+      # Rust 后端（crates/ffi）编成静态库再链进来；产物按 SDK/ARCHS/CONFIGURATION 选
+      - name: "编译 Rust 后端"
+        script: |
+          set -e
+          REPO="$(cd "$SRCROOT/../../.." && pwd)"
+          if [[ "$SDK_NAME" == iphonesimulator* ]]; then
+            case "${ARCHS:-arm64}" in
+              *arm64*) RT=aarch64-apple-ios-sim ;;
+              *) RT=x86_64-apple-ios ;;
+            esac
+          else
+            RT=aarch64-apple-ios
+          fi
+          if [[ "$CONFIGURATION" == "Debug" ]]; then
+            PROF=debug; PA=""
+          else
+            PROF=release; PA="--release"
+          fi
+          mkdir -p "$SRCROOT/Rust/lib"
+          cd "$REPO"
+          cargo build -p tinymusic-ffi --target "$RT" $PA
+          cp "target/$RT/$PROF/libtinymusic_ffi.a" "$SRCROOT/Rust/lib/libtinymusic_ffi.a"
+          echo "[TinyMusic] Rust 静态库就绪: $RT/$PROF"
+        basedOnDependencyAnalysis: false
       # bundle 是构建产物（gitignore），所以不能在生成工程时写死文件引用，
       # 统一在编译期拷进 App 的 Resources 目录
       - name: "打包 Lynx bundle"

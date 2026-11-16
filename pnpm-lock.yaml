@@ -53,6 +53,9 @@ importers:
 
   mobile/app:
     dependencies:
+      '@hugeicons/core-free-icons':
+        specifier: ^4.4.0
+        version: 4.4.0
       '@lynx-js/react':
         specifier: ^0.129.3
         version: 0.129.3(@lynx-js/types@4.4.2)(@types/react@19.3.0)
