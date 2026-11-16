@@ -21,6 +21,7 @@ export interface HostProps {
   searchKind?: string;
   openEq?: boolean | number;
   eqOn?: boolean | number;
+  openS3?: boolean | number;
 }
 
 /**
@@ -37,6 +38,7 @@ export function normalizeHostProps(raw: Record<string, unknown> | null | undefin
   props.openArtist = Boolean(src.openArtist);
   props.openEq = Boolean(src.openEq);
   props.eqOn = Boolean(src.eqOn);
+  props.openS3 = Boolean(src.openS3);
   props.openAlbum = Boolean(src.openAlbum);
   props.safeAreaTop = Number(src.safeAreaTop ?? 0) || 0;
   props.safeAreaBottom = Number(src.safeAreaBottom ?? 0) || 0;

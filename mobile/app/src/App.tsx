@@ -149,7 +149,7 @@ export function App() {
                 />
               ) : null}
               {tab === 'downloads' ? <Downloads iconColor={iconColor} playLocal={props.playLocal === true} /> : null}
-              {tab === 'cloud' ? <Cloud iconColor={iconColor} /> : null}
+              {tab === 'cloud' ? <Cloud iconColor={iconColor} autoOpen={props.openS3 === true} /> : null}
               {tab === 'account' ? <Account onOpenPlaylist={(p) => setPlaylist(p)} /> : null}
               {tab === 'settings' ? <Settings onOpenEqualizer={() => setShowEq(true)} /> : null}
             </view>

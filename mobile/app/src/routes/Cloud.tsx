@@ -4,13 +4,15 @@ import type { S3IntegrityReport, S3PlaylistInfo, S3TrackRow, Settings as Setting
 
 interface CloudProps {
   iconColor: string;
+  /** 冒烟：自动打开第一个歌单 */
+  autoOpen?: boolean;
 }
 
 /**
  * 网盘（S3 兼容）：歌单/曲目浏览 + 连通性测试 + 完整性检查。
  * 桶里的目录结构、校验算法都在 Rust（crates/core::s3），这里只展示。
  */
-export function Cloud({ iconColor }: CloudProps) {
+export function Cloud({ iconColor, autoOpen }: CloudProps) {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [playlists, setPlaylists] = useState<S3PlaylistInfo[]>([]);
   const [current, setCurrent] = useState<string | null>(null);
@@ -51,6 +53,18 @@ export function Cloud({ iconColor }: CloudProps) {
       .catch((e: unknown) => setError(String(e)))
       .finally(() => setBusy(''));
   }, []);
+
+  // 冒烟钩子：列表到手后自动进第一个歌单
+  useEffect(() => {
+    'background only';
+    if (!autoOpen || current || playlists.length === 0) return;
+    const first = playlists[0];
+    setCurrent(first.name);
+    api
+      .s3PlaylistTracks(first.name, !!first.root)
+      .then((rows) => setTracks(rows))
+      .catch((e: unknown) => setError(String(e)));
+  }, [autoOpen, current, playlists]);
 
   const onTest = useCallback(() => {
     'background only';

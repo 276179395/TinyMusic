@@ -193,3 +193,27 @@ P4 结束，进入 P5（播放闭环）。
 - **歌单导入网盘**：歌单页「导入网盘」按钮 → `s3_import_playlist`，进度从后端推回。
 - **完整性修复**：网盘页校验后列出问题，点「修复」→ `s3_integrity_fix`（带 done/total 进度）。
 - **内测包文档**：`mobile/docs/内测包.md`（能做什么/没做什么/两种安装方式/已知限制/验收清单）。
+
+
+## Round 12：网盘用本地 S3 桩做真实验证
+
+机器上没有 docker，所以写了一个最小 S3 兼容桩（不参与打包）：
+`crates/server/examples/s3_stub.rs`（PUT/GET/Range/HEAD/DELETE + ListObjectsV2）。
+
+    cargo run -p tinymusic-server --example s3_stub -- --port 9100 --dir /tmp/tm-s3stub
+    # 然后往 http://127.0.0.1:9100/music 里 PUT 对象，key 形如
+    # TinyMusic/<歌单>/<歌手> - <标题>.mp3|.lrc|.jpg
+
+**后端验证（curl，settings 指向桩）**
+| 命令 | 结果 |
+|---|---|
+| `s3_test` | 连接成功：bucket「music」可访问，前缀「TinyMusic」下已有 3 个对象 |
+| `s3_playlists` | 喜欢(1) / 流行(1) |
+| `s3_playlist_tracks` | 东风破（missing: cover） |
+| `s3_integrity_check` | checked 2；报出缺 lyrics/cover，can_fix=false（桩里没有来源元数据，符合预期） |
+
+**iOS 端验证**：把 App 容器里的 settings.json 指向桩后，网盘页列出「喜欢 / 流行」，
+进入歌单能看到「东风破 · 周杰伦 · 缺 cover」。截图 `p9-cloud-playlists.png`、`p9-cloud-tracks.png`。
+
+踩坑：axum 0.8 路由必须写 `{bucket}` / `{*key}`，写 `:bucket` 会直接 panic；
+`settings_set` 的参数是 `{ "settings": {...} }` 而不是平铺。
