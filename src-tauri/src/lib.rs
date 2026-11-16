@@ -2590,6 +2590,9 @@ fn open_download_dir(state: State<'_, AppState>) -> Result<(), String> {
 
 // ---------- 网盘（S3）----------
 
+/// 根目录散歌在网盘页里的伪歌单名（不是真实目录，保留名不可用来建歌单）
+const ROOT_PLAYLIST_LABEL: &str = "未分类";
+
 #[derive(Debug, Clone, Serialize)]
 pub struct S3PlaylistInfo {
     pub name: String,
@@ -2597,6 +2600,9 @@ pub struct S3PlaylistInfo {
     /// 第一首歌的封面直链（决定卡片长什么样，可以为空）
     #[serde(default)]
     pub cover: Option<String>,
+    /// true 表示这是「未分类」伪歌单（前缀根目录下的散歌）
+    #[serde(default)]
+    pub root: bool,
 }
 
 #[tauri::command]
@@ -2605,36 +2611,166 @@ async fn s3_test(state: State<'_, AppState>) -> Result<String, String> {
     s3.test().await.map_err(|e| e.to_string())
 }
 
-/// 本地记录的歌单 + 网盘上实际存在的曲目数
+/// 去掉配置的前缀，得到 `歌单名/文件名` 相对路径；不在前缀下的 key 返回 None
+fn key_under_prefix<'a>(key: &'a str, prefix: &str) -> Option<&'a str> {
+    let p = prefix.trim_matches('/');
+    if p.is_empty() {
+        return Some(key.trim_start_matches('/'));
+    }
+    key.strip_prefix(p)?.strip_prefix('/')
+}
+
+/// 前缀根目录下的散歌（下载时选了「未分类」）
+fn is_root_key(key: &str, prefix: &str) -> bool {
+    key_under_prefix(key, prefix)
+        .map(|rest| !rest.is_empty() && !rest.contains('/'))
+        .unwrap_or(false)
+}
+
+/// 从桶里的对象清单反推歌单（prefix 下的一级目录）。
+///
+/// 歌单名原本只存在本机 SQLite 里，换一台设备连同一个桶就什么都看不到了，
+/// 这里按对象 key 把目录找回来。
+fn playlists_from_keys(keys: &[String], prefix: &str) -> Vec<String> {
+    let mut names: Vec<String> = Vec::new();
+    for key in keys {
+        let Some(rest) = key_under_prefix(key, prefix) else {
+            continue;
+        };
+        let Some((first, _)) = rest.split_once('/') else {
+            continue; // 桶/前缀根目录下的散歌，不算歌单
+        };
+        let name = first.trim();
+        if name.is_empty() {
+            continue;
+        }
+        if !names.iter().any(|n| n == name) {
+            names.push(name.to_string());
+        }
+    }
+    names.sort();
+    names
+}
+
+/// 一个目录算不算歌单：里面有音频，或者有我们写的空歌单标记。
+/// 隐藏目录和别的工具的杂物（只有图片 / 文档）不往列表里塞。
+fn is_playlist_folder(name: &str, entries: &[String]) -> bool {
+    if name.starts_with('.') {
+        return false;
+    }
+    entries.iter().any(|key| {
+        is_audio_key(key) || key.rsplit('/').next().map(|f| f == ".keep").unwrap_or(false)
+    })
+}
+
+/// 本地记录的歌单 + 网盘上的目录，并统计曲目数
 #[tauri::command]
 async fn s3_playlists(state: State<'_, AppState>) -> Result<Vec<S3PlaylistInfo>, String> {
-    let names = state
+    let mut names = state
         .storage
         .list_s3_playlists()
         .map_err(|e| e.to_string())?;
     let client = s3_client(&state).ok();
+
+    // 整库列一次：既能把别的设备建的歌单补进来，也顺手拿到每个目录的对象
+    let mut folders: HashMap<String, Vec<String>> = HashMap::new();
+    let mut root_keys: Vec<String> = Vec::new();
+    if let Some(c) = client.as_ref() {
+        let prefix = c.normalized_prefix();
+        let scope = if prefix.is_empty() {
+            String::new()
+        } else {
+            format!("{}/", prefix)
+        };
+        if let Ok(keys) = c.list_keys_all(&scope).await {
+            for key in &keys {
+                if is_root_key(key, &prefix) {
+                    root_keys.push(key.clone());
+                }
+                let Some(rest) = key_under_prefix(key, &prefix) else {
+                    continue;
+                };
+                let Some((folder, _)) = rest.split_once('/') else {
+                    continue;
+                };
+                folders
+                    .entry(folder.to_string())
+                    .or_default()
+                    .push(key.clone());
+            }
+            for name in playlists_from_keys(&keys, &prefix) {
+                let Some(entries) = folders.get(&name) else {
+                    continue;
+                };
+                if !is_playlist_folder(&name, entries) {
+                    continue;
+                }
+                if !names.iter().any(|n| n == &name) {
+                    // 记到本地，排序稳定；下次列不动也能显示
+                    let _ = state.storage.save_s3_playlist(&name);
+                    names.push(name);
+                }
+            }
+        }
+    }
+    // 列不到桶（离线 / 配置错误）就只显示本地记录，数量为 0，不把列表清空
+
     let mut out = Vec::with_capacity(names.len());
     for name in names {
         let mut count = 0u32;
         let mut cover = None;
-        if let Some(c) = client.as_ref() {
-            let prefix = playlist_prefix(&c.config().prefix, &name);
-            if let Ok(keys) = c.list_keys(&prefix).await {
-                count = keys.iter().filter(|k| is_audio_key(k)).count() as u32;
+        if let Some(keys) = folders.get(&name) {
+            count = keys.iter().filter(|k| is_audio_key(k)).count() as u32;
+            if let (Some(c), Some(first)) = (client.as_ref(), keys.iter().find(|k| is_audio_key(k)))
+            {
                 let lower: Vec<(String, String)> =
                     keys.iter().map(|k| (k.to_lowercase(), k.clone())).collect();
-                if let Some(first) = keys.iter().find(|k| is_audio_key(k)) {
-                    let stem = first
-                        .rsplit_once('.')
-                        .map(|(a, _)| a)
-                        .unwrap_or(first.as_str());
-                    if let Some(img) = find_sibling(&lower, stem, &["jpg", "jpeg", "png", "webp"]) {
-                        cover = c.presign_get(&img, 6 * 3600).ok();
-                    }
+                let stem = first
+                    .rsplit_once('.')
+                    .map(|(a, _)| a)
+                    .unwrap_or(first.as_str());
+                if let Some(img) = find_sibling(&lower, stem, &["jpg", "jpeg", "png", "webp"]) {
+                    cover = c.presign_get(&img, 6 * 3600).ok();
                 }
             }
         }
-        out.push(S3PlaylistInfo { name, count, cover });
+        out.push(S3PlaylistInfo {
+            name,
+            count,
+            cover,
+            root: false,
+        });
+    }
+
+    // 根目录散歌：有歌才显示「未分类」，空的时候不占位置
+    if let (Some(c), true) = (client.as_ref(), root_keys.iter().any(|k| is_audio_key(k))) {
+        let count = root_keys.iter().filter(|k| is_audio_key(k)).count() as u32;
+        let mut cover = None;
+        if let Some(first) = root_keys.iter().find(|k| is_audio_key(k)) {
+            let lower: Vec<(String, String)> = root_keys
+                .iter()
+                .map(|k| (k.to_lowercase(), k.clone()))
+                .collect();
+            let stem = first
+                .rsplit_once('.')
+                .map(|(a, _)| a)
+                .unwrap_or(first.as_str());
+            if let Some(img) = find_sibling(&lower, stem, &["jpg", "jpeg", "png", "webp"]) {
+                cover = c.presign_get(&img, 6 * 3600).ok();
+            }
+        }
+        // 老数据里可能已经有一张叫「未分类」的真实歌单，那伪歌单换个名字
+        let label = if out.iter().any(|p| p.name == ROOT_PLAYLIST_LABEL) {
+            format!("{}（根目录）", ROOT_PLAYLIST_LABEL)
+        } else {
+            ROOT_PLAYLIST_LABEL.to_string()
+        };
+        out.push(S3PlaylistInfo {
+            name: label,
+            count,
+            cover,
+            root: true,
+        });
     }
     Ok(out)
 }
@@ -2716,9 +2852,8 @@ async fn refresh_s3_covers(client: &S3, tracks: &mut [Track]) {
 }
 
 /// 列出某个网盘歌单里的歌曲（音频 + 同名歌词/封面）。
-async fn list_s3_track_rows(client: &S3, name: &str) -> Result<Vec<S3TrackRow>, String> {
-    let folder = playlist_prefix(&client.normalized_prefix(), name);
-    let keys = client.list_keys(&folder).await.map_err(|e| e.to_string())?;
+/// 把一批对象 key 变成曲目行（同一个目录里的音频 + 同名歌词/封面）
+fn build_track_rows(client: &S3, keys: &[String]) -> Vec<S3TrackRow> {
     let lower: Vec<(String, String)> = keys
         .iter()
         .map(|k| (k.to_lowercase(), k.clone()))
@@ -2763,16 +2898,49 @@ async fn list_s3_track_rows(client: &S3, name: &str) -> Result<Vec<S3TrackRow>, 
         });
     }
     rows.sort_by(|a, b| a.key.cmp(&b.key));
-    Ok(rows)
+    rows
+}
+
+async fn list_s3_track_rows(client: &S3, name: &str) -> Result<Vec<S3TrackRow>, String> {
+    let folder = playlist_prefix(&client.normalized_prefix(), name);
+    let keys = client
+        .list_keys_all(&folder)
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(build_track_rows(client, &keys))
+}
+
+/// 前缀根目录的散歌（「未分类」）
+async fn list_root_track_rows(client: &S3) -> Result<Vec<S3TrackRow>, String> {
+    let prefix = client.normalized_prefix();
+    let scope = if prefix.is_empty() {
+        String::new()
+    } else {
+        format!("{}/", prefix)
+    };
+    let keys = client
+        .list_keys_all(&scope)
+        .await
+        .map_err(|e| e.to_string())?;
+    let root: Vec<String> = keys
+        .into_iter()
+        .filter(|k| is_root_key(k, &prefix))
+        .collect();
+    Ok(build_track_rows(client, &root))
 }
 
 #[tauri::command]
 async fn s3_playlist_tracks(
     state: State<'_, AppState>,
     name: String,
+    root: Option<bool>,
 ) -> Result<Vec<S3TrackRow>, String> {
     let client = s3_client(&state)?;
-    list_s3_track_rows(&client, &name).await
+    if root.unwrap_or(false) {
+        list_root_track_rows(&client).await
+    } else {
+        list_s3_track_rows(&client, &name).await
+    }
 }
 
 /// 删除网盘歌单：连同云端文件一起删
@@ -2781,6 +2949,9 @@ async fn s3_playlist_purge(state: State<'_, AppState>, name: String) -> Result<(
     let name = sanitize_playlist_name(&name)?;
     if name == FAVORITES_PLAYLIST {
         return Err("「喜欢」由红心管理，不能在这里删除".into());
+    }
+    if name == ROOT_PLAYLIST_LABEL {
+        return Err("「未分类」是根目录，不能整组删除".into());
     }
     let client = s3_client(&state)?;
     let folder = playlist_prefix(&client.normalized_prefix(), &name);
@@ -2811,6 +2982,9 @@ async fn s3_playlist_rename(
     }
     if new == FAVORITES_PLAYLIST {
         return Err("「喜欢」是保留名".into());
+    }
+    if new == ROOT_PLAYLIST_LABEL {
+        return Err(format!("「{}」是根目录专用名", ROOT_PLAYLIST_LABEL));
     }
     if old == new {
         return Ok(new);
@@ -2888,12 +3062,26 @@ fn s3_playlists_reorder(state: State<'_, AppState>, names: Vec<String>) -> Resul
 }
 
 #[tauri::command]
-fn s3_playlist_create(state: State<'_, AppState>, name: String) -> Result<String, String> {
+async fn s3_playlist_create(state: State<'_, AppState>, name: String) -> Result<String, String> {
     let name = sanitize_playlist_name(&name)?;
+    if name == ROOT_PLAYLIST_LABEL {
+        return Err(format!("「{}」是根目录专用名，换一个", ROOT_PLAYLIST_LABEL));
+    }
     state
         .storage
         .save_s3_playlist(&name)
         .map_err(|e| e.to_string())?;
+    // 对象存储没有真目录：写一个 0 字节标记，别的设备连同一个桶时也能发现空歌单。
+    // 失败不影响本地创建。
+    if let Ok(client) = s3_client(&state) {
+        let key = format!(
+            "{}.keep",
+            playlist_prefix(&client.normalized_prefix(), &name)
+        );
+        let _ = client
+            .put_object(&key, Vec::new(), "application/octet-stream")
+            .await;
+    }
     Ok(name)
 }
 
@@ -3993,6 +4181,59 @@ mod tests {
         .await;
         assert_eq!(res.unwrap(), 2);
         assert_eq!(calls.load(Ordering::SeqCst), 2);
+    }
+
+    /// 换设备后靠对象目录把歌单找回来：只取前缀下的一级目录
+    #[test]
+    fn discovers_playlists_from_object_keys() {
+        let keys: Vec<String> = [
+            "TinyMusic/周杰伦精选/七里香.flac",
+            "TinyMusic/喜欢/周杰伦 - 稻香.mp3",
+            "TinyMusic/喜欢/周杰伦 - 稻香.jpg",
+            "TinyMusic/喜欢/2024/旧歌.mp3",
+            "TinyMusic/favorites.json",
+            "TinyMusic/散歌.mp3",
+            "NotMine/x.mp3",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        assert_eq!(
+            playlists_from_keys(&keys, "TinyMusic"),
+            vec!["周杰伦精选".to_string(), "喜欢".to_string()]
+        );
+        // 前缀对不上时不会把别人的目录算进来
+        assert!(playlists_from_keys(&keys, "NotMine").is_empty());
+        // 没配前缀时按桶的一级目录
+        assert_eq!(
+            playlists_from_keys(&["A/x.mp3".to_string(), "root.mp3".to_string()], ""),
+            vec!["A".to_string()]
+        );
+    }
+
+    /// 根目录散歌的识别
+    #[test]
+    fn detects_root_keys() {
+        let p = "TinyMusic";
+        assert!(is_root_key("TinyMusic/周杰伦 - 稻香.mp3", p));
+        assert!(is_root_key("TinyMusic/favorites.json", p));
+        assert!(!is_root_key("TinyMusic/喜欢/周杰伦 - 稻香.mp3", p));
+        assert!(!is_root_key("Other/x.mp3", p));
+        assert!(is_root_key("x.mp3", ""));
+        assert!(!is_root_key("a/x.mp3", ""));
+    }
+
+    /// 只有音频或空歌单标记的目录才算歌单
+    #[test]
+    fn playlist_folder_filter() {
+        let with_song = vec!["TinyMusic/喜欢/周杰伦 - 稻香.mp3".to_string()];
+        let with_marker = vec!["TinyMusic/空歌单/.keep".to_string()];
+        let only_cover = vec!["TinyMusic/相册/a.jpg".to_string()];
+        let hidden = vec!["TinyMusic/.Trash/a.jpg".to_string()];
+        assert!(is_playlist_folder("喜欢", &with_song));
+        assert!(is_playlist_folder("空歌单", &with_marker));
+        assert!(!is_playlist_folder("相册", &only_cover));
+        assert!(!is_playlist_folder(".Trash", &hidden));
     }
 
     /// 完整 / 缺歌词封面 / 只剩 sidecar（音频没了）三种情况

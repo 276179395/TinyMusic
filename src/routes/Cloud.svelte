@@ -17,6 +17,8 @@
   let lists = $state<S3PlaylistInfo[]>([]);
   let rows = $state<S3TrackRow[]>([]);
   let current = $state<string | null>(null);
+  /** 当前打开的是「未分类」（前缀根目录的散歌） */
+  let currentRoot = $state(false);
   let loading = $state(true);
   let detailLoading = $state(false);
   let err = $state('');
@@ -37,6 +39,7 @@
 
   function onRowMouseDown(e: MouseEvent, i: number) {
     if (e.button !== 0) return;
+    if (lists[i]?.root) return; // 「未分类」固定在最后，不参与排序
     const el = e.target as HTMLElement;
     if (el.closest('button')) return;
     dragIndex = i;
@@ -60,7 +63,7 @@
     const name = row?.dataset.name;
     if (!name) return;
     const to = lists.findIndex((p) => p.name === name);
-    if (to < 0 || to === dragIndex) return;
+    if (to < 0 || to === dragIndex || lists[to]?.root) return;
     const [item] = lists.splice(dragIndex, 1);
     lists.splice(to, 0, item);
     dragIndex = to;
@@ -74,7 +77,7 @@
     if (!moved) return;
     dragging = false;
     void api
-      .s3ReorderPlaylists(lists.map((p) => p.name))
+      .s3ReorderPlaylists(lists.filter((p) => !p.root).map((p) => p.name))
       .catch((e) => {
         err = String(e);
         return loadList();
@@ -106,13 +109,14 @@
 
   onMount(loadList);
 
-  async function openPlaylist(name: string) {
+  async function openPlaylist(name: string, root = false) {
     current = name;
+    currentRoot = root;
     detailLoading = true;
     err = '';
     rows = [];
     try {
-      rows = await api.s3PlaylistTracks(name);
+      rows = await api.s3PlaylistTracks(name, root);
     } catch (e) {
       err = String(e);
     } finally {
@@ -122,6 +126,7 @@
 
   function back() {
     current = null;
+    currentRoot = false;
     rows = [];
     void loadList();
   }
@@ -155,7 +160,7 @@
     untrack(() => {
       if (current) {
         api
-          .s3PlaylistTracks(current)
+          .s3PlaylistTracks(current, currentRoot)
           .then((next) => (rows = next))
           .catch(() => {});
       } else {
@@ -164,8 +169,8 @@
     });
   });
 
-  function canManage(name: string) {
-    return name !== FAVORITES;
+  function canManage(name: string, root = false) {
+    return name !== FAVORITES && !root;
   }
 
   // ---- 弹窗 ----
@@ -358,10 +363,10 @@
             onmousedown={(e) => onRowMouseDown(e, i)}
             onclick={() => {
               if (suppressClick) return;
-              openPlaylist(p.name);
+              openPlaylist(p.name, p.root);
             }}
             onkeydown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') openPlaylist(p.name);
+              if (e.key === 'Enter' || e.key === ' ') openPlaylist(p.name, p.root);
             }}
           >
             <span class="plgrip" title="按住拖动排序" aria-hidden="true">
@@ -378,7 +383,7 @@
 
             <span class="pltext">
               <span class="plname">{p.name}</span>
-              <span class="plsub">{p.count} 首</span>
+              <span class="plsub">{p.count} 首{#if p.root} · 根目录{/if}</span>
             </span>
 
             <span class="placts">
@@ -388,12 +393,12 @@
                 aria-label="播放 {p.name}"
                 onclick={(e) => {
                   e.stopPropagation();
-                  openPlaylist(p.name).then(() => playAll());
+                  openPlaylist(p.name, p.root).then(() => playAll());
                 }}
               >
                 <HugeiconsIcon icon={icons.play} size={ICON_SIZE.inline} />
               </button>
-              {#if canManage(p.name)}
+              {#if canManage(p.name, p.root)}
                 <button
                   class="icon-btn"
                   title="重命名"
@@ -429,7 +434,7 @@
       </button>
       <h1>{current}</h1>
       <span class="muted">{rows.length} 首</span>
-      {#if missingCount > 0}
+      {#if !currentRoot && missingCount > 0}
         <button
           class="mini warn"
           title="这些歌缺歌词或封面，点开可以补齐"
@@ -439,19 +444,21 @@
         </button>
       {/if}
       <div class="cloud-top-actions">
-        <button
-          class="mini btn-ico"
-          onclick={() => openIntegrity(current!)}
-          title="检查这个歌单里缺音频 / 歌词 / 封面的歌"
-        >
-          <HugeiconsIcon icon={icons.shield} size={ICON_SIZE.inline} />
-          检查完整性
-        </button>
+        {#if !currentRoot}
+          <button
+            class="mini btn-ico"
+            onclick={() => openIntegrity(current!)}
+            title="检查这个歌单里缺音频 / 歌词 / 封面的歌"
+          >
+            <HugeiconsIcon icon={icons.shield} size={ICON_SIZE.inline} />
+            检查完整性
+          </button>
+        {/if}
         <button class="primary btn-ico" onclick={playAll} disabled={!rows.length}>
           <HugeiconsIcon icon={icons.play} size={ICON_SIZE.inline} />
           播放全部
         </button>
-        {#if canManage(current)}
+        {#if canManage(current, currentRoot)}
           <button class="mini btn-ico" onclick={() => openRename(current!)}>
             <HugeiconsIcon icon={icons.edit} size={ICON_SIZE.inline} />
             重命名
@@ -509,7 +516,7 @@
                 size={ICON_SIZE.inline}
               />
             </button>
-            {#if canManage(current)}
+            {#if canManage(current, currentRoot)}
               <button
                 class="icon-btn danger"
                 title="删除这首歌"

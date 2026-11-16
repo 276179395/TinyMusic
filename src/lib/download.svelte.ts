@@ -54,8 +54,12 @@ export function closeDownloadDialog(force = false) {
 export async function loadPlaylists() {
   downloadUi.playlistLoading = true;
   try {
-    downloadUi.playlists = await api.s3Playlists();
-    if (!downloadUi.playlist) downloadUi.playlist = downloadUi.playlists[0]?.name ?? '';
+    // 「未分类」是根目录的伪歌单，下拉框里已经有「（未分类，放在根目录）」了
+    const list = (await api.s3Playlists()).filter((p) => !p.root);
+    downloadUi.playlists = list;
+    if (!list.some((p) => p.name === downloadUi.playlist)) {
+      downloadUi.playlist = list[0]?.name ?? '';
+    }
   } catch (e) {
     downloadUi.playlists = [];
     downloadUi.err = String(e);

@@ -222,6 +222,8 @@ export interface S3PlaylistInfo {
   name: string;
   count: number;
   cover?: string | null;
+  /** true 表示根目录散歌的伪歌单（「未分类」） */
+  root?: boolean;
 }
 
 /** 一次「歌单导入网盘」的结果 */
@@ -442,7 +444,8 @@ export const api = {
   s3PlaylistDelete: (name: string) => invoke<void>('s3_playlist_purge', { name }),
   s3PlaylistRename: (oldName: string, newName: string) =>
     invoke<string>('s3_playlist_rename', { old: oldName, new: newName }),
-  s3PlaylistTracks: (name: string) => invoke<S3TrackRow[]>('s3_playlist_tracks', { name }),
+  s3PlaylistTracks: (name: string, root = false) =>
+    invoke<S3TrackRow[]>('s3_playlist_tracks', { name, root }),
   s3ReorderPlaylists: (names: string[]) => invoke<void>('s3_playlists_reorder', { names }),
   /** 重新签一个网盘曲目的封面直链（签名地址会过期） */
   s3Cover: (key: string) => invoke<string | null>('s3_cover', { key }),
