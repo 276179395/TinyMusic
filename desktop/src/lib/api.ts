@@ -1,5 +1,14 @@
-import { invoke } from '@tauri-apps/api/core';
-import { Channel } from '@tauri-apps/api/core';
+import { invoke as tauriInvoke, Channel } from '@tauri-apps/api/core';
+
+/**
+ * 统一命令入口：桌面走 Tauri IPC 的 tm_invoke，mobile 走本地 HTTP。
+ * 两端的实现只有一份（crates/app::dispatch），这里只是传输层差异。
+ */
+const invoke = <T>(cmd: string, args?: Record<string, unknown>): Promise<T> =>
+  tauriInvoke<T>('tm_invoke', { cmd, args: args ?? {} });
+
+/** 带进度通道的命令仍然走类型化命令（Channel 不能塞进 args） */
+const invokeRaw = tauriInvoke;
 
 export type Availability = 'unknown' | 'available' | 'preview_only' | 'vip_only' | 'unavailable';
 export type Quality =
@@ -329,7 +338,7 @@ export const api = {
   downloadStart: (track: Track, quality: Quality, onProgress: (p: Progress) => void) => {
     const ch = new Channel<Progress>();
     ch.onmessage = onProgress;
-    return invoke<string>('download_start', { track, quality, onProgress: ch });
+    return invokeRaw<string>('download_start', { track, quality, onProgress: ch });
   },
 
   downloads: () => invoke<DownloadRow[]>('download_list'),
@@ -374,7 +383,7 @@ export const api = {
   ) => {
     const ch = new Channel<Progress>();
     ch.onmessage = onProgress;
-    return invoke<string[]>('download_batch', { tracks, quality, onProgress: ch });
+    return invokeRaw<string[]>('download_batch', { tracks, quality, onProgress: ch });
   },
 
   /** 打开酷我网页登录窗口 */
@@ -462,7 +471,7 @@ export const api = {
   ) => {
     const ch = new Channel<S3FixProgress>();
     ch.onmessage = onProgress;
-    return invoke<S3IntegrityReport>('s3_integrity_fix', {
+    return invokeRaw<S3IntegrityReport>('s3_integrity_fix', {
       playlist,
       ids,
       onProgress: ch,
@@ -477,7 +486,7 @@ export const api = {
   ) => {
     const ch = new Channel<Progress>();
     ch.onmessage = onProgress;
-    return invoke<string>('s3_download', { track, quality, playlist, onProgress: ch });
+    return invokeRaw<string>('s3_download', { track, quality, playlist, onProgress: ch });
   },
   s3DownloadBatch: (
     tracks: Track[],
@@ -487,7 +496,7 @@ export const api = {
   ) => {
     const ch = new Channel<Progress>();
     ch.onmessage = onProgress;
-    return invoke<string[]>('s3_download_batch', { tracks, quality, playlist, onProgress: ch });
+    return invokeRaw<string[]>('s3_download_batch', { tracks, quality, playlist, onProgress: ch });
   },
 
   /** 把一个平台歌单整张导入到网盘（后台逐首下载 + 上传） */
@@ -500,7 +509,7 @@ export const api = {
   ) => {
     const ch = new Channel<Progress>();
     ch.onmessage = onProgress;
-    return invoke<S3ImportResult>('s3_import_playlist', {
+    return invokeRaw<S3ImportResult>('s3_import_playlist', {
       provider,
       playlistId,
       name,

@@ -1,0 +1,15 @@
+[package]
+name = "tinymusic-app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "TinyMusic 业务层：AppState + 命令实现，桌面与 mobile 共用"
+
+[dependencies]
+tinymusic-core = { path = "../core" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "fs"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros"] }

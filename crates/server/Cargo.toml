@@ -1,0 +1,18 @@
+[package]
+name = "tinymusic-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "TinyMusic 本地 HTTP API：给 mobile 用，也能单独跑起来用 curl 验收"
+
+[dependencies]
+tinymusic-app = { path = "../app" }
+tinymusic-core = { path = "../core" }
+axum = "0.8"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "sync", "time"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[[bin]]
+name = "tm-server"
+path = "src/main.rs"

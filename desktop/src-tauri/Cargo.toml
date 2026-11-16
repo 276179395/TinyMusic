@@ -6,7 +6,7 @@ license.workspace = true
 description = "TinyMusic — 轻量多平台音乐客户端"
 
 [lib]
-name = "tinymusic_app"
+name = "tinymusic_shell"
 # 桌面端只需要 rlib。`staticlib` / `cdylib` 是移动端（iOS/Android）才需要的产物：
 # 在 Windows + MinGW 上链接 cdylib 会因为导出符号超过 65535 个而失败
 # （ld: error: export ordinal too large）。要出移动包时再临时加回来。
@@ -17,6 +17,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tinymusic-core = { path = "../../crates/core" }
+tinymusic-app = { path = "../../crates/app" }
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
