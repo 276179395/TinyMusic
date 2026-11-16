@@ -1,0 +1,64 @@
+name: mobile
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - 'crates/**'
+      - 'packages/**'
+      - '.github/workflows/mobile.yml'
+  pull_request:
+    paths:
+      - 'mobile/**'
+      - 'crates/**'
+      - 'packages/**'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios-sim,aarch64-apple-ios
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: '. -> target'
+
+      - name: 安装依赖
+        run: pnpm install --no-frozen-lockfile
+
+      - name: 公共库测试
+        run: |
+          pnpm -F @tinymusic/shared test
+          pnpm -F @tinymusic/theme check
+
+      - name: Rust 业务层测试
+        run: cargo test -p tinymusic-app
+
+      - name: 构建 Lynx bundle
+        run: pnpm -F @tinymusic/mobile build
+
+      - name: 构建 iOS 静态库
+        run: cargo build -p tinymusic-ffi --target aarch64-apple-ios-sim
+
+      - name: 装 Pods 并编译模拟器 App
+        run: |
+          cd mobile/native/ios
+          xcodegen generate
+          pod install
+          xcodebuild -workspace TinyMusic.xcworkspace -scheme TinyMusic \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -configuration Debug CODE_SIGNING_ALLOWED=NO build | tail -40

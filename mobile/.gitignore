@@ -1,0 +1,11 @@
+# ReactLynx 产物
+app/dist/
+app/.rspeedy/
+
+# iOS 原生：Pods 与生成物都不入库
+native/ios/Pods/
+native/ios/Podfile.lock
+native/ios/*.xcodeproj/
+native/ios/*.xcworkspace/
+native/ios/DerivedData/
+native/ios/Resources/*.bundle

@@ -1,0 +1,36 @@
+# Lynx 4.2.0 引擎 + 官方扩展元素。
+# 版本必须成对：Lynx 4.2.0 依赖 PrimJS 4.2.1；XElement / LynxService / LynxDevtool 用同一版本号。
+source 'https://github.com/lynx-family/Specs.git'
+source 'https://cdn.cocoapods.org/'
+
+platform :ios, '16.0'
+
+target 'TinyMusic' do
+  pod 'Lynx', '4.2.0', :source => 'https://github.com/lynx-family/Specs.git', :subspecs => ['Framework']
+  pod 'PrimJS', '4.2.1', :subspecs => ['quickjs', 'napi']
+
+  # 图片（SDWebImage）/ 日志 / HTTP（Lynx 的 fetch 靠它）
+  pod 'LynxService', '4.2.0', :source => 'https://github.com/lynx-family/Specs.git', :subspecs => ['Image', 'Log', 'Http']
+  pod 'SDWebImage', '5.15.5'
+  pod 'SDWebImageWebPCoder', '0.11.0'
+
+  # XElement：blur-view / overlay / refresh / svg 等扩展元素
+  pod 'XElement', '4.2.0', :source => 'https://github.com/lynx-family/Specs.git'
+end
+
+# Xcode 26/27 把告警当错误会让 Lynx 的 pod 编不过（官方文档给的降级办法）
+post_install do |installer|
+  installer.pods_project.targets.each do |t|
+    t.build_configurations.each do |config|
+      config.build_settings['GCC_TREAT_WARNINGS_AS_ERRORS'] = 'NO'
+      config.build_settings['CLANG_WARN_DOCUMENTATION_COMMENTS'] = 'NO'
+      flags = config.build_settings['OTHER_CFLAGS'] || ['$(inherited)']
+      flags = [flags] unless flags.is_a?(Array)
+      config.build_settings['OTHER_CFLAGS'] = flags + ['-Wno-error', '-Wno-deprecated-declarations', '-Wno-deprecated-implementations']
+      flags_cpp = config.build_settings['OTHER_CPLUSPLUSFLAGS'] || ['$(inherited)']
+      flags_cpp = [flags_cpp] unless flags_cpp.is_a?(Array)
+      config.build_settings['OTHER_CPLUSPLUSFLAGS'] = flags_cpp + ['-Wno-error', '-Wno-deprecated-declarations', '-Wno-deprecated-implementations']
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
+    end
+  end
+end

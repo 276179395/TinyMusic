@@ -1,0 +1,26 @@
+{
+  "name": "@tinymusic/mobile",
+  "version": "0.7.2",
+  "private": true,
+  "type": "module",
+  "description": "TinyMusic 跨端 App（ReactLynx）：本期 iOS，Android 复用同一份 bundle 与本地后端",
+  "scripts": {
+    "dev": "rspeedy dev",
+    "build": "rspeedy build",
+    "preview": "rspeedy preview"
+  },
+  "dependencies": {
+    "@lynx-js/react": "^0.129.3",
+    "@tinymusic/shared": "workspace:*",
+    "@tinymusic/theme": "workspace:*"
+  },
+  "devDependencies": {
+    "@lynx-js/react-rsbuild-plugin": "^0.22.3",
+    "@lynx-js/rspeedy": "^0.18.6",
+    "@lynx-js/types": "^4.1.0",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  }
+}

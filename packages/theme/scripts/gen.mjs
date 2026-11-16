@@ -188,7 +188,7 @@ function toCss() {
   ];
   for (const [name, tokens] of Object.entries(themes)) {
     lines.push(`.tm-${name} {`);
-    lines.push('  color-scheme: ' + name + ';');
+    // Lynx 的模板编码器不认 color-scheme，直接不写
     for (const [k, v] of Object.entries(tokens)) {
       if (typeof v !== 'string') continue;
       if (/backdrop-filter/.test(k)) continue;

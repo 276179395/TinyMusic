@@ -1,0 +1,35 @@
+name: TinyMusic
+options:
+  bundleIdPrefix: com.tinymusic
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+targets:
+  TinyMusic:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources
+      - path: Resources
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_NAME: TinyMusic
+        PRODUCT_BUNDLE_IDENTIFIER: com.tinymusic.app
+        INFOPLIST_FILE: Supporting/Info.plist
+        SWIFT_OBJC_BRIDGING_HEADER: Sources/Bridging-Header.h
+        SWIFT_VERSION: "5.9"
+        TARGETED_DEVICE_FAMILY: "1"
+        ENABLE_USER_SCRIPT_SANDBOXING: "NO"
+        CLANG_ENABLE_MODULES: "YES"
+        OTHER_LDFLAGS: ["$(inherited)", "-ObjC"]
+        # 本地调试不需要签名；真机/TestFlight 时再覆盖
+        CODE_SIGNING_ALLOWED: "NO"
+    preBuildScripts:
+      - name: "同步 Lynx bundle"
+        script: |
+          SRC="${SRCROOT}/../../app/dist/main.lynx.bundle"
+          DST="${SRCROOT}/Resources/main.lynx.bundle"
+          if [ -f "$SRC" ]; then cp "$SRC" "$DST"; fi
+        basedOnDependencyAnalysis: false

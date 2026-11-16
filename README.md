@@ -14,6 +14,22 @@ TinyMusic 是一个 Windows / macOS 上的音乐客户端。它把「找歌 → 
 
 它不是在线音乐服务，也不替代平台会员。曲目来自平台网页端的接口，能拿到的正常播，拿不到的会明确标出来并置灰——不会让你盯着「正在搜索」等一个永远不会来的结果。
 
+
+---
+
+## 仓库结构
+
+    desktop/         桌面端（Svelte 5 + Tauri 2）
+    mobile/          跨端 App（ReactLynx + iOS 原生壳 + 本地 Rust 后端）
+    crates/core      平台无关协议层（酷我 / 网易云 / S3 / 下载 / SQLite / Range 代理 / ID3）
+    crates/app       业务层：AppState + dispatch，桌面与 mobile 共用同一份实现
+    crates/server    本地 HTTP API（mobile 调用；也能单独跑起来 curl 验收）
+    crates/ffi       C ABI（tm_start/tm_stop/tm_free），原生壳用它启动后端
+    packages/shared  前端公共库（类型 / API 契约 / 传输层 / 格式化 / 音质 / 歌词 / EQ 预设）
+    packages/theme   设计令牌单源（desktop/src/app.css → Lynx 可用的 hex/rgba）
+
+一个 bug 只修一处：业务规则在 crates/app 或 packages/shared，两端口只做薄适配。
+
 ---
 
 ## 能做什么
