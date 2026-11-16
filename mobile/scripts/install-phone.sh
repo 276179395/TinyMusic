@@ -18,22 +18,50 @@ say() { printf '%s\n' "$*"; }
 fail() { printf '✗ %s\n' "$*" >&2; exit 1; }
 
 # ---------- 1. 证书 / Team ----------
+# Team 候选：描述文件里出现过的 Team 才是真能签的；证书可能来自已移除的账号
+candidate_teams() {
+  python3 - <<'PY'
+import glob, os, plistlib, subprocess, sys
+teams = []
+# 1) 已有描述文件
+for path in glob.glob(os.path.expanduser("~/Library/Developer/Xcode/UserData/Provisioning Profiles/*.provisionprofile")):
+    try:
+        raw = subprocess.run(["security", "cms", "-D", "-i", path], capture_output=True).stdout
+        data = plistlib.loads(raw)
+        for t in data.get("TeamIdentifier", []) or []:
+            if t not in teams:
+                teams.append(t)
+    except Exception:
+        pass
+# 2) 证书（兜底）
+try:
+    out = subprocess.run(["security", "find-identity", "-v", "-p", "codesigning"], capture_output=True, text=True).stdout
+    import re
+    for t in re.findall(r"Apple Development: [^(]*\(([A-Z0-9]{10})\)", out):
+        if t not in teams:
+            teams.append(t)
+except Exception:
+    pass
+for t in teams:
+    print(t)
+PY
+}
+
 TEAM="${TM_TEAM:-}"
 if [[ -z "$TEAM" ]]; then
-  IDENT=$(security find-identity -v -p codesigning 2>/dev/null | grep -E 'Apple Development' | head -1 || true)
-  TEAM=$(printf '%s' "$IDENT" | sed -n 's/.*(\([A-Z0-9]\{10\}\))".*/\1/p')
+  TEAMS=$(candidate_teams || true)
+  TEAM=$(printf '%s\n' "$TEAMS" | head -1)
+  TEAM_LIST="$TEAMS"
+else
+  TEAM_LIST="$TEAM"
 fi
-[[ -n "$TEAM" ]] || fail "没找到 Apple Development 证书。先在 Xcode → Settings → Accounts 登录 Apple ID（会自动生成证书），再回来跑。"
-say "✓ Team: $TEAM"
+[[ -n "$TEAM" ]] || fail "没找到可用的 Team。先在 Xcode → Settings → Accounts 登录 Apple ID，再回来跑。"
+say "✓ Team 候选: $(printf '%s' "${TEAM_LIST:-$TEAM}" | paste -sd' ' -)"
 
 BUNDLE_ID="${TM_BUNDLE_ID:-$(sed -n 's/.*PRODUCT_BUNDLE_IDENTIFIER: *//p' "$IOS/project.yml" | head -1 | tr -d '[:space:]')}"
 BUNDLE_ID="${BUNDLE_ID:-com.tinymusic.app}"
 say "✓ Bundle ID: $BUNDLE_ID"
 
-# Xcode 账号是否真的可用（证书在、但账号没登录时 xcodebuild 会报 No Account for Team）
-if ! defaults read com.apple.dt.Xcode IDEProvisioningTeams >/dev/null 2>&1; then
-  say "! 没读到 Xcode 里缓存的 Team —— 如果自动签名失败，去 Xcode → Settings → Accounts 加 Apple ID。"
-fi
 
 # ---------- 2. 设备 ----------
 DEV_INFO=$(xcrun devicectl list devices --json-output /tmp/tm-devices.json >/dev/null 2>&1 && python3 - /tmp/tm-devices.json <<'PY'
@@ -72,6 +100,14 @@ else
   DEVICE_STATE=$(printf '%s' "$DEV_INFO" | cut -f3)
   DEVICE_OS=$(printf '%s' "$DEV_INFO" | cut -f4)
   say "✓ 设备: ${DEVICE_NAME}（iOS ${DEVICE_OS}, ${DEVICE_STATE}）"
+  # 开发者模式没开时，安装会以「cryptex / DDI 无法挂载」失败，提前讲清楚
+  if xcrun devicectl device info details --device "$DEVICE_ID" 2>&1 | grep -q 'Developer Mode is turned off'; then
+    say ""
+    say "! 手机的「开发者模式」还关着，安装会被系统拒绝。请先在手机上打开："
+    say "   设置 → 隐私与安全性 → 开发者模式 → 打开 → 输入密码 → 重启"
+    say "   重启解锁后会再问一次，点「打开」"
+    [[ $CHECK_ONLY -eq 1 ]] || fail "打开开发者模式并重启后，重跑本脚本。"
+  fi
 fi
 
 [[ $CHECK_ONLY -eq 1 ]] && { say ""; say "检查完毕，可以直接跑不带 --check 的命令安装。"; exit 0; }
@@ -86,12 +122,27 @@ TM_TEAM="$TEAM" TM_BUNDLE_ID="$BUNDLE_ID" "$ROOT/mobile/scripts/device-setup.sh"
   || { tail -5 /tmp/tm-install-setup.log; fail "工程准备失败（详见 /tmp/tm-install-setup.log）"; }
 
 # ---------- 4. 签名构建 ----------
-build_signed() {
+build_with_team() {
   (cd "$IOS" && xcodebuild -workspace TinyMusic.xcworkspace -scheme TinyMusic \
     -configuration Release -destination 'generic/platform=iOS' \
     -allowProvisioningUpdates \
-    DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Automatic \
+    DEVELOPMENT_TEAM="$1" CODE_SIGN_STYLE=Automatic \
     build > /tmp/tm-install-build.log 2>&1)
+}
+
+# 逐个候选 Team 试，第一个能签过描述文件的就是它
+build_signed() {
+  local t
+  while IFS= read -r t; do
+    [[ -z "$t" ]] && continue
+    if build_with_team "$t"; then
+      TEAM="$t"
+      say "✓ 用 Team $t 完成签名"
+      return 0
+    fi
+    say "  Team $t 签不过，换下一个"
+  done <<< "$(printf '%s\n' "${TEAM_LIST:-$TEAM}")"
+  return 1
 }
 
 say "== 构建 Release（签名）=="
@@ -137,10 +188,16 @@ APP=$(ls -d ~/Library/Developer/Xcode/DerivedData/TinyMusic-*/Build/Products/Rel
 
 # ---------- 5. 安装到手机 ----------
 say "== 安装到手机（$DEVICE_ID）=="
-xcrun devicectl device install app --device "$DEVICE_ID" "$APP" > /tmp/tm-install-devicectl.log 2>&1 || {
+if ! xcrun devicectl device install app --device "$DEVICE_ID" "$APP" > /tmp/tm-install-devicectl.log 2>&1; then
+  if grep -qiE 'developer mode is not enabled|developer mode is turned off|cryptex|DDI' /tmp/tm-install-devicectl.log; then
+    say ""
+    fail "手机没开「开发者模式」，系统拒绝了安装。请在手机上：
+   设置 → 隐私与安全性 → 开发者模式 → 打开 → 输入锁屏密码 → 重启
+   重启解锁后再点一次「打开」，然后重跑本脚本。"
+  fi
   tail -6 /tmp/tm-install-devicectl.log
   fail "安装失败。也可以在 Xcode 里选中手机按 ⌘R（那时会自动处理授权）。"
-}
+fi
 
 cat <<EOF
 
