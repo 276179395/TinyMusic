@@ -154,6 +154,26 @@ impl Default for Settings {
 }
 
 
+/// 把旧沙盒容器的绝对路径改写到当前容器。
+///
+/// 只有在两端都落在 `/Documents/` 之下时才改写（iOS 特征）；
+/// 桌面默认目录是 ~/Music/TinyMusic，不会命中，行为不变。
+pub fn rebase_sandbox_path(stored: &str, current_default: &str) -> String {
+    const MARK: &str = "/Documents/";
+    let Some((_, tail_stored)) = stored.split_once(MARK) else {
+        return stored.to_string();
+    };
+    let Some((head_current, _)) = current_default.split_once(MARK) else {
+        return stored.to_string();
+    };
+    let rebased = format!("{}{}{}", head_current, MARK, tail_stored);
+    if rebased != stored {
+        return rebased;
+    }
+    stored.to_string()
+}
+
+
 pub fn dirs_download() -> String {
     let base = std::env::var("USERPROFILE")
         .or_else(|_| std::env::var("HOME"))
@@ -3519,6 +3539,12 @@ impl AppState {
         if !has_settings_file || settings.download_dir.trim().is_empty() {
             settings.download_dir = default_download_dir.to_string_lossy().to_string();
         }
+        // iOS 的沙盒容器 UUID 会随重装变化，settings.json 里存的是旧容器的绝对路径。
+        // 这里把它改写到当前容器，否则新下载会写进一个"已经不存在于本次安装"的目录。
+        settings.download_dir = rebase_sandbox_path(
+            &settings.download_dir,
+            &default_download_dir.to_string_lossy(),
+        );
         let _ = std::fs::create_dir_all(&settings.download_dir);
 
         let kuwo: Arc<dyn MusicProvider> = Arc::new(KuwoProvider::with_http(http.clone()));

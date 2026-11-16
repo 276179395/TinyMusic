@@ -8,18 +8,22 @@ import { api } from '@tinymusic/shared/api';
 interface PlaylistPageProps {
   playlist: PlaylistRef;
   onBack: () => void;
+  /** 冒烟：进页面就进多选态并选中前两首 */
+  autoBatch?: boolean;
 }
 
 /**
  * 歌单详情：曲目列表 + 一键播放全部。
  * 取数与解析在 Rust（crates/app::playlist），这里只渲染和入队。
  */
-export function PlaylistPage({ playlist, onBack }: PlaylistPageProps) {
+export function PlaylistPage({ playlist, onBack, autoBatch }: PlaylistPageProps) {
   const [detail, setDetail] = useState<PlaylistDetail | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState('');
   const [message, setMessage] = useState('');
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<string[]>([]);
 
   useEffect(() => {
     'background only';
@@ -51,6 +55,45 @@ export function PlaylistPage({ playlist, onBack }: PlaylistPageProps) {
     if (tracks.length) void player.playTrack(tracks[0], tracks);
   }, [detail]);
 
+  const toggleSelect = useCallback((track: Track) => {
+    'background only';
+    const id = track.provider + ':' + track.id;
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }, []);
+
+  /** 批量下载选中曲目（编排在 crates/app，进度从后端推回） */
+  const onBatchDownload = useCallback(() => {
+    'background only';
+    const tracks = (detail?.tracks ?? []).filter((t) => selected.includes(t.provider + ':' + t.id));
+    if (!tracks.length) return;
+    setMessage('批量下载中…');
+    api
+      .downloadBatch(tracks, 'super', (p: { done?: number; total?: number }) => {
+        setMessage('下载中 ' + String(p.done ?? 0) + '/' + String(p.total ?? tracks.length));
+      })
+      .then(() => setMessage('已开始下载 ' + tracks.length + ' 首'))
+      .catch((e: unknown) => setMessage(String(e)));
+  }, [detail, selected]);
+
+  // 冒烟钩子：自动进多选并选中前两首
+  useEffect(() => {
+    'background only';
+    if (!autoBatch || !detail || selecting) return;
+    setSelecting(true);
+    setSelected(detail.tracks.slice(0, 2).map((t) => t.provider + ':' + t.id));
+    // 再等一拍，让选中态先渲染出来，然后真的发起批量下载
+    setTimeout(() => {
+      const tracks = detail.tracks.slice(0, 2);
+      setMessage('批量下载中…');
+      api
+        .downloadBatch(tracks, 'super', (p: { done?: number; total?: number }) => {
+          setMessage('下载中 ' + String(p.done ?? 0) + '/' + String(p.total ?? tracks.length));
+        })
+        .then(() => setMessage('已开始下载 ' + tracks.length + ' 首'))
+        .catch((e: unknown) => setMessage(String(e)));
+    }, 800);
+  }, [autoBatch, detail, selecting]);
+
   const onTap = useCallback((track: Track) => {
     'background only';
     void player.playTrack(track, detail?.tracks ?? []);
@@ -65,6 +108,9 @@ export function PlaylistPage({ playlist, onBack }: PlaylistPageProps) {
           <text className="page-head-action-text">返回</text>
         </view>
         <view className="row-actions">
+          <view className="page-head-action" bindtap={() => { setSelecting((v) => !v); setSelected([]); }}>
+            <text className="page-head-action-text">{selecting ? '取消多选' : '多选'}</text>
+          </view>
           <view className="page-head-action" bindtap={onImport}>
             <text className="page-head-action-text">{importing || '导入网盘'}</text>
           </view>
@@ -89,10 +135,25 @@ export function PlaylistPage({ playlist, onBack }: PlaylistPageProps) {
       {message ? <text className="home-hint">{message}</text> : null}
       {error ? <text className="home-error">{error}</text> : null}
 
+      {selecting ? (
+        <view className="batch-bar">
+          <text className="batch-count">{'已选 ' + selected.length + ' 首'}</text>
+          <view className="row-actions">
+            <view className="page-head-action" bindtap={onBatchDownload}>
+              <text className="page-head-action-text">下载</text>
+            </view>
+          </view>
+        </view>
+      ) : null}
+
       <scroll-view className="results" scroll-orientation="vertical">
         {tracks.map((t, i) => (
-          <view className="row" key={t.provider + ':' + t.id} bindtap={() => onTap(t)}>
-            <text className="row-index">{String(i + 1)}</text>
+          <view
+            className={'row' + (selected.includes(t.provider + ':' + t.id) ? ' row--selected' : '')}
+            key={t.provider + ':' + t.id}
+            bindtap={() => (selecting ? toggleSelect(t) : onTap(t))}
+          >
+            <text className="row-index">{selecting ? (selected.includes(t.provider + ':' + t.id) ? '✓' : String(i + 1)) : String(i + 1)}</text>
             <view className="row-meta">
               <text className="row-title">{t.title}</text>
               <text className="row-sub">{t.artist}</text>

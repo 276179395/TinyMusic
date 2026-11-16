@@ -231,3 +231,26 @@ P4 结束，进入 P5（播放闭环）。
    再校验一次仍然是 0 issue。
 
 踩坑：桩一开始收不到 12MB 的 PUT —— axum 默认请求体上限 2MB，要 `DefaultBodyLimit::max(...)`。
+
+
+## Round 14：列表批量操作 + 又一类沙盒路径坑
+
+### 批量多选
+歌单页新增「多选」：行变成勾选、顶部显示「已选 N 首」+「下载」，走 `api.downloadBatch`
+（编排在 `crates/app`，进度按 done/total 回推）。截图 `p10-batch-select.png`。
+
+实测（`TM_BATCH=1` 自动选前两首并真的发起下载）：
+```
+最伟大的作品  super 9,771,355 bytes  done
+还在流浪      super 10,641,751 bytes done
+```
+
+### 沙盒 download_dir 过期（写路径）
+批量下载后发现文件落在了**上一安装**的容器里：`settings.json` 里 `download_dir` 存的是旧容器绝对路径，
+重装后新容器 UUID 变了，下载就往旧路径写。
+
+修法（`crates/app`）：启动加载设置时把落在 `/Documents/` 下的旧绝对路径改写到当前容器的对应位置；
+桌面默认目录是 `~/Music/TinyMusic`，不会命中，行为不变。
+
+配合 round 7 的「读出来按文件名重找」，写入和读取两侧都稳了。实测修复后：
+记录路径 = `/Application/E5A27A30-…/Documents/TinyMusic/…`（当前容器），文件也在。

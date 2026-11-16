@@ -68,6 +68,8 @@ final class RootViewController: UIViewController {
             "openEq": ProcessInfo.processInfo.environment["TM_OPEN_EQ"] == "1",
             "eqOn": ProcessInfo.processInfo.environment["TM_EQ"] == "1",
             "openS3": ProcessInfo.processInfo.environment["TM_OPEN_S3"] == "1",
+            "batch": ProcessInfo.processInfo.environment["TM_BATCH"] == "1",
+            "openPlaylist": ProcessInfo.processInfo.environment["TM_OPEN_PLAYLIST"] == "1",
         ]
         if let baseUrl = backend.baseUrl { props["apiBase"] = baseUrl }
         if let token = backend.token { props["apiToken"] = token }

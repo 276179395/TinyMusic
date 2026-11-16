@@ -22,6 +22,8 @@ interface HomeProps {
   onOpenPlaylist: (p: PlaylistRef) => void;
   /** 冒烟：直接进搜索段（song / playlist） */
   initialSearchKind?: string;
+  /** 冒烟：自动打开第一个歌单 */
+  autoOpenPlaylist?: boolean;
 }
 
 function fmt(sec: number): string {
@@ -34,7 +36,7 @@ function fmt(sec: number): string {
 /**
  * 首页 = 搜索 + 结果列表 + 底部播放条（P3 浏览骨架 + P5 播放的最小闭环）。
  */
-export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, onOpenPlaylist, initialSearchKind }: HomeProps) {
+export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, onOpenPlaylist, initialSearchKind, autoOpenPlaylist }: HomeProps) {
   const [mode, setMode] = useState<'recommend' | 'search'>(initialSearchKind ? 'search' : 'recommend');
   const [recSongs, setRecSongs] = useState<Track[]>([]);
   const [recLists, setRecLists] = useState<PlaylistRef[]>([]);
@@ -123,6 +125,13 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, o
     };
     setTimeout(attempt, 500);
   }, [autoDownload, mode, items, recSongs]);
+
+  // 冒烟钩子：搜歌单结果到手后自动进第一个
+  useEffect(() => {
+    'background only';
+    if (!autoOpenPlaylist || playlistHits.length === 0) return;
+    onOpenPlaylist(playlistHits[0]);
+  }, [autoOpenPlaylist, playlistHits, onOpenPlaylist]);
 
   const onTapTrack = useCallback((track: Track) => {
     'background only';

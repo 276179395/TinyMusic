@@ -126,7 +126,7 @@ export function App() {
             onBack={() => setAlbum(null)}
           />
         ) : playlist ? (
-          <PlaylistPage playlist={playlist} onBack={() => setPlaylist(null)} />
+          <PlaylistPage playlist={playlist} onBack={() => setPlaylist(null)} autoBatch={props.batch === true} />
         ) : showPlayer && snapshot.current ? (
           <PlayerPage
             iconColor={iconColor}
@@ -146,6 +146,7 @@ export function App() {
                   onOpenPlayer={() => setShowPlayer(true)}
                   onOpenPlaylist={(p) => setPlaylist(p)}
                   initialSearchKind={props.searchKind}
+                  autoOpenPlaylist={props.openPlaylist === true}
                 />
               ) : null}
               {tab === 'downloads' ? <Downloads iconColor={iconColor} playLocal={props.playLocal === true} /> : null}

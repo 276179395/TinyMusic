@@ -851,3 +851,24 @@
   font-size: 11px;
   color: var(--foreground, #fafafa);
 }
+
+/* ---------- 多选 ---------- */
+.batch-bar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+  border-radius: 10px;
+  background-color: var(--bg3, rgba(255, 255, 255, 0.07));
+}
+
+.batch-count {
+  font-size: 12px;
+  color: var(--foreground, #fafafa);
+}
+
+.row--selected {
+  background-color: var(--bg2, rgba(48, 48, 48, 0.46));
+}
