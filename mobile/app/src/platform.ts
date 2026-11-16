@@ -19,6 +19,8 @@ export interface HostProps {
   openArtist?: boolean | number;
   openAlbum?: boolean | number;
   searchKind?: string;
+  openEq?: boolean | number;
+  eqOn?: boolean | number;
 }
 
 /**
@@ -33,6 +35,8 @@ export function normalizeHostProps(raw: Record<string, unknown> | null | undefin
   props.autoDownload = Boolean(src.autoDownload);
   props.playLocal = Boolean(src.playLocal);
   props.openArtist = Boolean(src.openArtist);
+  props.openEq = Boolean(src.openEq);
+  props.eqOn = Boolean(src.eqOn);
   props.openAlbum = Boolean(src.openAlbum);
   props.safeAreaTop = Number(src.safeAreaTop ?? 0) || 0;
   props.safeAreaBottom = Number(src.safeAreaBottom ?? 0) || 0;

@@ -169,3 +169,17 @@ P4 结束，进入 P5（播放闭环）。
 - 下载页离线起播 → 播放条显示 "东风破 / 0:13 / 5:15"（截图 `p8-miniplayer-local.png`）
 
 **留下的约定**：跨组件的播放态一律走原生状态；JS store 只负责队列/切歌策略。
+
+
+## Round 10：均衡器（MTAudioProcessingTap）
+
+播放走 AVPlayer（流代理 + 本地文件都是），AVAudioEngine 的 AVAudioUnitEQ 接不进来，
+所以用 **MTAudioProcessingTap**：给 AVPlayerItem 挂 audioMix + tap，在回调里跑 10 段峰值 biquad。
+
+- `EQProcessor.swift`：RBJ cookbook 峰值 EQ 系数 + 每声道状态；`set(enabled:gains:preampDB:)` 线程安全更新。
+- `TmAudioModule.attachEQ(to:)`：`MTAudioProcessingTapCreate` → `AVMutableAudioMixInputParameters.audioTapProcessor`，
+  在 asset tracks 加载完成后赋值；失败只打日志，不影响播放。
+- JS：`audio.setEQ(enabled, gains, preamp)`；状态在 `state/equalizer.ts`（频段/预设来自 `packages/shared/eq`）。
+- UI：设置 → 均衡器；开关 + 10 段 ±按钮 + 预设（平直/流行/摇滚/…）。
+- 实测：开启「流行」预设后播放正常推进（0:10/2:42），无 tap 创建失败日志；截图 `p8-equalizer.png`、`p8-eq-playing.png`。
+- 已知：EQ 目前是内存态（重开 App 回默认），要持久化得给 `Settings` 加字段。

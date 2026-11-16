@@ -30,7 +30,7 @@ function Field({ label, value, placeholder, onChange }: FieldProps) {
  * 设置页（mobile）：下载、音质、网盘。
  * 桌面专属项（托盘、自动更新、窗口主题）不出现。
  */
-export function Settings() {
+export function Settings({ onOpenEqualizer }: { onOpenEqualizer: () => void }) {
   const [model, setModel] = useState<SettingsModel | null>(null);
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState('');
@@ -140,6 +140,14 @@ export function Settings() {
               <view className="switch-knob" />
             </view>
           </view>
+        </view>
+
+        <view className="section" bindtap={onOpenEqualizer}>
+          <view className="failure-head">
+            <text className="section-title">均衡器</text>
+            <text className="link-text">调整 ›</text>
+          </view>
+          <text className="section-hint">10 段均衡 + 预设，与桌面同一套频段与预设</text>
         </view>
 
         <view className="section">

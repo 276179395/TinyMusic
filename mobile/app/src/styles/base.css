@@ -800,3 +800,54 @@
   font-size: 12px;
   color: var(--fg2, #a4a4a4);
 }
+
+/* ---------- 均衡器 ---------- */
+.eq-guide {
+  display: flex;
+  flex-direction: column;
+  margin-top: 10px;
+}
+
+.eq-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.eq-label {
+  width: 46px;
+  font-size: 11px;
+  color: var(--fg3, #747474);
+}
+
+.eq-bar {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background-color: var(--bg3, rgba(255, 255, 255, 0.07));
+  overflow: hidden;
+}
+
+.eq-fill {
+  height: 6px;
+  border-radius: 3px;
+  background-color: var(--ink, #ebebeb);
+}
+
+.eq-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+}
+
+.eq-value {
+  width: 34px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--foreground, #fafafa);
+}

@@ -22,6 +22,7 @@ final class TmAudioModule: NSObject, LynxModule {
             "setVolume": NSStringFromSelector(#selector(setVolume(_:))),
             "stop": NSStringFromSelector(#selector(stop)),
             "state": NSStringFromSelector(#selector(state(_:))),
+            "setEQ": NSStringFromSelector(#selector(setEQ(_:gains:preamp:))),
         ]
     }
 
@@ -36,6 +37,11 @@ final class TmAudioModule: NSObject, LynxModule {
     private var pendingCommand: [String: Any]?
     private var nowPlaying: [String: Any] = [:]
     private var coverURL: String?
+    /// 均衡器（挂在每个 AVPlayerItem 的 audioMix 上）
+    private let eq = EQProcessor()
+    private var eqEnabled = false
+    private var eqGains: [Float] = Array(repeating: 0, count: 10)
+    private var eqPreamp: Float = 0
 
     override init() {
         super.init()
@@ -86,6 +92,7 @@ final class TmAudioModule: NSObject, LynxModule {
                 return
             }
             let item = AVPlayerItem(url: u)
+            self.attachEQ(to: item)
             self.player.replaceCurrentItem(with: item)
             self.status = "loading"
             self.nowPlaying = [
@@ -122,6 +129,7 @@ final class TmAudioModule: NSObject, LynxModule {
             }
             NSLog("[TinyMusic] audio.loadLocal path=\(path)")
             let item = AVPlayerItem(url: fileURL)
+            self.attachEQ(to: item)
             self.player.replaceCurrentItem(with: item)
             self.status = "loading"
             self.nowPlaying = [
@@ -137,6 +145,15 @@ final class TmAudioModule: NSObject, LynxModule {
                 self?.status = "paused"
             }
         }
+    }
+
+    /// JS 设置均衡器：enabled + 10 段增益(dB) + 预增益(dB)。
+    /// 改动立即生效（tap 内的系数是线程安全更新的）。
+    func setEQ(_ enabled: Bool, gains: [Double], preamp: Double) {
+        eqEnabled = enabled
+        eqGains = gains.map { Float($0) }
+        eqPreamp = Float(preamp)
+        eq.set(enabled: enabled, gains: eqGains, preampDB: eqPreamp)
     }
 
     func play() {
@@ -215,6 +232,51 @@ final class TmAudioModule: NSObject, LynxModule {
     }
 
     // MARK: - 线程
+
+    /// 建一个 processing tap 挂到 item 上；失败就静默跳过（不影响播放）
+    private func attachEQ(to item: AVPlayerItem) {
+        var callbacks = MTAudioProcessingTapCallbacks(
+            version: kMTAudioProcessingTapCallbacksVersion_0,
+            clientInfo: Unmanaged.passUnretained(eq).toOpaque(),
+            init: { _, clientInfo, tapStorageOut in
+                tapStorageOut.pointee = clientInfo
+            },
+            finalize: { _ in },
+            prepare: { tap, _, format in
+                let storage = MTAudioProcessingTapGetStorage(tap)
+                let processor = Unmanaged<EQProcessor>.fromOpaque(storage).takeUnretainedValue()
+                processor.prepare(format: format.pointee)
+            },
+            unprepare: { _ in },
+            process: { tap, numberFrames, _, bufferListInOut, numberFramesOut, flagsOut in
+                var timeRange = CMTimeRange.zero
+                let status = MTAudioProcessingTapGetSourceAudio(
+                    tap, numberFrames, bufferListInOut, flagsOut, &timeRange, numberFramesOut
+                )
+                guard status == noErr else { return }
+                let storage = MTAudioProcessingTapGetStorage(tap)
+                let processor = Unmanaged<EQProcessor>.fromOpaque(storage).takeUnretainedValue()
+                processor.process(frames: Int(numberFramesOut.pointee), bufferList: bufferListInOut)
+            }
+        )
+
+        var tap: MTAudioProcessingTap?
+        let created = MTAudioProcessingTapCreate(
+            kCFAllocatorDefault, &callbacks, kMTAudioProcessingTapCreationFlag_PostEffects, &tap
+        )
+        guard created == noErr, let tap else {
+            NSLog("[TinyMusic] EQ tap 创建失败: \(created)")
+            return
+        }
+        let audioMix = AVMutableAudioMix()
+        item.asset.loadTracks(withMediaType: .audio) { tracks, _ in
+            guard let track = tracks?.first else { return }
+            let params = AVMutableAudioMixInputParameters(track: track)
+            params.audioTapProcessor = tap
+            audioMix.inputParameters = [params]
+            DispatchQueue.main.async { item.audioMix = audioMix }
+        }
+    }
 
     private func onMain(_ block: @escaping () -> Void) {
         if Thread.isMainThread { block() } else { DispatchQueue.main.async(execute: block) }

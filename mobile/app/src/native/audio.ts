@@ -18,6 +18,7 @@ export interface AudioState {
 interface TmAudioModule {
   load(url: string, title: string, artist: string, cover: string, duration: number): void;
   loadLocal(path: string, title: string, artist: string): void;
+  setEQ(enabled: boolean, gains: number[], preamp: number): void;
   play(): void;
   pause(): void;
   seek(seconds: number): void;
@@ -79,6 +80,9 @@ export const audio = {
   },
   setVolume(v: number): void {
     module()?.setVolume(v);
+  },
+  setEQ(enabled: boolean, gains: number[], preamp: number): void {
+    module()?.setEQ(enabled, gains, preamp);
   },
   stop(): void {
     module()?.stop();

@@ -8,6 +8,7 @@ import { Downloads } from './routes/Downloads.js';
 import { Settings } from './routes/Settings.js';
 import { Account } from './routes/Account.js';
 import { Cloud } from './routes/Cloud.js';
+import { Equalizer } from './routes/Equalizer.js';
 import { PlaylistPage } from './routes/PlaylistPage.js';
 import { ArtistPage } from './routes/ArtistPage.js';
 import { AlbumPage } from './routes/AlbumPage.js';
@@ -18,6 +19,8 @@ import { PlayerBar } from './components/PlayerBar.js';
 import { player } from './state/player.js';
 import { ensureTransport, normalizeHostProps, readGlobalPropsDirect, transportError, type HostProps } from './platform.js';
 import { usePlayer } from './state/player.js';
+import { equalizer } from './state/equalizer.js';
+import { EQ_PRESETS } from '@tinymusic/shared/eq';
 
 /**
  * 壳层：主题、安全区、传输层初始化，然后决定渲染首页还是全屏播放页。
@@ -55,6 +58,7 @@ export function App() {
   const [playlist, setPlaylist] = useState<PlaylistRef | null>(null);
   const [artist, setArtist] = useState<{ id: string; name: string } | null>(null);
   const [album, setAlbum] = useState<{ id: string; name: string } | null>(null);
+  const [showEq, setShowEq] = useState(Boolean(props.openEq));
 
   useEffect(() => {
     'background only';
@@ -69,6 +73,12 @@ export function App() {
     if (props.openArtist && cur.artist_id) setArtist({ id: String(cur.artist_id), name: cur.artist });
     else if (props.openAlbum && cur.album_id) setAlbum({ id: String(cur.album_id), name: cur.album });
   }, [props.openArtist, props.openAlbum, snapshot.current?.id]);
+
+  // 冒烟钩子：TM_OPEN_EQ=1 时套一个预设，顺带验证原生 EQ tap 不影响播放
+  useEffect(() => {
+    'background only';
+    if (props.openEq || props.eqOn) equalizer.usePreset(EQ_PRESETS[1] ?? EQ_PRESETS[0]);
+  }, [props.openEq, props.eqOn]);
 
   // 冒烟钩子：TM_OPEN_PLAYER=1 时，播放开始后自动展开全屏播放页
   useEffect(() => {
@@ -92,6 +102,8 @@ export function App() {
               {transportError || props.backendError || '等待本地后端…'}
             </text>
           </view>
+        ) : showEq ? (
+          <Equalizer onBack={() => setShowEq(false)} />
         ) : artist ? (
           <ArtistPage
             provider="kuwo"
@@ -132,7 +144,7 @@ export function App() {
               {tab === 'downloads' ? <Downloads iconColor={iconColor} playLocal={props.playLocal === true} /> : null}
               {tab === 'cloud' ? <Cloud iconColor={iconColor} /> : null}
               {tab === 'account' ? <Account onOpenPlaylist={(p) => setPlaylist(p)} /> : null}
-              {tab === 'settings' ? <Settings /> : null}
+              {tab === 'settings' ? <Settings onOpenEqualizer={() => setShowEq(true)} /> : null}
             </view>
             {/* 全局迷你播放条：切换 tab 也在，点了展开全屏 */}
             <view bindtap={() => snapshot.current && setShowPlayer(true)}>
