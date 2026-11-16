@@ -17,7 +17,7 @@ targets:
         INFOPLIST_FILE: Supporting/Info.plist
         # 真机签名：把下面两行改成自己的（或用 ./mobile/scripts/device-setup.sh <TEAM_ID>）
         # 留空时模拟器照常构建（构建命令显式传 CODE_SIGNING_ALLOWED=NO）
-        DEVELOPMENT_TEAM: "B8787NKP38"
+        DEVELOPMENT_TEAM: "BCRZR3P4AP"
         PRODUCT_BUNDLE_IDENTIFIER: com.tinymusic.app
         CODE_SIGN_STYLE: Automatic
         SWIFT_OBJC_BRIDGING_HEADER: Sources/Bridging-Header.h

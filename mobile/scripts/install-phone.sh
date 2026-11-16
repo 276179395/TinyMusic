@@ -48,19 +48,19 @@ PY
 }
 
 TEAM="${TM_TEAM:-}"
-if [[ -z "$TEAM" ]]; then
+if [[ -z "${TEAM}" ]]; then
   TEAMS=$(candidate_teams || true)
-  TEAM=$(printf '%s\n' "$TEAMS" | head -1)
-  TEAM_LIST="$TEAMS"
+  TEAM=$(printf '%s\n' "${TEAMS}" | head -1)
+  TEAM_LIST="${TEAMS}"
 else
-  TEAM_LIST="$TEAM"
+  TEAM_LIST="${TEAM}"
 fi
-[[ -n "$TEAM" ]] || fail "没找到可用的 Team。先在 Xcode → Settings → Accounts 登录 Apple ID，再回来跑。"
-say "✓ Team 候选: $(printf '%s' "${TEAM_LIST:-$TEAM}" | paste -sd' ' -)"
+[[ -n "${TEAM}" ]] || fail "没找到可用的 Team。先在 Xcode → Settings → Accounts 登录 Apple ID，再回来跑。"
+say "✓ Team 候选: $(printf '%s' "${TEAM_LIST:-${TEAM}}" | paste -sd' ' -)"
 
 BUNDLE_ID="${TM_BUNDLE_ID:-$(sed -n 's/.*PRODUCT_BUNDLE_IDENTIFIER: *//p' "$IOS/project.yml" | head -1 | tr -d '[:space:]')}"
 BUNDLE_ID="${BUNDLE_ID:-com.tinymusic.app}"
-say "✓ Bundle ID: $BUNDLE_ID"
+say "✓ Bundle ID: ${BUNDLE_ID}"
 
 
 # ---------- 2. 设备 ----------
@@ -101,7 +101,7 @@ else
   DEVICE_OS=$(printf '%s' "$DEV_INFO" | cut -f4)
   say "✓ 设备: ${DEVICE_NAME}（iOS ${DEVICE_OS}, ${DEVICE_STATE}）"
   # 开发者模式没开时，安装会以「cryptex / DDI 无法挂载」失败，提前讲清楚
-  if xcrun devicectl device info details --device "$DEVICE_ID" 2>&1 | grep -q 'Developer Mode is turned off'; then
+  if xcrun devicectl device info details --device "${DEVICE_ID}" 2>&1 | grep -q 'Developer Mode is turned off'; then
     say ""
     say "! 手机的「开发者模式」还关着，安装会被系统拒绝。请先在手机上打开："
     say "   设置 → 隐私与安全性 → 开发者模式 → 打开 → 输入密码 → 重启"
@@ -118,14 +118,19 @@ say "== 构建 Lynx bundle =="
 (cd "$ROOT" && pnpm -F @tinymusic/mobile build 2>&1 | grep -E 'lynx.bundle|error' | head -2 || true)
 
 say "== 写入签名配置并重新生成工程 =="
-TM_TEAM="$TEAM" TM_BUNDLE_ID="$BUNDLE_ID" "$ROOT/mobile/scripts/device-setup.sh" "$TEAM" "$BUNDLE_ID" > /tmp/tm-install-setup.log 2>&1 \
+TM_TEAM="${TEAM}" TM_BUNDLE_ID="${BUNDLE_ID}" "$ROOT/mobile/scripts/device-setup.sh" "${TEAM}" "${BUNDLE_ID}" > /tmp/tm-install-setup.log 2>&1 \
   || { tail -5 /tmp/tm-install-setup.log; fail "工程准备失败（详见 /tmp/tm-install-setup.log）"; }
 
 # ---------- 4. 签名构建 ----------
 build_with_team() {
+  # 指定具体设备：Xcode 才会把设备注册进 Team，并生成包含该 UDID 的描述文件
+  local dest="generic/platform=iOS"
+  if [[ -n "${DEVICE_ID:-}" ]]; then
+    dest="platform=iOS,id=${DEVICE_ID}"
+  fi
   (cd "$IOS" && xcodebuild -workspace TinyMusic.xcworkspace -scheme TinyMusic \
-    -configuration Release -destination 'generic/platform=iOS' \
-    -allowProvisioningUpdates \
+    -configuration Release -destination "$dest" \
+    -allowProvisioningUpdates -allowProvisioningDeviceRegistration \
     DEVELOPMENT_TEAM="$1" CODE_SIGN_STYLE=Automatic \
     build > /tmp/tm-install-build.log 2>&1)
 }
@@ -141,7 +146,7 @@ build_signed() {
       return 0
     fi
     say "  Team $t 签不过，换下一个"
-  done <<< "$(printf '%s\n' "${TEAM_LIST:-$TEAM}")"
+  done <<< "$(printf '%s\n' "${TEAM_LIST:-${TEAM}}")"
   return 1
 }
 
@@ -151,16 +156,16 @@ build_signed() {
   (cd "$IOS" && xcodebuild -workspace TinyMusic.xcworkspace -scheme TinyMusic \
     -configuration Release -destination 'generic/platform=iOS' \
     -allowProvisioningUpdates \
-    DEVELOPMENT_TEAM="$TEAM" CODE_SIGN_STYLE=Automatic \
+    DEVELOPMENT_TEAM="${TEAM}" CODE_SIGN_STYLE=Automatic \
     build > /tmp/tm-install-build.log 2>&1)
 }
 
 if ! build_signed; then
   # Bundle ID 被别人占用 → 换成唯一后缀再试一次
   if grep -qiE 'not available|already (been )?registered|identifier.*in use|invalid.*bundle' /tmp/tm-install-build.log; then
-    BUNDLE_ID="com.tinymusic.app.$(printf '%s' "$TEAM" | tr 'A-Z' 'a-z')"
-    say "! Bundle ID 被占用，自动换成 $BUNDLE_ID 重试"
-    "$ROOT/mobile/scripts/device-setup.sh" "$TEAM" "$BUNDLE_ID" > /tmp/tm-install-setup.log 2>&1 || {
+    BUNDLE_ID="com.tinymusic.app.$(printf '%s' "${TEAM}" | tr 'A-Z' 'a-z')"
+    say "! Bundle ID 被占用，自动换成 ${BUNDLE_ID} 重试"
+    "$ROOT/mobile/scripts/device-setup.sh" "${TEAM}" "${BUNDLE_ID}" > /tmp/tm-install-setup.log 2>&1 || {
       tail -5 /tmp/tm-install-setup.log
       fail "重新生成工程失败"
     }
@@ -184,11 +189,11 @@ if ! build_signed; then
 fi
 
 APP=$(ls -d ~/Library/Developer/Xcode/DerivedData/TinyMusic-*/Build/Products/Release-iphoneos/TinyMusic.app 2>/dev/null | head -1 || true)
-[[ -n "$APP" ]] || fail "找不到构建产物 TinyMusic.app"
+[[ -n "${APP}" ]] || fail "找不到构建产物 TinyMusic.app"
 
 # ---------- 5. 安装到手机 ----------
-say "== 安装到手机（$DEVICE_ID）=="
-if ! xcrun devicectl device install app --device "$DEVICE_ID" "$APP" > /tmp/tm-install-devicectl.log 2>&1; then
+say "== 安装到手机（${DEVICE_ID}）=="
+if ! xcrun devicectl device install app --device "${DEVICE_ID}" "${APP}" > /tmp/tm-install-devicectl.log 2>&1; then
   if grep -qiE 'developer mode is not enabled|developer mode is turned off|cryptex|DDI' /tmp/tm-install-devicectl.log; then
     say ""
     fail "手机没开「开发者模式」，系统拒绝了安装。请在手机上：
