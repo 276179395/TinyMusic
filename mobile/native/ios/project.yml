@@ -11,8 +11,6 @@ targets:
     platform: iOS
     sources:
       - path: Sources
-      - path: Resources
-        buildPhase: resources
     settings:
       base:
         PRODUCT_NAME: TinyMusic
@@ -27,9 +25,16 @@ targets:
         # 本地调试不需要签名；真机/TestFlight 时再覆盖
         CODE_SIGNING_ALLOWED: "NO"
     preBuildScripts:
-      - name: "同步 Lynx bundle"
+      # bundle 是构建产物（gitignore），所以不能在生成工程时写死文件引用，
+      # 统一在编译期拷进 App 的 Resources 目录
+      - name: "打包 Lynx bundle"
         script: |
           SRC="${SRCROOT}/../../app/dist/main.lynx.bundle"
-          DST="${SRCROOT}/Resources/main.lynx.bundle"
-          if [ -f "$SRC" ]; then cp "$SRC" "$DST"; fi
+          DST="${BUILT_PRODUCTS_DIR}/${UNLOCALIZED_RESOURCES_FOLDER_PATH}/main.lynx.bundle"
+          if [ -f "$SRC" ]; then
+            cp "$SRC" "$DST"
+            echo "[TinyMusic] 已打入 Lynx bundle: $DST"
+          else
+            echo "warning: 缺少 main.lynx.bundle，先跑 pnpm build:mobile"
+          fi
         basedOnDependencyAnalysis: false

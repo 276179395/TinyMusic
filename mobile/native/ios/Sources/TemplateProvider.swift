@@ -28,6 +28,7 @@ final class TemplateProvider: NSObject, LynxTemplateProvider {
         }
         do {
             let data = try Data(contentsOf: URL(fileURLWithPath: path))
+            NSLog("[TinyMusic] Lynx bundle 来自内置资源: \(path) (\(data.count) bytes)")
             callback(data, nil)
         } catch {
             callback(nil, error)

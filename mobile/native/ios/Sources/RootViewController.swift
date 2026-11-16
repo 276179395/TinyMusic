@@ -31,7 +31,8 @@ final class RootViewController: UIViewController {
             lynxView.topAnchor.constraint(equalTo: view.topAnchor),
             lynxView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
-        lynxView.loadTemplate(fromURL: "main", initData: nil)
+        // 资源名带上 .lynx：TemplateProvider 会拼成 main.lynx.bundle
+        lynxView.loadTemplate(fromURL: "main.lynx", initData: nil)
         self.lynxView = lynxView
     }
 
