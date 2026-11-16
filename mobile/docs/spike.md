@@ -217,3 +217,17 @@ P4 结束，进入 P5（播放闭环）。
 
 踩坑：axum 0.8 路由必须写 `{bucket}` / `{*key}`，写 `:bucket` 会直接 panic；
 `settings_set` 的参数是 `{ "settings": {...} }` 而不是平铺。
+
+
+### Round 13：网盘写路径 + 修复也跑通了
+
+用同一个 S3 桩把写路径走完：
+
+1. `s3_download`（quality=standard, playlist=测试）→ 桶里出现 `.mp3` / `.lrc` / `.jpg` 三个对象，
+   `s3_playlist_tracks` 显示 `missing: []`，封面是桩现签的直链。
+2. 手动删掉 `.lrc` 和 `.jpg` → `s3_integrity_check` 报出 `missing: ["lyrics","cover"]`、
+   `can_fix: true`、`source: "kuwo"`（来源来自本地上传记录表）。
+3. `s3_integrity_fix`（带 ids）→ 返回 `issues: []`，两个文件被重新补回桶里；
+   再校验一次仍然是 0 issue。
+
+踩坑：桩一开始收不到 12MB 的 PUT —— axum 默认请求体上限 2MB，要 `DefaultBodyLimit::max(...)`。

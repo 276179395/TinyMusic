@@ -10,7 +10,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use axum::body::Body;
-use axum::extract::{Path, Query, State};
+use axum::extract::{DefaultBodyLimit, Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
@@ -45,15 +45,10 @@ async fn put_object(
             return StatusCode::INTERNAL_SERVER_ERROR.into_response();
         }
     }
-    let ct = headers
-        .get("content-type")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("application/octet-stream")
-        .to_string();
+    let _ = &headers;
     if std::fs::write(&path, &body).is_err() {
         return StatusCode::INTERNAL_SERVER_ERROR.into_response();
     }
-    let _ = std::fs::write(path.with_extension(format!("{}.ctype", "")) , ct.as_bytes());
     StatusCode::OK.into_response()
 }
 
@@ -131,7 +126,7 @@ fn collect_files(dir: &PathBuf, base: &PathBuf, prefix: &str, out: &mut Vec<(Str
         } else {
             let rel = path.strip_prefix(base).unwrap_or(&path).to_string_lossy().to_string();
             let rel = rel.replace('\\', "/");
-            if rel.contains(".ctype") || !rel.starts_with(prefix) {
+            if !rel.starts_with(prefix) {
                 continue;
             }
             let size = entry.metadata().map(|m| m.len()).unwrap_or(0);
@@ -205,6 +200,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .head(head_object)
                 .delete(delete_object),
         )
+        // 音频对象动辄十几 MB，必须放开 axum 默认 2MB 的请求体限制
+        .layer(DefaultBodyLimit::max(512 * 1024 * 1024))
         .with_state(store);
 
     let listener = tokio::net::TcpListener::bind(("127.0.0.1", port)).await?;
