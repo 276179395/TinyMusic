@@ -11,4 +11,3 @@ dist
 *.key.pub
 .env
 .DS_Store
-pnpm-workspace.yaml

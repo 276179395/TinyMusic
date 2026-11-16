@@ -1,0 +1,10 @@
+packages:
+  - 'desktop'
+  - 'mobile/app'
+  - 'packages/*'
+
+allowBuilds:
+  '@hugeicons/svelte': true
+  esbuild: true
+
+verifyDepsBeforeRun: false

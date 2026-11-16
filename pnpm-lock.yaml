@@ -6,7 +6,9 @@ settings:
 
 importers:
 
-  .:
+  .: {}
+
+  desktop:
     dependencies:
       '@hugeicons/core-free-icons':
         specifier: ^4.4.0
