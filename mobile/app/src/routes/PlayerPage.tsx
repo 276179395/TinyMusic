@@ -9,6 +9,7 @@ import {
   ShuffleIcon,
   RepeatIcon,
   RepeatOne01Icon,
+  FavouriteIcon,
 } from '@hugeicons/core-free-icons';
 import type { Quality } from '@tinymusic/shared/types';
 import { qualityChoices } from '@tinymusic/shared/quality';
@@ -40,6 +41,7 @@ export function PlayerPage({ iconColor, inkIconColor, onCollapse }: PlayerPagePr
   const p = usePlayer();
   const [caps, setCaps] = useState<{ value: Quality; label: string; available: boolean }[]>([]);
   const [scrollTop, setScrollTop] = useState(0);
+  const [fav, setFav] = useState(false);
 
   useEffect(() => {
     'background only';
@@ -48,6 +50,17 @@ export function PlayerPage({ iconColor, inkIconColor, onCollapse }: PlayerPagePr
       .then((list) => setCaps(list.map((c) => ({ value: c.value, label: c.label, available: c.available }))))
       .catch(() => setCaps([]));
   }, []);
+
+  // 切歌时查收藏状态
+  useEffect(() => {
+    'background only';
+    const t = p.current;
+    if (!t) return;
+    api
+      .favoriteCheck(t.provider, t.id)
+      .then((v) => setFav(!!v))
+      .catch(() => setFav(false));
+  }, [p.current?.id]);
 
   // 当前行变化时把歌词滚到中间
   useEffect(() => {
@@ -144,6 +157,24 @@ export function PlayerPage({ iconColor, inkIconColor, onCollapse }: PlayerPagePr
             size={20}
             color={p.repeat === 'off' ? iconColor : '#54d2a4'}
           />
+        </view>
+      </view>
+
+      <view className="player-fav-row">
+        <view
+          className="player-fav"
+          bindtap={() => {
+            'background only';
+            const t = p.current;
+            if (!t) return;
+            const next = !fav;
+            setFav(next);
+            const call = next ? api.favoriteAdd(t) : api.favoriteRemove(t.provider, t.id);
+            call.catch(() => setFav(!next));
+          }}
+        >
+          <Icon icon={FavouriteIcon} size={18} color={fav ? '#ff6468' : iconColor} />
+          <text className="player-fav-text">{fav ? '已收藏' : '收藏'}</text>
         </view>
       </view>
 

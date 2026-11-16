@@ -99,7 +99,7 @@ export function App() {
               ) : null}
               {tab === 'downloads' ? <Downloads iconColor={iconColor} /> : null}
               {tab === 'cloud' ? <Cloud iconColor={iconColor} /> : null}
-              {tab === 'account' ? <Account /> : null}
+              {tab === 'account' ? <Account onOpenPlaylist={(p) => setPlaylist(p)} /> : null}
               {tab === 'settings' ? <Settings /> : null}
             </view>
             {/* 全局迷你播放条：切换 tab 也在，点了展开全屏 */}

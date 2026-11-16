@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from '@lynx-js/react';
 import { api } from '@tinymusic/shared/api';
-import type { Session } from '@tinymusic/shared/types';
+import type { PlaylistRef, Session, Track } from '@tinymusic/shared/types';
 
 import { loginWithWebView } from '../native/login.js';
+import { player } from '../state/player.js';
 
 const PROVIDERS = [
   { id: 'kuwo', name: '酷我音乐' },
@@ -13,10 +14,12 @@ const PROVIDERS = [
  * 账号页：网页登录 / 会话展示 / 退出。
  * 登录态校验和存储都在后端（crates/app），这里只负责唤起登录窗口。
  */
-export function Account() {
+export function Account({ onOpenPlaylist }: { onOpenPlaylist: (p: PlaylistRef) => void }) {
   const [sessions, setSessions] = useState<Record<string, Session | null>>({});
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [favorites, setFavorites] = useState<Track[]>([]);
+  const [playlists, setPlaylists] = useState<PlaylistRef[]>([]);
 
   const refresh = useCallback(() => {
     'background only';
@@ -32,7 +35,14 @@ export function Account() {
   useEffect(() => {
     'background only';
     refresh();
+    api.favoriteList().then((list) => setFavorites(list ?? [])).catch(() => undefined);
+    api.myPlaylists('kuwo').then((list) => setPlaylists(list ?? [])).catch(() => undefined);
   }, [refresh]);
+
+  const playFavorites = useCallback(() => {
+    'background only';
+    if (favorites.length) void player.playTrack(favorites[0], favorites);
+  }, [favorites]);
 
   const onLogin = useCallback(
     (provider: string) => {
@@ -104,6 +114,42 @@ export function Account() {
 
       {error ? <text className="home-error">{error}</text> : null}
       <text className="section-hint">登录只为了拿歌单与每日推荐；不保存密码，登录态只留在本机</text>
+
+      <view className="section">
+        <view className="failure-head">
+          <text className="section-title">{'收藏（' + favorites.length + '）'}</text>
+          {favorites.length ? (
+            <view bindtap={playFavorites}>
+              <text className="link-text">播放全部</text>
+            </view>
+          ) : null}
+        </view>
+        {favorites.length === 0 ? (
+          <text className="section-hint">还没有收藏；播放页点♡可以收藏当前歌曲</text>
+        ) : null}
+        {favorites.slice(0, 20).map((t) => (
+          <view className="row" key={t.provider + ':' + t.id} bindtap={() => void player.playTrack(t, favorites)}>
+            <view className="row-meta">
+              <text className="row-title">{t.title}</text>
+              <text className="row-sub">{t.artist}</text>
+            </view>
+          </view>
+        ))}
+      </view>
+
+      {playlists.length ? (
+        <view className="section">
+          <text className="section-title">{'我的歌单（' + playlists.length + '）'}</text>
+          {playlists.map((p) => (
+            <view className="row" key={p.id} bindtap={() => onOpenPlaylist(p)}>
+              <view className="row-meta">
+                <text className="row-title">{p.name}</text>
+                <text className="row-sub">{p.track_count + ' 首'}</text>
+              </view>
+            </view>
+          ))}
+        </view>
+      ) : null}
     </view>
   );
 }

@@ -89,32 +89,34 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, o
   // 冒烟钩子：拿到 autoPlay 标记时自动播第一首（TM_AUTOPLAY=1，自动化验证用）
   useEffect(() => {
     'background only';
-    if (!autoPlay || items.length === 0) return;
+    const feed = mode === 'search' ? items : recSongs;
+    if (!autoPlay || feed.length === 0) return;
 
-    // 竞态兜底：globalProps 可能比搜索结果晚到，这里最多试 10 次
+    // 竞态兜底：globalProps / 列表可能比首帧晚到，这里最多试 10 次
     let tries = 0;
     const attempt = () => {
       if (player.snapshot().current || tries >= 10) return;
       tries += 1;
       if (player.snapshot().status === 'loading') return;
-      void player.playTrack(items[0], items);
+      void player.playTrack(feed[0], feed);
       setTimeout(attempt, 1200);
     };
     setTimeout(attempt, 300);
-  }, [autoPlay, items]);
+  }, [autoPlay, mode, items, recSongs]);
 
   // 冒烟钩子：自动下载第一首（验证下载全链路）
   useEffect(() => {
     'background only';
-    if (!autoDownload || items.length === 0) return;
+    const feed = mode === 'search' ? items : recSongs;
+    if (!autoDownload || feed.length === 0) return;
     let tries = 0;
     const attempt = () => {
       if (tries >= 3) return;
       tries += 1;
-      void downloads.start(items[0], 'super');
+      void downloads.start(feed[0], 'super');
     };
     setTimeout(attempt, 500);
-  }, [autoDownload, items]);
+  }, [autoDownload, mode, items, recSongs]);
 
   const onTapTrack = useCallback((track: Track) => {
     'background only';

@@ -758,3 +758,26 @@
   font-size: 12px;
   color: var(--fg3, #747474);
 }
+
+/* ---------- 收藏按钮 ---------- */
+.player-fav-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.player-fav {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 10px;
+  background-color: var(--bg3, rgba(255, 255, 255, 0.07));
+}
+
+.player-fav-text {
+  font-size: 12px;
+  color: var(--fg2, #a4a4a4);
+}
