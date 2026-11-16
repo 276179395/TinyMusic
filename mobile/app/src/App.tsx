@@ -7,6 +7,7 @@ import { Home } from './routes/Home.js';
 import { Downloads } from './routes/Downloads.js';
 import { Settings } from './routes/Settings.js';
 import { Account } from './routes/Account.js';
+import { Cloud } from './routes/Cloud.js';
 import { PlayerPage } from './routes/PlayerPage.js';
 import { TabBar, type TabKey } from './components/TabBar.js';
 import { PlayerBar } from './components/PlayerBar.js';
@@ -35,8 +36,10 @@ export function App() {
   const initialTab: TabKey =
     props.initialTab === 'downloads'
       ? 'downloads'
-      : props.initialTab === 'account'
-        ? 'account'
+      : props.initialTab === 'cloud'
+        ? 'cloud'
+        : props.initialTab === 'account'
+          ? 'account'
         : props.initialTab === 'settings'
           ? 'settings'
           : 'home';
@@ -89,6 +92,7 @@ export function App() {
                 />
               ) : null}
               {tab === 'downloads' ? <Downloads iconColor={iconColor} /> : null}
+              {tab === 'cloud' ? <Cloud iconColor={iconColor} /> : null}
               {tab === 'account' ? <Account /> : null}
               {tab === 'settings' ? <Settings /> : null}
             </view>
