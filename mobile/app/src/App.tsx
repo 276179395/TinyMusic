@@ -62,7 +62,9 @@ export function App() {
 
   useEffect(() => {
     'background only';
-    setReady(ensureTransport(props));
+    const ok = ensureTransport(props);
+    setReady(ok);
+    if (ok) void equalizer.hydrate();
   }, [props.apiBase, props.apiToken]);
 
   // 冒烟钩子：TM_OPEN_ARTIST / TM_OPEN_ALBUM=1 时，播放开始后直接进歌手/专辑页
@@ -77,8 +79,13 @@ export function App() {
   // 冒烟钩子：TM_OPEN_EQ=1 时套一个预设，顺带验证原生 EQ tap 不影响播放
   useEffect(() => {
     'background only';
-    if (props.openEq || props.eqOn) equalizer.usePreset(EQ_PRESETS[1] ?? EQ_PRESETS[0]);
-  }, [props.openEq, props.eqOn]);
+    // 等 transport 就绪 + hydrate 跑完，否则会被恢复的默认值覆盖
+    if (!ready || !(props.openEq || props.eqOn)) return;
+    const t = setTimeout(() => {
+      equalizer.usePreset(EQ_PRESETS[1] ?? EQ_PRESETS[0]);
+    }, 1200);
+    return () => clearTimeout(t);
+  }, [props.openEq, props.eqOn, ready]);
 
   // 冒烟钩子：TM_OPEN_PLAYER=1 时，播放开始后自动展开全屏播放页
   useEffect(() => {

@@ -80,6 +80,17 @@ pub struct Settings {
     #[serde(default = "default_true")]
     pub close_to_tray: bool,
 
+    // ---- 均衡器 ----
+    /// 是否启用（桌面与 mobile 共用同一份设置）
+    #[serde(default)]
+    pub eq_enabled: bool,
+    /// 10 段增益（dB），长度固定 10；缺省用全 0
+    #[serde(default)]
+    pub eq_gains: Vec<f32>,
+    /// 预增益（dB）
+    #[serde(default)]
+    pub eq_preamp: f32,
+
     // ---- 网易云（目录侧）----
     /// `netease_first`：先试网易云直链，失败回落酷我；
     /// `kuwo_only`：网易云只当目录，音源一律走酷我桥接。
@@ -134,6 +145,9 @@ impl Default for Settings {
             s3_prefix: default_s3_prefix(),
             s3_path_style: false,
             close_to_tray: true,
+            eq_enabled: false,
+            eq_gains: vec![0.0; 10],
+            eq_preamp: 0.0,
             netease_play_mode: default_netease_mode(),
         }
     }

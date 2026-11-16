@@ -2,6 +2,8 @@ import { useEffect, useState } from '@lynx-js/react';
 
 import { EQ_BANDS, EQ_FLAT_GAINS, EQ_PRESETS, clampDb, type EqualizerPreset } from '@tinymusic/shared/eq';
 
+import { api } from '@tinymusic/shared/api';
+
 import { audio } from '../native/audio.js';
 
 export interface EqState {
@@ -39,10 +41,55 @@ class EqualizerStore {
     return () => this.listeners.delete(fn);
   }
 
+  private saveTimer: ReturnType<typeof setTimeout> | null = null;
+
   private apply(next: EqState): void {
     this.state = next;
     audio.setEQ(next.enabled, next.gains, next.preamp);
+    this.persist();
     for (const fn of this.listeners) fn();
+  }
+
+  /** 写回后端设置（和桌面同一份 settings），防抖 600ms */
+  private persist(): void {
+    if (this.saveTimer) clearTimeout(this.saveTimer);
+    this.saveTimer = setTimeout(() => {
+      const snap = this.snapshot();
+      api
+        .settingsGet()
+        .then((s) =>
+          api.settingsSet({
+            ...s,
+            eq_enabled: snap.enabled,
+            eq_gains: snap.gains,
+            eq_preamp: snap.preamp,
+          })
+        )
+        .catch(() => {
+          /* 设置写不进去不影响当前播放 */
+        });
+    }, 600);
+  }
+
+  /** App 启动时从后端设置恢复 */
+  async hydrate(): Promise<void> {
+    try {
+      const s = await api.settingsGet();
+      const gains =
+        Array.isArray(s.eq_gains) && s.eq_gains.length === EQ_BANDS.length
+          ? s.eq_gains.map((v) => clampDb(v))
+          : [...EQ_FLAT_GAINS];
+      this.state = {
+        enabled: !!s.eq_enabled,
+        gains,
+        preamp: clampDb(s.eq_preamp ?? 0),
+        preset: 'custom',
+      };
+      audio.setEQ(this.state.enabled, this.state.gains, this.state.preamp);
+      for (const fn of this.listeners) fn();
+    } catch {
+      /* 读不到就用默认 */
+    }
   }
 
   setEnabled(enabled: boolean): void {

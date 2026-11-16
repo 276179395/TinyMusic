@@ -207,6 +207,11 @@ export interface Settings {
   s3_secret_key: string;
   s3_prefix: string;
   s3_path_style: boolean;
+  // ---- 均衡器 ----
+  eq_enabled: boolean;
+  /** 10 段增益（dB） */
+  eq_gains: number[];
+  eq_preamp: number;
   // ---- 托盘 ----
   close_to_tray: boolean;
   // ---- 网易云 ----

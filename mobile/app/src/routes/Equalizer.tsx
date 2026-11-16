@@ -78,7 +78,7 @@ export function Equalizer({ onBack }: { onBack: () => void }) {
         </view>
 
         <text className="section-hint">
-          均衡器走原生音频处理（MTAudioProcessingTap），对流媒体和本地文件都生效；当前为内存态，重开 App 回默认
+          均衡器走原生音频处理（MTAudioProcessingTap），对流媒体和本地文件都生效；设置与桌面共用同一份配置，会自动保存
         </text>
       </scroll-view>
     </view>
