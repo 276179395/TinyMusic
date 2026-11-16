@@ -275,3 +275,21 @@ P4 结束，进入 P5（播放闭环）。
 
 验证：重装后启动，`xcrun devicectl device capture screenshot` 能截到完整 UI（首页/网盘/迷你播放条），
 崩溃日志不再新增；模拟器回归（冒烟脚本）仍然 `audio.play()` 正常。
+
+## Round 17：Apple Music 风重做时踩到的布局坑
+
+改 UI 时最费时间的不是样式，是「底部 tab bar 老被长页面顶出屏幕」。
+
+- **Lynx 的 `overflow: hidden` 只是部分支持**（官方 supported-properties 里标了 partial），
+  指望 flex 容器裁掉溢出内容并不可靠：`.tab-body { flex: 1; overflow: hidden }` 里放长表单，
+  容器会跟着内容长高，把后面的 mini player / tab bar 一起推下去。
+- **靠 `position: fixed` 也不行**：这个嵌套结构下它没按预期相对屏幕定位。
+- **可靠做法**：壳层用绝对定位接管
+  - `.tab-shell { position: relative; height: 100% }`
+  - `.tab-body { position: absolute; top: 0; bottom: 108px }`
+  - 迷你条 / tab bar 各自 `position: absolute; bottom: ...`
+  - 根节点给显式高度（`globalProps.screenHeight`），iOS 侧在 `viewDidLayoutSubviews` 里推真实尺寸
+- **安全区**：LynxView 全屏铺满，insets 通过 globalProps 传前端；底栏高度自己吃 `safeAreaBottom`。
+  之前把 LynxView 约束进 safeAreaLayoutGuide 反而导致 insets 与视图尺寸不一致（内容顶到灵动岛下面）。
+- **状态栏样式**要跟主题走，否则浅色页面上白色时间/电量看不见（之前写死 `.lightContent`）。
+- 图标被 flex 压扁：给 `<Icon>` 套一个固定尺寸容器（`width/height: 26px; flex-shrink: 0`）。
