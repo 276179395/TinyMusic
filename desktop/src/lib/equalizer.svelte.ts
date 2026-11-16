@@ -10,124 +10,21 @@
  * 所以 `<audio>` 必须带 `crossorigin="anonymous"`，否则 Web Audio 会拿到静音。
  */
 
-export interface EqualizerPreset {
-  id: string;
-  name: string;
-  desc: string;
-  gains: number[];
-  preamp: number;
-}
+import {
+  EQ_BANDS,
+  EQ_MAX_DB,
+  EQ_MIN_DB,
+  EQ_PRESETS,
+  clampDb,
+  presetById,
+} from '@tinymusic/shared/eq';
+import { EQ_FLAT_GAINS as FLAT_GAINS } from '@tinymusic/shared/eq';
 
-/** 频段：32 / 64 / 125 / ... / 16k，标签只写数字，单位在面板上说明。 */
-export const EQ_BANDS = [
-  { hz: 32, label: '32' },
-  { hz: 64, label: '64' },
-  { hz: 125, label: '125' },
-  { hz: 250, label: '250' },
-  { hz: 500, label: '500' },
-  { hz: 1000, label: '1k' },
-  { hz: 2000, label: '2k' },
-  { hz: 4000, label: '4k' },
-  { hz: 8000, label: '8k' },
-  { hz: 16000, label: '16k' }
-] as const;
-
-export const EQ_MIN_DB = -12;
-export const EQ_MAX_DB = 12;
-
-const FLAT_GAINS = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-
-/**
- * 预设曲线。数字都按「听感」调过：
- * 低音 / 响度这类大增益的预设会给一个负的前级（留 headroom），
- * 限幅器只在真的有正增益时介入。
- */
-export const EQ_PRESETS: EqualizerPreset[] = [
-  {
-    id: 'flat',
-    name: '平直',
-    desc: '不染色，所有频段 0 dB',
-    preamp: 0,
-    gains: FLAT_GAINS
-  },
-  {
-    id: 'pop',
-    name: '流行',
-    desc: '人声和中高频更靠前，低频收一点',
-    preamp: -3,
-    gains: [-1, 0, 2, 3.5, 3.5, 2, 0.5, -1, -1.5, -2]
-  },
-  {
-    id: 'rock',
-    name: '摇滚',
-    desc: '经典微笑曲线：鼓和贝斯更重，吉他更亮',
-    preamp: -4,
-    gains: [4, 3, 2, 0, -1, -1, 0, 2, 3, 4]
-  },
-  {
-    id: 'jazz',
-    name: '爵士',
-    desc: '温暖的低频和铜管，中频略退',
-    preamp: -3,
-    gains: [3, 2, 0, 1, -1, -1, 0, 1, 2, 2.5]
-  },
-  {
-    id: 'classical',
-    name: '古典',
-    desc: '保留厅堂感，弦乐和空气感更清晰',
-    preamp: -3,
-    gains: [3.5, 3, 2, 1, 0, 0, -0.5, 0, 2, 3]
-  },
-  {
-    id: 'electronic',
-    name: '电子',
-    desc: '下潜和 hi-hat 都更突出',
-    preamp: -4,
-    gains: [5, 4, 1, -1, -2, 0, 1, 3, 4, 5]
-  },
-  {
-    id: 'hiphop',
-    name: '嘻哈',
-    desc: '808 和底鼓更厚，顶部保留咬字',
-    preamp: -5,
-    gains: [6, 5, 2, 0, -1, 0, 1, 2, 3, 3]
-  },
-  {
-    id: 'vocal',
-    name: '人声',
-    desc: '突出中频，压低低频和齿音',
-    preamp: -3,
-    gains: [-2, -2, -1, 1, 3, 4, 4, 2, 0, -1]
-  },
-  {
-    id: 'acoustic',
-    name: '原声',
-    desc: '木吉他和人声都自然、靠前',
-    preamp: -2,
-    gains: [3, 2, 1, 1, 2, 2, 1.5, 1, 1.5, 2]
-  },
-  {
-    id: 'bass',
-    name: '低音增强',
-    desc: '只抬低频，适合鼓点和小音箱',
-    preamp: -7,
-    gains: [8, 7, 5, 3, 1, 0, 0, 0, 0, 0]
-  },
-  {
-    id: 'treble',
-    name: '高音增强',
-    desc: '更亮的高频，适合闷的耳机',
-    preamp: -4,
-    gains: [0, 0, 0, 0, 0, 0, 1, 3, 5, 6]
-  },
-  {
-    id: 'loudness',
-    name: '响度',
-    desc: '小音量下补足两端，中频略退',
-    preamp: -6,
-    gains: [6, 4, 1, -2, -1, 1, 3, 4, 5, 5]
-  }
-];
+// 频段与预设曲线是桌面 / mobile 共用的一份数据（packages/shared/src/eq.ts），
+// 这里只做转发，UI 组件继续按原来的名字 import。
+export { EQ_BANDS, EQ_MAX_DB, EQ_MIN_DB, EQ_PRESETS } from '@tinymusic/shared/eq';
+export type { EqualizerPreset } from '@tinymusic/shared/eq';
+export { clampDb, presetById };
 
 const STORAGE_KEY = 'tinymusic.equalizer';
 
@@ -136,11 +33,6 @@ interface StoredEqualizer {
   preset?: string;
   preamp?: number;
   gains?: number[];
-}
-
-function clampDb(v: number): number {
-  if (!Number.isFinite(v)) return 0;
-  return Math.max(EQ_MIN_DB, Math.min(EQ_MAX_DB, Math.round(v * 2) / 2));
 }
 
 function readStored(): StoredEqualizer {

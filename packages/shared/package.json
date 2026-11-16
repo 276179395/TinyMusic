@@ -1,0 +1,26 @@
+{
+  "name": "@tinymusic/shared",
+  "version": "0.7.2",
+  "private": true,
+  "type": "module",
+  "description": "TinyMusic 前端公共库：类型、API 契约、传输层、纯逻辑（桌面 Svelte 与 mobile ReactLynx 共用）",
+  "exports": {
+    ".": "./src/index.ts",
+    "./transport": "./src/transport/index.ts",
+    "./transport/http": "./src/transport/http.ts",
+    "./api": "./src/api.ts",
+    "./types": "./src/types.ts",
+    "./format": "./src/format.ts",
+    "./quality": "./src/quality.ts",
+    "./lyrics": "./src/lyrics.ts",
+    "./eq": "./src/eq.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.4"
+  }
+}

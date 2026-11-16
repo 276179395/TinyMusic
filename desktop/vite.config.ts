@@ -4,6 +4,10 @@ import { svelte } from '@sveltejs/vite-plugin-svelte';
 export default defineConfig({
   plugins: [svelte()],
   clearScreen: false,
+  // 公共库是 TS 源码（不是预编译产物），交给 vite 直接编译，避免 optimizeDeps 卡住
+  optimizeDeps: {
+    exclude: ['@tinymusic/shared'],
+  },
   server: {
     port: 1420,
     strictPort: true,
