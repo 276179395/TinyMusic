@@ -45,8 +45,8 @@ jobs:
           pnpm -F @tinymusic/shared test
           pnpm -F @tinymusic/theme check
 
-      - name: Rust 业务层测试
-        run: cargo test -p tinymusic-app
+      - name: Rust 测试（workspace，含桌面壳）
+        run: cargo test --workspace
 
       - name: 构建 Lynx bundle
         run: pnpm -F @tinymusic/mobile build
