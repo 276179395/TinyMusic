@@ -1,0 +1,15 @@
+{
+  "name": "@tinymusic/theme",
+  "version": "0.7.2",
+  "private": true,
+  "type": "module",
+  "description": "设计令牌单一来源：从桌面 app.css 生成 mobile(Lynx) 用的 hex/rgba 令牌",
+  "exports": {
+    "./lynx.css": "./dist/lynx-tokens.css",
+    "./tokens.json": "./dist/tokens.json"
+  },
+  "scripts": {
+    "gen": "node scripts/gen.mjs",
+    "check": "node scripts/gen.mjs --check"
+  }
+}
