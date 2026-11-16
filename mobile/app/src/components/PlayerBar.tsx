@@ -5,10 +5,13 @@ import { player } from '../state/player.js';
 import { useNativeNowPlaying } from '../state/nativePlayer.js';
 
 interface PlayerBarProps {
-  /** 图标颜色（跟随主题） */
   iconColor: string;
-  /** 主按钮（墨色底）上的图标颜色 */
   inkIconColor: string;
+}
+
+function clip(s: string, n: number): string {
+  if (!s) return '';
+  return s.length > n ? s.slice(0, n) + '…' : s;
 }
 
 function fmt(sec: number): string {
@@ -19,17 +22,20 @@ function fmt(sec: number): string {
 }
 
 /**
- * 迷你播放条：状态直接来自原生播放器（见 useNativeNowPlaying 的说明），
- * 操作复用 player store（队列/切歌规则仍在 packages/shared）。
+ * 迷你播放器（Apple Music 那种贴在 Tab bar 上方的条）。
+ * 状态直接读原生播放器，避免 Lynx 双线程下 store 副本不一致。
  */
-export function PlayerBar({ iconColor, inkIconColor }: PlayerBarProps) {
+export function PlayerBar({ iconColor }: PlayerBarProps) {
   const now = useNativeNowPlaying();
-  const color = iconColor;
 
   if (!now.title) {
     return (
-      <view className="player-bar player-bar--empty">
-        <text className="player-empty">在下面搜一首，点一下就能播</text>
+      <view className="ios-mini-player">
+        <view className="ios-mini-art ios-row-art--round" />
+        <view className="ios-mini-text">
+          <text className="ios-mini-title">未在播放</text>
+          <text className="ios-mini-sub">从「现在就听」里挑一首</text>
+        </view>
       </view>
     );
   }
@@ -37,35 +43,36 @@ export function PlayerBar({ iconColor, inkIconColor }: PlayerBarProps) {
   const ratio = now.duration > 0 ? Math.min(1, now.position / now.duration) : 0;
 
   return (
-    <view className="player-bar">
-      <view className="player-progress">
-        <view className="player-progress-fill" style={{ width: `${Math.round(ratio * 100)}%` }} />
+    <view className="ios-mini-player">
+      {now.cover ? (
+        <image className="ios-mini-art" src={now.cover} />
+      ) : (
+        <view className="ios-mini-art ios-row-art-ph">
+          <Icon icon={MusicNote01Icon} size={18} color={iconColor} />
+        </view>
+      )}
+
+      <view className="ios-mini-text">
+        <text className="ios-mini-title">{clip(now.title, 26)}</text>
+        <text className="ios-mini-sub">
+          {clip(now.artist, 16) + ' · ' + fmt(now.position) + ' / ' + fmt(now.duration)}
+        </text>
       </view>
-      <view className="player-row">
-        {now.cover ? (
-          <image className="player-cover" src={now.cover} />
-        ) : (
-          <view className="player-cover player-cover--ph">
-            <Icon icon={MusicNote01Icon} size={18} color={color} />
-          </view>
-        )}
-        <view className="player-meta">
-          <text className="player-title">{now.title}</text>
-          <text className="player-sub">
-            {now.artist} · {fmt(now.position)} / {fmt(now.duration)}
-          </text>
+
+      <view className="ios-mini-controls">
+        <view className="ios-mini-btn" bindtap={() => player.prev()}>
+          <Icon icon={PreviousIcon} size={22} color={iconColor} />
         </view>
-        <view className="player-actions">
-          <view className="player-btn" bindtap={() => player.prev()}>
-            <Icon icon={PreviousIcon} size={20} color={color} />
-          </view>
-          <view className="player-btn player-btn--main" bindtap={() => player.toggle()}>
-            <Icon icon={now.status === 'playing' ? PauseIcon : PlayIcon} size={22} color={inkIconColor} />
-          </view>
-          <view className="player-btn" bindtap={() => player.next()}>
-            <Icon icon={NextIcon} size={20} color={color} />
-          </view>
+        <view className="ios-mini-btn" bindtap={() => player.toggle()}>
+          <Icon icon={now.status === 'playing' ? PauseIcon : PlayIcon} size={24} color={iconColor} />
         </view>
+        <view className="ios-mini-btn" bindtap={() => player.next()}>
+          <Icon icon={NextIcon} size={22} color={iconColor} />
+        </view>
+      </view>
+
+      <view className="ios-mini-progress">
+        <view className="ios-mini-progress-fill" style={{ width: Math.round(ratio * 100) + '%' }} />
       </view>
     </view>
   );

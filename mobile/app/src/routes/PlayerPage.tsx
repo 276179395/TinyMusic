@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from '@lynx-js/react';
 import {
-  ArrowDown01Icon,
+  ChevronDownIcon,
   MusicNote01Icon,
   PauseIcon,
   PlayIcon,
@@ -10,13 +10,14 @@ import {
   RepeatIcon,
   RepeatOne01Icon,
   FavouriteIcon,
+  ArrowDown01Icon,
 } from '@hugeicons/core-free-icons';
 import type { Quality } from '@tinymusic/shared/types';
 import { qualityChoices } from '@tinymusic/shared/quality';
+import { api } from '@tinymusic/shared/api';
 
 import { Icon } from '../components/Icon.js';
 import { player, usePlayer } from '../state/player.js';
-import { api } from '@tinymusic/shared/api';
 
 interface PlayerPageProps {
   iconColor: string;
@@ -36,8 +37,7 @@ function fmt(sec: number): string {
 const LINE_HEIGHT = 34;
 
 /**
- * 全屏播放页：封面 + 控制 + 音质 + 歌词。
- * 队列/随机/循环/音质门控全部来自 packages/shared，这里只做展示与手势。
+ * 全屏播放页，按 Apple Music 的排布：封面 → 标题/歌手 → 进度 → 传输控制 → 歌词 → 次要操作。
  */
 export function PlayerPage({ iconColor, inkIconColor, onCollapse, onOpenArtist, onOpenAlbum }: PlayerPageProps) {
   const p = usePlayer();
@@ -53,18 +53,13 @@ export function PlayerPage({ iconColor, inkIconColor, onCollapse, onOpenArtist, 
       .catch(() => setCaps([]));
   }, []);
 
-  // 切歌时查收藏状态
   useEffect(() => {
     'background only';
     const t = p.current;
     if (!t) return;
-    api
-      .favoriteCheck(t.provider, t.id)
-      .then((v) => setFav(!!v))
-      .catch(() => setFav(false));
+    api.favoriteCheck(t.provider, t.id).then((v) => setFav(!!v)).catch(() => setFav(false));
   }, [p.current?.id]);
 
-  // 当前行变化时把歌词滚到中间
   useEffect(() => {
     'background only';
     if (!p.lyrics.length || p.duration <= 0) return;
@@ -77,6 +72,7 @@ export function PlayerPage({ iconColor, inkIconColor, onCollapse, onOpenArtist, 
     if (idx >= 0) setScrollTop(Math.max(0, idx * LINE_HEIGHT - 2 * LINE_HEIGHT));
   }, [p.position, p.lyrics, p.duration]);
 
+  const ratio = p.duration > 0 ? Math.min(1, p.position / p.duration) : 0;
   const choices = qualityChoices(
     p.current,
     caps as never,
@@ -86,159 +82,96 @@ export function PlayerPage({ iconColor, inkIconColor, onCollapse, onOpenArtist, 
     p.quality
   );
 
-  const onSeekTap = useCallback(
-    (e: { detail?: { x?: number } }) => {
-      'background only';
-      if (!p.duration || !e.detail?.x) return;
-      // 进度条点击：按点击位置估算比例（Lynx 事件里的 x 是相对坐标）
-      const ratio = Math.max(0, Math.min(1, e.detail.x / 320));
-      player.seekTo(ratio * p.duration);
-    },
-    [p.duration]
-  );
-
-  const ratio = p.duration > 0 ? Math.min(1, p.position / p.duration) : 0;
+  const onFav = useCallback(() => {
+    'background only';
+    const t = p.current;
+    if (!t) return;
+    const next = !fav;
+    setFav(next);
+    const call = next ? api.favoriteAdd(t) : api.favoriteRemove(t.provider, t.id);
+    call.catch(() => setFav(!next));
+  }, [fav, p.current]);
 
   return (
-    <view className="player-page">
-      <view className="player-top">
-        <view className="player-collapse" bindtap={onCollapse}>
-          <Icon icon={ArrowDown01Icon} size={22} color={iconColor} />
+    <view className="ios-player">
+      <view className="ios-player-grabber" bindtap={onCollapse} />
+
+      {p.current?.cover ? (
+        <image className="ios-player-art" src={p.current.cover} />
+      ) : (
+        <view className="ios-player-art ios-row-art-ph">
+          <Icon icon={MusicNote01Icon} size={56} color={iconColor} />
         </view>
-        <text className="player-top-label">正在播放</text>
-        <view className="player-collapse" />
-      </view>
+      )}
 
-      <view className="player-art">
-        {p.current?.cover ? (
-          <image className="player-art-img" src={p.current.cover} />
-        ) : (
-          <view className="player-art-img player-art-ph">
-            <Icon icon={MusicNote01Icon} size={48} color={iconColor} />
-          </view>
-        )}
-      </view>
+      <text className="ios-player-title">{p.current?.title ?? '未在播放'}</text>
+      <text className="ios-player-artist" bindtap={() => p.current?.artist_id && onOpenArtist?.(String(p.current.artist_id), p.current.artist)}>
+        {p.current?.artist ?? ''}
+      </text>
 
-      <view className="player-info">
-        <text className="player-info-title">{p.current?.title ?? '未在播放'}</text>
-        <text className="player-info-sub">
-          {(p.current?.artist ?? '') + (p.current?.album ? ' · ' + p.current.album : '')}
-        </text>
-      </view>
-
-      <view className="player-seek" bindtap={onSeekTap}>
-        <view className="player-seek-track">
-          <view className="player-seek-fill" style={{ width: Math.round(ratio * 100) + '%' }} />
+      <view className="ios-progress">
+        <view className="ios-progress-track">
+          <view className="ios-progress-fill" style={{ width: Math.round(ratio * 100) + '%' }} />
         </view>
-        <view className="player-seek-times">
-          <text className="player-time">{fmt(p.position)}</text>
-          <text className="player-time">{fmt(p.duration || p.current?.duration_sec || 0)}</text>
+        <view className="ios-progress-times">
+          <text className="ios-time">{fmt(p.position)}</text>
+          <text className="ios-time">{'-' + fmt(Math.max(0, (p.duration || 0) - p.position))}</text>
         </view>
       </view>
 
-      <view className="player-controls">
-        <view className="player-icon-btn" bindtap={() => player.toggleShuffle()}>
-          <Icon icon={ShuffleIcon} size={20} color={p.shuffle ? '#54d2a4' : iconColor} />
+      <view className="ios-transport">
+        <view className="ios-transport-btn" bindtap={() => player.prev()}>
+          <Icon icon={PreviousIcon} size={32} color={iconColor} />
         </view>
-        <view className="player-icon-btn" bindtap={() => player.prev()}>
-          <Icon icon={PreviousIcon} size={26} color={iconColor} />
+        <view className="ios-transport-main" bindtap={() => player.toggle()}>
+          <Icon icon={p.status === 'playing' ? PauseIcon : PlayIcon} size={44} color={iconColor} />
         </view>
-        <view className="player-play-big" bindtap={() => player.toggle()}>
-          <Icon
-            icon={p.status === 'playing' ? PauseIcon : PlayIcon}
-            size={30}
-            color={inkIconColor}
-          />
-        </view>
-        <view className="player-icon-btn" bindtap={() => player.next()}>
-          <Icon icon={NextIcon} size={26} color={iconColor} />
-        </view>
-        <view className="player-icon-btn" bindtap={() => player.cycleRepeat()}>
-          <Icon
-            icon={p.repeat === 'one' ? RepeatOne01Icon : RepeatIcon}
-            size={20}
-            color={p.repeat === 'off' ? iconColor : '#54d2a4'}
-          />
+        <view className="ios-transport-btn" bindtap={() => player.next()}>
+          <Icon icon={NextIcon} size={32} color={iconColor} />
         </view>
       </view>
 
-      <view className="player-links">
-        {p.current?.artist_id ? (
-          <view
-            className="player-link"
-            bindtap={() => onOpenArtist?.(String(p.current?.artist_id), p.current?.artist ?? '')}
-          >
-            <text className="player-link-text">歌手</text>
-          </view>
-        ) : null}
-        {p.current?.album_id ? (
-          <view
-            className="player-link"
-            bindtap={() => onOpenAlbum?.(String(p.current?.album_id), p.current?.album ?? '')}
-          >
-            <text className="player-link-text">专辑</text>
-          </view>
-        ) : null}
-      </view>
-
-      <view className="player-fav-row">
-        <view
-          className="player-fav"
-          bindtap={() => {
-            'background only';
-            const t = p.current;
-            if (!t) return;
-            const next = !fav;
-            setFav(next);
-            const call = next ? api.favoriteAdd(t) : api.favoriteRemove(t.provider, t.id);
-            call.catch(() => setFav(!next));
-          }}
-        >
-          <Icon icon={FavouriteIcon} size={18} color={fav ? '#ff6468' : iconColor} />
-          <text className="player-fav-text">{fav ? '已收藏' : '收藏'}</text>
-        </view>
-      </view>
-
-      <view className="player-quality">
-        {choices.map((c) => (
-          <view
-            key={c.value}
-            className={'quality-chip' + (c.current ? ' quality-chip--on' : '') + (c.disabled ? ' quality-chip--off' : '')}
-            bindtap={() => {
-              'background only';
-              if (c.disabled) return;
-              void player.setQuality(c.value);
-            }}
-          >
-            <text className="quality-chip-text">{c.label}</text>
-          </view>
-        ))}
-      </view>
-
-      <view className="player-lyrics-wrap">
-        {p.lyricsLoading ? <text className="lyrics-hint">歌词加载中…</text> : null}
-        {p.lyricsError ? <text className="lyrics-hint">{p.lyricsError}</text> : null}
-        {!p.lyricsLoading && !p.lyricsError && p.lyrics.length === 0 ? (
-          <text className="lyrics-hint">没有歌词</text>
-        ) : null}
-        <scroll-view className="lyrics-scroll" scroll-orientation="vertical" scroll-top={scrollTop}>
+      {p.lyrics.length > 0 ? (
+        <scroll-view className="ios-lyrics" style={{ height: "150px" }} scroll-orientation="vertical" scroll-top={scrollTop}>
           {p.lyrics.map((l, i) => {
             const ms = p.position * 1000;
             const active = l.time_ms <= ms + 60 && (i === p.lyrics.length - 1 || p.lyrics[i + 1].time_ms > ms + 60);
             return (
               <view
-                className={'lyric-line' + (active ? ' lyric-line--on' : '')}
-                key={l.time_ms + '-' + i}
-                bindtap={() => {
-                  'background only';
-                  player.seekTo(l.time_ms / 1000);
-                }}
+                className={'ios-lyric-line' + (active ? ' ios-lyric-line--on' : '')}
+                key={String(l.time_ms) + '-' + i}
+                bindtap={() => player.seekTo(l.time_ms / 1000)}
               >
-                <text className="lyric-text">{l.text || ' '}</text>
+                <text className="ios-lyric-text">{l.text || ' '}</text>
               </view>
             );
           })}
         </scroll-view>
+      ) : (
+        <view className="ios-empty">
+          <text className="ios-empty-sub">{p.lyricsLoading ? '歌词加载中…' : '暂无歌词'}</text>
+        </view>
+      )}
+
+      <view className="ios-action-row">
+        <view className="ios-action-item" bindtap={onFav}>
+          <Icon icon={FavouriteIcon} size={22} color={fav ? '#ff375f' : iconColor} />
+          <text className="ios-action-label">{fav ? '已收藏' : '收藏'}</text>
+        </view>
+        <view className="ios-action-item" bindtap={() => player.toggleShuffle()}>
+          <Icon icon={ShuffleIcon} size={22} color={p.shuffle ? '#ff375f' : iconColor} />
+          <text className="ios-action-label">随机</text>
+        </view>
+        <view className="ios-action-item" bindtap={() => player.cycleRepeat()}>
+          <Icon icon={p.repeat === 'one' ? RepeatOne01Icon : RepeatIcon} size={22} color={p.repeat === 'off' ? iconColor : '#ff375f'} />
+          <text className="ios-action-label">循环</text>
+        </view>
+        {p.current?.album_id ? (
+          <view className="ios-action-item" bindtap={() => onOpenAlbum?.(String(p.current?.album_id), p.current?.album ?? '')}>
+            <Icon icon={ArrowDown01Icon} size={22} color={iconColor} />
+            <text className="ios-action-label">专辑</text>
+          </view>
+        ) : null}
       </view>
     </view>
   );

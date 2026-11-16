@@ -3,6 +3,7 @@ import { useGlobalProps } from '@lynx-js/react';
 
 import '@tinymusic/theme/lynx.css';
 import './styles/base.css';
+import './styles/ios.css';
 import { Home } from './routes/Home.js';
 import { Downloads } from './routes/Downloads.js';
 import { Settings } from './routes/Settings.js';
@@ -93,13 +94,21 @@ export function App() {
     if (props.openPlayer && snapshot.current) setShowPlayer(true);
   }, [props.openPlayer, snapshot.current]);
 
+  // 迷你播放条 + tab bar 的固定高度：内容区用确定高度，长页面才会自己滚动
+  const bottomInset = Number(props.safeAreaBottom ?? 0) || 0;
+  const BAR_H = 112 + bottomInset;
+  const bodyHeight = Math.max(200, Number(props.screenHeight ?? 800) - BAR_H);
+
   const light = props.appTheme === 'light';
   const theme = light ? 'tm-light' : 'tm-dark';
   const iconColor = light ? '#161616' : '#fafafa';
   const inkIconColor = light ? '#fafafa' : '#2a2a2a';
 
   return (
-    <view className={'page ' + theme}>
+    <view
+      className={'page ' + theme + (light ? ' ios-light' : ' ios-dark')}
+      style={{ height: Number(props.screenHeight ?? 800) + 'px' }}
+    >
       <view style={{ height: String(props.safeAreaTop ?? 0) + 'px' }} />
       <view className="app-body">
         {!ready ? (
@@ -134,8 +143,11 @@ export function App() {
             onCollapse={() => setShowPlayer(false)}
           />
         ) : (
-          <view className="tab-shell">
-            <view className="tab-body">
+          <view className="tab-shell ios-page ios-shell" style={{ height: "100%" }}>
+            <view
+              className="tab-body"
+              style={{ backgroundColor: "transparent", bottom: 108 + bottomInset + "px" }}
+            >
               {tab === 'home' ? (
                 <Home
                   iconColor={iconColor}
@@ -155,19 +167,24 @@ export function App() {
               {tab === 'settings' ? <Settings onOpenEqualizer={() => setShowEq(true)} /> : null}
             </view>
             {/* 全局迷你播放条：切换 tab 也在，点了展开全屏 */}
-            <view bindtap={() => snapshot.current && setShowPlayer(true)}>
+            <view
+              className="ios-mini-wrap"
+              style={{ bottom: 50 + bottomInset + "px" }}
+              bindtap={() => snapshot.current && setShowPlayer(true)}
+            >
               <PlayerBar iconColor={iconColor} inkIconColor={inkIconColor} />
             </view>
             <TabBar
               current={tab}
-              iconColor={iconColor}
-              activeColor={light ? '#171717' : '#fafafa'}
+              tintColor={light ? 'rgba(60,60,67,0.6)' : 'rgba(235,235,245,0.62)'}
+              activeColor={light ? '#fa233b' : '#ff375f'}
+              bottomInset={props.safeAreaBottom ?? 0}
               onChange={(t) => setTab(t)}
             />
           </view>
         )}
       </view>
-      <view style={{ height: String(props.safeAreaBottom ?? 0) + 'px' }} />
+
     </view>
   );
 }

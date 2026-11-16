@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from '@lynx-js/react';
+import { PageHeader } from '../components/PageHeader.js';
+import { useContentHeight } from '../platform/layout.js';
 import { api } from '@tinymusic/shared/api';
 import { QUALITY_ORDER } from '@tinymusic/shared/quality';
 import { qualityLabel } from '@tinymusic/shared/format';
@@ -31,6 +33,7 @@ function Field({ label, value, placeholder, onChange }: FieldProps) {
  * 桌面专属项（托盘、自动更新、窗口主题）不出现。
  */
 export function Settings({ onOpenEqualizer }: { onOpenEqualizer: () => void }) {
+  const contentH = useContentHeight(112, 64);
   const [model, setModel] = useState<SettingsModel | null>(null);
   const [dirty, setDirty] = useState(false);
   const [message, setMessage] = useState('');
@@ -73,14 +76,16 @@ export function Settings({ onOpenEqualizer }: { onOpenEqualizer: () => void }) {
 
   return (
     <view className="page-content">
-      <view className="page-head">
-        <text className="page-title">设置</text>
-        <view className="page-head-action" bindtap={save}>
-          <text className="page-head-action-text">{dirty ? '保存' : '已保存'}</text>
-        </view>
-      </view>
+      <PageHeader
+        title="设置"
+        actions={
+          <view className="ios-text-button" bindtap={save}>
+            <text className="ios-text-button-label">{dirty ? '保存' : '已保存'}</text>
+          </view>
+        }
+      />
 
-      <scroll-view className="results" scroll-orientation="vertical">
+      <scroll-view className="results" style={{ height: contentH + "px" }} scroll-orientation="vertical">
         <view className="section">
           <text className="section-title">下载目录</text>
           <text className="section-value">{model.download_dir || '未设置'}</text>

@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from '@lynx-js/react';
-import { Search01Icon } from '@hugeicons/core-free-icons';
+import { Search01Icon, PlayCircleIcon } from '@hugeicons/core-free-icons';
 import { api } from '@tinymusic/shared/api';
 import type { PlaylistRef, Track } from '@tinymusic/shared/types';
 
 import { Icon } from '../components/Icon.js';
+import { PageHeader } from '../components/PageHeader.js';
 import { player } from '../state/player.js';
 import { downloads } from '../state/downloads.js';
 import { ensureTransport } from '../platform.js';
@@ -12,32 +13,31 @@ interface HomeProps {
   iconColor: string;
   inkIconColor: string;
   ready: boolean;
-  /** 自动化冒烟：拿到结果后自动播第一首 */
   autoPlay?: boolean;
-  /** 自动化冒烟：拿到结果后下载第一首 */
   autoDownload?: boolean;
-  /** 点播放条展开全屏播放页（保留参数，播放条在 App 层） */
-  onOpenPlayer?: () => void;
-  /** 打开歌单详情 */
   onOpenPlaylist: (p: PlaylistRef) => void;
-  /** 冒烟：直接进搜索段（song / playlist） */
   initialSearchKind?: string;
-  /** 冒烟：自动打开第一个歌单 */
   autoOpenPlaylist?: boolean;
+}
+
+function clip(s: string, n: number): string {
+  if (!s) return '';
+  return s.length > n ? s.slice(0, n) + '…' : s;
 }
 
 function fmt(sec: number): string {
   if (!sec) return '';
   const m = Math.floor(sec / 60);
   const s = Math.floor(sec % 60);
-  return `${m}:${String(s).padStart(2, '0')}`;
+  return String(m) + ':' + String(s).padStart(2, '0');
 }
 
 /**
- * 首页 = 搜索 + 结果列表 + 底部播放条（P3 浏览骨架 + P5 播放的最小闭环）。
+ * 首页 = Apple Music 的「现在就听」：大标题 + 每日推荐 + 推荐歌单。
+ * 搜索做成右上角入口，点开才是搜索列表（和 Apple Music 一致）。
  */
 export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, onOpenPlaylist, initialSearchKind, autoOpenPlaylist }: HomeProps) {
-  const [mode, setMode] = useState<'recommend' | 'search'>(initialSearchKind ? 'search' : 'recommend');
+  const [mode, setMode] = useState<'feed' | 'search'>(initialSearchKind ? 'search' : 'feed');
   const [recSongs, setRecSongs] = useState<Track[]>([]);
   const [recLists, setRecLists] = useState<PlaylistRef[]>([]);
   const [recLoading, setRecLoading] = useState(false);
@@ -59,12 +59,9 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, o
       searchKind === 'song'
         ? api.search('kuwo', key, 1, 30).then((page) => setItems(page.items ?? []))
         : api.searchPlaylists('kuwo', key, 0, 30).then((page) => setPlaylistHits(page.items ?? []));
-    req
-      .catch((e: unknown) => setError(String(e)))
-      .finally(() => setLoading(false));
+    req.catch((e: unknown) => setError(String(e))).finally(() => setLoading(false));
   }, [searchKind]);
 
-  // 推荐：每日歌曲（需登录态）+ 推荐歌单（不需要），失败各自降级
   useEffect(() => {
     'background only';
     if (!ready) return;
@@ -72,7 +69,7 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, o
     Promise.allSettled([api.recommendSongs('netease', 30), api.recommendPlaylists('netease')])
       .then(([songs, lists]) => {
         if (songs.status === 'fulfilled') setRecSongs(songs.value ?? []);
-        else setRecError('推荐歌曲取不到（可能未登录）');
+        else setRecError('推荐暂时取不到，检查一下网络');
         if (lists.status === 'fulfilled') setRecLists(lists.value ?? []);
       })
       .finally(() => setRecLoading(false));
@@ -81,7 +78,6 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, o
   useEffect(() => {
     'background only';
     if (ready && mode === 'search') search(kw);
-    // 切到搜索时才请求
   }, [ready, mode, search]);
 
   const onInput = useCallback((e: { detail?: { value?: string } }) => {
@@ -94,13 +90,10 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, o
     search(kw);
   }, [kw, search]);
 
-  // 冒烟钩子：拿到 autoPlay 标记时自动播第一首（TM_AUTOPLAY=1，自动化验证用）
   useEffect(() => {
     'background only';
     const feed = mode === 'search' ? items : recSongs;
     if (!autoPlay || feed.length === 0) return;
-
-    // 竞态兜底：globalProps / 列表可能比首帧晚到，这里最多试 10 次
     let tries = 0;
     const attempt = () => {
       if (player.snapshot().current || tries >= 10) return;
@@ -112,7 +105,6 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, o
     setTimeout(attempt, 300);
   }, [autoPlay, mode, items, recSongs]);
 
-  // 冒烟钩子：自动下载第一首（验证下载全链路）
   useEffect(() => {
     'background only';
     const feed = mode === 'search' ? items : recSongs;
@@ -126,7 +118,6 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, o
     setTimeout(attempt, 500);
   }, [autoDownload, mode, items, recSongs]);
 
-  // 冒烟钩子：搜歌单结果到手后自动进第一个
   useEffect(() => {
     'background only';
     if (!autoOpenPlaylist || playlistHits.length === 0) return;
@@ -135,118 +126,130 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, o
 
   const onTapTrack = useCallback((track: Track) => {
     'background only';
-    void player.playTrack(track, items);
-  }, [items]);
+    void player.playTrack(track, items.length ? items : recSongs);
+  }, [items, recSongs]);
+
+  const searchButton = (
+    <view className="ios-icon-button" bindtap={() => setMode(mode === 'search' ? 'feed' : 'search')}>
+      <Icon icon={mode === 'search' ? PlayCircleIcon : Search01Icon} size={18} color={iconColor} />
+    </view>
+  );
 
   return (
-    <view className="home">
-      <view className="segment">
-        <view
-          className={'segment-item' + (mode === 'recommend' ? ' segment-item--on' : '')}
-          bindtap={() => setMode('recommend')}
-        >
-          <text className="segment-text">推荐</text>
-        </view>
-        <view
-          className={'segment-item' + (mode === 'search' ? ' segment-item--on' : '')}
-          bindtap={() => setMode('search')}
-        >
-          <text className="segment-text">搜索</text>
-        </view>
-      </view>
+    <view className="ios-page">
+      <PageHeader title={mode === 'search' ? '搜索' : '现在就听'} actions={searchButton} />
 
-      {mode === 'recommend' ? (
-        <scroll-view className="results" scroll-orientation="vertical">
-          {recLoading ? <text className="home-hint">读取推荐…</text> : null}
-          {recError ? <text className="home-hint">{recError}</text> : null}
-          {recLists.length > 0 ? <text className="section-title">推荐歌单</text> : null}
-          {recLists.map((p) => (
-            <view className="row" key={'pl:' + p.id} bindtap={() => onOpenPlaylist(p)}>
-              {p.cover ? <image className="row-cover" src={p.cover} /> : <view className="row-cover row-cover--ph" />}
-              <view className="row-meta">
-                <text className="row-title">{p.name}</text>
-                <text className="row-sub">{p.creator ?? ''}</text>
-              </view>
-            </view>
-          ))}
-          {recSongs.length > 0 ? <text className="section-title">每日推荐</text> : null}
+      {mode === 'feed' ? (
+        <scroll-view className="ios-list" scroll-orientation="vertical">
+          {recLoading ? <text className="ios-hint">正在加载推荐…</text> : null}
+          {recError ? <text className="ios-error">{recError}</text> : null}
+
+          {recSongs.length > 0 ? <text className="ios-section-title">每日推荐</text> : null}
           {recSongs.map((t) => (
-            <view className="row" key={'rec:' + t.provider + ':' + t.id} bindtap={() => onTapTrack(t)}>
-              {t.cover ? <image className="row-cover" src={t.cover} /> : <view className="row-cover row-cover--ph" />}
-              <view className="row-meta">
-                <text className="row-title">{t.title}</text>
-                <text className="row-sub">{t.artist}</text>
+            <view className="ios-row" key={'rec:' + t.provider + ':' + t.id} bindtap={() => onTapTrack(t)}>
+              {t.cover ? (
+                <image className="ios-row-art" src={t.cover} />
+              ) : (
+                <view className="ios-row-art ios-row-art-ph" />
+              )}
+              <view className="ios-row-text">
+                <text className="ios-row-title">{clip(t.title, 28)}</text>
+                <text className="ios-row-sub">{t.artist}</text>
               </view>
-              <text className="row-dur">{fmt(t.duration_sec)}</text>
+              <text className="ios-row-trailing">{fmt(t.duration_sec)}</text>
             </view>
           ))}
+
+          {recLists.length > 0 ? <text className="ios-section-title">推荐歌单</text> : null}
+          {recLists.map((p) => (
+            <view className="ios-row" key={'pl:' + p.id} bindtap={() => onOpenPlaylist(p)}>
+              {p.cover ? (
+                <image className="ios-row-art" src={p.cover} />
+              ) : (
+                <view className="ios-row-art ios-row-art-ph" />
+              )}
+              <view className="ios-row-text">
+                <text className="ios-row-title">{clip(p.name, 28)}</text>
+                <text className="ios-row-sub">{(p.creator ?? '') + (p.track_count ? ' · ' + p.track_count + ' 首' : '')}</text>
+              </view>
+            </view>
+          ))}
+
+          {!recLoading && recSongs.length === 0 && recLists.length === 0 ? (
+            <view className="ios-empty">
+              <text className="ios-empty-title">暂无推荐</text>
+              <text className="ios-empty-sub">点右上角的搜索，先找一首想听的</text>
+            </view>
+          ) : null}
         </scroll-view>
       ) : null}
 
       {mode === 'search' ? (
-        <view className="home">
-      <view className="segment segment--sub">
-        <view
-          className={'segment-item' + (searchKind === 'song' ? ' segment-item--on' : '')}
-          bindtap={() => setSearchKind('song')}
-        >
-          <text className="segment-text">单曲</text>
-        </view>
-        <view
-          className={'segment-item' + (searchKind === 'playlist' ? ' segment-item--on' : '')}
-          bindtap={() => setSearchKind('playlist')}
-        >
-          <text className="segment-text">歌单</text>
-        </view>
-      </view>
-      <view className="search">
-        <Icon icon={Search01Icon} size={18} color={iconColor} />
-        <input
-          className="search-input"
-          value={kw}
-          placeholder="搜索歌曲、歌手"
-          bindinput={onInput}
-          bindconfirm={onConfirm}
-        />
-        <view className="search-go" bindtap={onConfirm}>
-          <text className="search-go-text">搜索</text>
-        </view>
-      </view>
-
-      {error ? <text className="home-error">{error}</text> : null}
-      {loading ? <text className="home-hint">搜索中…</text> : null}
-      {!loading && !error && (searchKind === 'song' ? items.length : playlistHits.length) === 0 ? (
-        <text className="home-hint">没有结果</text>
-      ) : null}
-
-      <scroll-view className="results" scroll-orientation="vertical">
-        {searchKind === 'playlist'
-          ? playlistHits.map((p) => (
-              <view className="row" key={'sp:' + p.id} bindtap={() => onOpenPlaylist(p)}>
-                {p.cover ? <image className="row-cover" src={p.cover} /> : <view className="row-cover row-cover--ph" />}
-                <view className="row-meta">
-                  <text className="row-title">{p.name}</text>
-                  <text className="row-sub">
-                    {(p.creator ?? '') + (p.track_count ? ` · ${p.track_count} 首` : '')}
-                  </text>
-                </view>
-              </view>
-            ))
-          : null}
-        {searchKind === 'song' && items.map((t) => (
-          <view className="row" key={`${t.provider}:${t.id}`} bindtap={() => onTapTrack(t)}>
-            {t.cover ? <image className="row-cover" src={t.cover} /> : <view className="row-cover row-cover--ph" />}
-            <view className="row-meta">
-              <text className="row-title">{t.title}</text>
-              <text className="row-sub">
-                {t.artist}
-                {t.album ? ` · ${t.album}` : ''}
-              </text>
+        <view className="ios-page">
+          <view className="ios-segmented">
+            <view
+              className={'ios-segmented-item' + (searchKind === 'song' ? ' ios-segmented-item--on' : '')}
+              bindtap={() => setSearchKind('song')}
+            >
+              <text className="ios-segmented-label">歌曲</text>
             </view>
-            <text className="row-dur">{fmt(t.duration_sec)}</text>
+            <view
+              className={'ios-segmented-item' + (searchKind === 'playlist' ? ' ios-segmented-item--on' : '')}
+              bindtap={() => setSearchKind('playlist')}
+            >
+              <text className="ios-segmented-label">歌单</text>
+            </view>
           </view>
-        ))}
-      </scroll-view>
+
+          <view className="ios-search-field">
+            <Icon icon={Search01Icon} size={16} color={iconColor} />
+            <input
+              className="ios-search-input"
+              value={kw}
+              placeholder={searchKind === 'song' ? '搜索歌曲、歌手' : '搜索歌单'}
+              bindinput={onInput}
+              bindconfirm={onConfirm}
+            />
+            <view className="ios-text-button" bindtap={onConfirm}>
+              <text className="ios-text-button-label">搜索</text>
+            </view>
+          </view>
+
+          {error ? <text className="ios-error">{error}</text> : null}
+          {loading ? <text className="ios-hint">搜索中…</text> : null}
+
+          <scroll-view className="ios-list" scroll-orientation="vertical">
+            {searchKind === 'playlist'
+              ? playlistHits.map((p) => (
+                  <view className="ios-row" key={'sp:' + p.id} bindtap={() => onOpenPlaylist(p)}>
+                    {p.cover ? <image className="ios-row-art" src={p.cover} /> : <view className="ios-row-art ios-row-art-ph" />}
+                    <view className="ios-row-text">
+                      <text className="ios-row-title">{clip(p.name, 28)}</text>
+                      <text className="ios-row-sub">{(p.creator ?? '') + (p.track_count ? ' · ' + p.track_count + ' 首' : '')}</text>
+                    </view>
+                  </view>
+                ))
+              : null}
+            {searchKind === 'song'
+              ? items.map((t) => (
+                  <view className="ios-row" key={t.provider + ':' + t.id} bindtap={() => onTapTrack(t)}>
+                    {t.cover ? <image className="ios-row-art" src={t.cover} /> : <view className="ios-row-art ios-row-art-ph" />}
+                    <view className="ios-row-text">
+                      <text className="ios-row-title">{clip(t.title, 28)}</text>
+                      <text className="ios-row-sub">{t.artist + (t.album ? ' · ' + t.album : '')}</text>
+                    </view>
+                    <text className="ios-row-trailing">{fmt(t.duration_sec)}</text>
+                  </view>
+                ))
+              : null}
+
+            {!loading && (searchKind === 'song' ? items.length : playlistHits.length) === 0 ? (
+              <view className="ios-empty">
+                <text className="ios-empty-title">没有结果</text>
+                <text className="ios-empty-sub">换个关键词试试</text>
+              </view>
+            ) : null}
+          </scroll-view>
         </view>
       ) : null}
     </view>

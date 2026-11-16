@@ -6,7 +6,8 @@ final class RootViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        view.backgroundColor = UIColor(red: 0.05, green: 0.05, blue: 0.05, alpha: 1)
+        // 底色跟着系统主题，安全区外的区域才不会突兀
+        view.backgroundColor = .systemBackground
 
         // 全局配置在 AppDelegate 里已经 prepare（provider + TmAudio 模块）
         let lynxView = LynxView { builder in
@@ -19,6 +20,7 @@ final class RootViewController: UIViewController {
         lynxView.layoutHeightMode = .exact
         lynxView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(lynxView)
+        // 全屏铺满（iOS 原生 App 就是这样），安全区通过 globalProps 交给前端
         NSLayoutConstraint.activate([
             lynxView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
             lynxView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
@@ -34,6 +36,16 @@ final class RootViewController: UIViewController {
         // 资源名带上 .lynx：TemplateProvider 会拼成 main.lynx.bundle
         lynxView.loadTemplate(fromURL: "main.lynx", initData: nil)
         self.lynxView = lynxView
+    }
+
+    private var lastPushedSize: CGSize = .zero
+
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // 首次布局完才知道 LynxView 的真实高度（安全区已扣掉），这时再推一次
+        guard let lynxView, lynxView.bounds.size != lastPushedSize else { return }
+        lastPushedSize = lynxView.bounds.size
+        lynxView.updateGlobalProps(with: globalProps())
     }
 
     override func viewDidAppear(_ animated: Bool) {
@@ -53,8 +65,8 @@ final class RootViewController: UIViewController {
             "safeAreaBottom": Double(insets.bottom),
             "safeAreaLeft": Double(insets.left),
             "safeAreaRight": Double(insets.right),
-            "screenWidth": Double(view.bounds.width),
-            "screenHeight": Double(view.bounds.height),
+            "screenWidth": Double(lynxView?.bounds.width ?? view.bounds.width),
+            "screenHeight": Double(lynxView?.bounds.height ?? view.bounds.height),
             // 自动化冒烟：TM_AUTOPLAY=1 时前端自动播第一条搜索结果
             "autoPlay": ProcessInfo.processInfo.environment["TM_AUTOPLAY"] == "1",
             // 自动化冒烟：TM_OPEN_PLAYER=1 时播放开始后自动展开全屏播放页
@@ -77,5 +89,16 @@ final class RootViewController: UIViewController {
         return props
     }
 
-    override var preferredStatusBarStyle: UIStatusBarStyle { .lightContent }
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        traitCollection.userInterfaceStyle == .light ? .darkContent : .lightContent
+    }
+
+    override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+        super.traitCollectionDidChange(previous)
+        if previous?.userInterfaceStyle != traitCollection.userInterfaceStyle {
+            view.backgroundColor = .systemBackground
+            setNeedsStatusBarAppearanceUpdate()
+            lynxView?.updateGlobalProps(with: globalProps())
+        }
+    }
 }

@@ -1,4 +1,6 @@
 import { useCallback, useEffect } from '@lynx-js/react';
+import { PageHeader } from '../components/PageHeader.js';
+import { useContentHeight } from '../platform/layout.js';
 
 import { downloads, useDownloads } from '../state/downloads.js';
 import { player } from '../state/player.js';
@@ -14,6 +16,7 @@ function fmtBytes(n: number): string {
  * 下载页：已下载列表 + 失败记录（可重试/忽略）。
  */
 export function Downloads({ iconColor, playLocal }: { iconColor: string; playLocal?: boolean }) {
+  const contentH = useContentHeight(112, 64);
   const d = useDownloads();
 
   // 冒烟钩子：TM_PLAY_LOCAL=1 时自动播第一条已下载
@@ -37,12 +40,14 @@ export function Downloads({ iconColor, playLocal }: { iconColor: string; playLoc
 
   return (
     <view className="page-content">
-      <view className="page-head">
-        <text className="page-title">下载</text>
-        <view className="page-head-action" bindtap={onRefresh}>
-          <text className="page-head-action-text">刷新</text>
-        </view>
-      </view>
+      <PageHeader
+        title="资料库"
+        actions={
+          <view className="ios-text-button" bindtap={onRefresh}>
+            <text className="ios-text-button-label">刷新</text>
+          </view>
+        }
+      />
 
       {d.error ? <text className="home-error">{d.error}</text> : null}
       {d.busy ? <text className="home-hint">{d.message}</text> : null}
@@ -58,8 +63,8 @@ export function Downloads({ iconColor, playLocal }: { iconColor: string; playLoc
           {d.failures.map((f) => (
             <view className="failure-row" key={f.id}>
               <view className="failure-meta">
-                <text className="row-title">{f.track.title}</text>
-                <text className="row-sub">
+                <text className="ios-row-title">{f.track.title}</text>
+                <text className="ios-row-sub">
                   {f.track.artist + ' · ' + (f.parts.map((p) => p.part).join('/') || '音频')}
                 </text>
               </view>
@@ -76,7 +81,7 @@ export function Downloads({ iconColor, playLocal }: { iconColor: string; playLoc
         </view>
       ) : null}
 
-      <scroll-view className="results" scroll-orientation="vertical">
+      <scroll-view className="results" style={{ height: contentH + "px" }} scroll-orientation="vertical">
         {d.rows.length === 0 ? <text className="home-hint">还没有下载完成的曲目</text> : null}
         {d.rows.map((r) => (
           <view
@@ -87,11 +92,11 @@ export function Downloads({ iconColor, playLocal }: { iconColor: string; playLoc
               player.playLocal(r);
             }}
           >
-            <view className="row-meta">
-              <text className="row-title">{r.title}</text>
-              <text className="row-sub">{r.artist}</text>
+            <view className="ios-row-text">
+              <text className="ios-row-title">{r.title}</text>
+              <text className="ios-row-sub">{r.artist}</text>
             </view>
-            <text className="row-dur">{fmtBytes(r.bytes)}</text>
+            <text className="ios-row-trailing">{fmtBytes(r.bytes)}</text>
           </view>
         ))}
       </scroll-view>

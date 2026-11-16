@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from '@lynx-js/react';
+import { PageHeader } from '../components/PageHeader.js';
 import { api } from '@tinymusic/shared/api';
 import type { PlaylistRef, Session, Track } from '@tinymusic/shared/types';
 
@@ -74,9 +75,7 @@ export function Account({ onOpenPlaylist }: { onOpenPlaylist: (p: PlaylistRef) =
 
   return (
     <view className="page-content">
-      <view className="page-head">
-        <text className="page-title">账号</text>
-      </view>
+      <PageHeader title="账号" />
 
       {PROVIDERS.map((p) => {
         const s = sessions[p.id];
@@ -128,10 +127,10 @@ export function Account({ onOpenPlaylist }: { onOpenPlaylist: (p: PlaylistRef) =
           <text className="section-hint">还没有收藏；播放页点♡可以收藏当前歌曲</text>
         ) : null}
         {favorites.slice(0, 20).map((t) => (
-          <view className="row" key={t.provider + ':' + t.id} bindtap={() => void player.playTrack(t, favorites)}>
-            <view className="row-meta">
-              <text className="row-title">{t.title}</text>
-              <text className="row-sub">{t.artist}</text>
+          <view className="ios-row" key={t.provider + ':' + t.id} bindtap={() => void player.playTrack(t, favorites)}>
+            <view className="ios-row-text">
+              <text className="ios-row-title">{t.title}</text>
+              <text className="ios-row-sub">{t.artist}</text>
             </view>
           </view>
         ))}
@@ -141,10 +140,10 @@ export function Account({ onOpenPlaylist }: { onOpenPlaylist: (p: PlaylistRef) =
         <view className="section">
           <text className="section-title">{'我的歌单（' + playlists.length + '）'}</text>
           {playlists.map((p) => (
-            <view className="row" key={p.id} bindtap={() => onOpenPlaylist(p)}>
+            <view className="ios-row" key={p.id} bindtap={() => onOpenPlaylist(p)}>
               <view className="row-meta">
-                <text className="row-title">{p.name}</text>
-                <text className="row-sub">{p.track_count + ' 首'}</text>
+                <text className="ios-row-title">{p.name}</text>
+                <text className="ios-row-sub">{p.track_count + ' 首'}</text>
               </view>
             </view>
           ))}

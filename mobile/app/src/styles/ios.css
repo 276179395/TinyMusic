@@ -1,0 +1,164 @@
+/* =========================================================
+   iOS 原生风（参考 Apple Music）—— 只在 mobile 生效
+   背景/分组/分隔线/三级文本 + 苹果红 accent，全部走系统色近似值
+   ========================================================= */
+
+.ios-dark {
+  --bg: #000000;
+  --bg-elevated: #1c1c1e;
+  --bg-grouped: #121212;
+  --bg-fill: #2c2c2e;
+  --sep: rgba(84, 84, 88, 0.65);
+  --label: #ffffff;
+  --label-2: rgba(235, 235, 245, 0.62);
+  --label-3: rgba(235, 235, 245, 0.32);
+  --tint: #ff375f;
+}
+
+.ios-light {
+  --bg: #ffffff;
+  --bg-elevated: #ffffff;
+  --bg-grouped: #f2f2f7;
+  --bg-fill: #e9e9ee;
+  --sep: rgba(60, 60, 67, 0.29);
+  --label: #000000;
+  --label-2: rgba(60, 60, 67, 0.6);
+  --label-3: rgba(60, 60, 67, 0.3);
+  --tint: #fa233b;
+}
+
+/* ---------- 页面骨架 ---------- */
+.ios-page { display: flex; flex-direction: column; flex: 1; background-color: var(--bg); overflow: hidden; }
+
+.ios-nav { display: flex; flex-direction: row; align-items: flex-end; justify-content: space-between; padding: 6px 16px 8px; }
+.ios-nav-actions { display: flex; flex-direction: row; align-items: center; gap: 8px; }
+
+.ios-large-title { font-size: 32px; font-weight: 700; letter-spacing: -0.5px; color: var(--label); }
+
+.ios-icon-button { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 16px; background-color: var(--bg-fill); }
+.ios-text-button { padding: 6px 12px; border-radius: 14px; background-color: var(--bg-fill); }
+.ios-text-button-label { font-size: 13px; font-weight: 600; color: var(--tint); }
+
+/* 分段控件 */
+.ios-segmented { display: flex; flex-direction: row; align-items: center; padding: 2px; margin: 2px 16px 10px; border-radius: 10px; background-color: var(--bg-fill); }
+.ios-segmented-item { display: flex; align-items: center; justify-content: center; flex: 1; height: 30px; border-radius: 8px; }
+.ios-segmented-item--on { background-color: var(--bg-elevated); }
+.ios-segmented-label { font-size: 13px; font-weight: 500; color: var(--label-2); }
+.ios-segmented-item--on .ios-segmented-label { font-weight: 600; color: var(--label); }
+
+.ios-section-title { font-size: 21px; font-weight: 700; letter-spacing: -0.3px; color: var(--label); padding: 16px 16px 8px; }
+
+/* ---------- 列表 ---------- */
+.ios-list { display: flex; flex-direction: column; flex: 1; }
+
+.ios-row { display: flex; flex-direction: row; align-items: center; gap: 12px; padding: 8px 16px; min-height: 56px; }
+.ios-row-art { width: 48px; height: 48px; border-radius: 6px; background-color: var(--bg-fill); }
+.ios-row-art--round { border-radius: 24px; }
+.ios-row-art-ph { display: flex; align-items: center; justify-content: center; }
+.ios-row-text { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+.ios-row-title { font-size: 16px; font-weight: 500; color: var(--label); }
+.ios-row-sub { margin-top: 2px; font-size: 13px; color: var(--label-2); }
+.ios-row-trailing { font-size: 13px; color: var(--label-3); }
+.ios-row-index { width: 22px; font-size: 14px; color: var(--label-3); }
+.ios-row--on { background-color: var(--bg-fill); }
+
+.ios-sep { height: 1px; margin-left: 76px; background-color: var(--sep); }
+.ios-sep--inset { margin-left: 16px; }
+
+/* ---------- Tab bar ---------- */
+.ios-tabbar { display: flex; flex-direction: row; align-items: flex-start; justify-content: space-around; padding-top: 6px; background-color: var(--bg-elevated); border-top-width: 1px; border-top-style: solid; border-top-color: var(--sep); }
+.ios-tab { display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px; flex: 1; padding-bottom: 2px; }
+.ios-tab-label { font-size: 10px; font-weight: 500; color: var(--label-2); }
+.ios-tab-label--on { color: var(--tint); }
+
+/* ---------- 迷你播放器 ---------- */
+.ios-mini-player { display: flex; flex-direction: row; align-items: center; gap: 10px; margin: 6px 8px; padding: 6px 10px 6px 6px; border-radius: 14px; background-color: var(--bg-fill); }
+.ios-mini-art { width: 38px; height: 38px; border-radius: 6px; background-color: var(--bg-grouped); }
+.ios-mini-text { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+.ios-mini-title { font-size: 15px; font-weight: 500; color: var(--label); }
+.ios-mini-sub { font-size: 12px; color: var(--label-2); }
+.ios-mini-controls { display: flex; flex-direction: row; align-items: center; gap: 2px; }
+.ios-mini-btn { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; }
+.ios-mini-progress { height: 2px; background-color: rgba(120, 120, 128, 0.22); }
+.ios-mini-progress-fill { height: 2px; background-color: var(--tint); }
+
+/* ---------- 播放页 ---------- */
+.ios-player { display: flex; flex-direction: column; flex: 1; padding: 0 22px 10px; background-color: var(--bg); overflow: hidden; }
+.ios-player-grabber { width: 36px; height: 5px; border-radius: 3px; margin: 4px auto 8px; background-color: var(--label-3); }
+.ios-player-art { width: 100%; height: 300px; border-radius: 10px; background-color: var(--bg-fill); }
+.ios-player-title { margin-top: 20px; font-size: 22px; font-weight: 700; letter-spacing: -0.3px; color: var(--label); }
+.ios-player-artist { margin-top: 2px; font-size: 20px; color: var(--tint); }
+
+.ios-progress { margin-top: 16px; }
+.ios-progress-track { height: 4px; border-radius: 2px; background-color: var(--bg-fill); overflow: hidden; }
+.ios-progress-fill { height: 4px; border-radius: 2px; background-color: var(--label-2); }
+.ios-progress-times { display: flex; flex-direction: row; justify-content: space-between; margin-top: 6px; }
+.ios-time { font-size: 11px; color: var(--label-2); }
+
+.ios-transport { display: flex; flex-direction: row; align-items: center; justify-content: space-between; margin-top: 8px; padding: 0 4px; }
+.ios-transport-btn { display: flex; align-items: center; justify-content: center; width: 52px; height: 52px; }
+.ios-transport-main { display: flex; align-items: center; justify-content: center; width: 72px; height: 72px; }
+
+.ios-action-row { display: flex; flex-direction: row; align-items: center; justify-content: space-around; margin-top: 4px; padding: 8px 0 4px; border-top-width: 1px; border-top-style: solid; border-top-color: var(--sep); }
+.ios-action-item { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.ios-action-label { font-size: 11px; color: var(--label-2); }
+
+.ios-lyrics { display: flex; flex-direction: column; flex: 1; margin-top: 6px; overflow: hidden; }
+.ios-lyric-line { display: flex; align-items: center; height: 34px; }
+.ios-lyric-text { font-size: 16px; font-weight: 500; color: var(--label-3); }
+.ios-lyric-line--on .ios-lyric-text { font-size: 18px; font-weight: 700; color: var(--label); }
+
+/* ---------- 其它 ---------- */
+.ios-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 36px 20px; }
+.ios-empty-title { font-size: 17px; font-weight: 600; color: var(--label); }
+.ios-empty-sub { font-size: 13px; color: var(--label-2); text-align: center; }
+.ios-hint { padding: 4px 16px; font-size: 13px; color: var(--label-2); }
+.ios-error { padding: 4px 16px; font-size: 13px; color: var(--tint); }
+.ios-group { display: flex; flex-direction: column; margin: 0 16px; border-radius: 12px; background-color: var(--bg-elevated); overflow: hidden; }
+
+/* 搜索输入区 */
+.ios-search-field { display: flex; flex-direction: row; align-items: center; gap: 8px; margin: 0 16px 8px; padding: 0 8px 0 10px; height: 38px; border-radius: 10px; background-color: var(--bg-fill); }
+.ios-search-input { flex: 1; height: 38px; font-size: 16px; color: var(--label); }
+
+/* 页面底色跟着 iOS 主题走（盖掉旧 .page 的分组灰） */
+.page.ios-light { background-color: #ffffff; }
+.page.ios-dark { background-color: #000000; }
+
+/* 行分隔线：Apple 的 hairline（右侧留 16，左侧对齐文字） */
+.ios-row { border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: var(--sep); }
+.ios-row:last-child { border-bottom-width: 0; }
+
+/* 一行截断 */
+.ios-row-title, .ios-mini-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ios-row-sub, .ios-mini-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* 播放页：歌词区固定高度，别把底部操作行挤掉 */
+.ios-player-art { height: 300px; }
+.ios-lyrics { height: 150px; }
+.ios-action-row { flex-shrink: 0; }
+
+/* 壳层高度：让内容区可被压缩，两条底栏不被顶出屏幕 */
+.app-body, .tab-shell, .tab-body, .ios-page, .page-content { flex-shrink: 1; min-height: 0; }
+.ios-tabbar, .ios-mini-player { flex-shrink: 0; }
+
+/* 播放页歌词区：不吃 flex 增长，固定高度，底部操作行才在屏幕里 */
+.ios-lyrics { flex-grow: 0; flex-shrink: 0; height: 150px; }
+
+
+
+/* ---- 壳层：绝对定位，彻底不依赖 flex 压缩 ----
+   Lynx 的 overflow:hidden 只是部分支持，长页面会把底栏顶出屏幕。
+   tab-body 固定占「整屏 - 底栏」，页面在里面自己滚。 */
+.ios-shell { position: relative; width: 100%; }
+.tab-body { position: absolute; top: 0; left: 0; right: 0; bottom: 108px; }
+.ios-mini-wrap { position: absolute; left: 0; right: 0; bottom: 50px; }
+.ios-tabbar { position: absolute; left: 0; right: 0; bottom: 0; height: 50px; padding-bottom: 0; }
+
+.ios-tab-icon { width: 26px; height: 26px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+
+/* 表单类页面：底部给迷你条留出可滚动的余量 */
+.page-content { padding-bottom: 118px; }
+
+/* tab 文字要占满整格并居中，否则会被挤成一个字 */
+.ios-tab-label { width: 100%; text-align: center; }
+.ios-tab { padding-left: 0; padding-right: 0; }

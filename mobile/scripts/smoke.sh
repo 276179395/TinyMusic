@@ -38,5 +38,11 @@ sleep "${TM_WAIT:-14}"
 echo "== 4/4 截图 + 日志 =="
 xcrun simctl io booted screenshot "$OUT" >/dev/null 2>&1
 echo "   screenshot: $OUT"
+
+# 默认跑完就退出 App，避免模拟器在后台一直放歌（设 TM_KEEP=1 可保留）
+if [[ "${TM_KEEP:-0}" != "1" ]]; then
+  xcrun simctl terminate booted "$BUNDLE_ID" >/dev/null 2>&1 || true
+  echo "   已退出 App（TM_KEEP=1 可保留）"
+fi
 xcrun simctl spawn booted log show --last "${TM_LOG_WINDOW:-40s}" --predicate "process == \"TinyMusic\"" 2>/dev/null \
   | grep -F '[TinyMusic]' | tail -12 || true

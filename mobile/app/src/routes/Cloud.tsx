@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState } from '@lynx-js/react';
+import { PageHeader } from '../components/PageHeader.js';
+import { useContentHeight } from '../platform/layout.js';
 import { api } from '@tinymusic/shared/api';
 import type { S3IntegrityReport, S3PlaylistInfo, S3TrackRow, Settings as SettingsModel } from '@tinymusic/shared/types';
 
@@ -13,6 +15,7 @@ interface CloudProps {
  * 桶里的目录结构、校验算法都在 Rust（crates/core::s3），这里只展示。
  */
 export function Cloud({ iconColor, autoOpen }: CloudProps) {
+  const contentH = useContentHeight(112, 64);
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [playlists, setPlaylists] = useState<S3PlaylistInfo[]>([]);
   const [current, setCurrent] = useState<string | null>(null);
@@ -110,10 +113,8 @@ export function Cloud({ iconColor, autoOpen }: CloudProps) {
   if (enabled === false) {
     return (
       <view className="page-content">
-        <view className="page-head">
-          <text className="page-title">网盘</text>
-        </view>
-        <text className="home-hint">还没配置网盘</text>
+        <PageHeader title="网盘" />
+        <text className="ios-hint">还没配置网盘</text>
         <text className="section-hint">去「设置 → 网盘」填 endpoint / bucket / 密钥，教程和桌面端一致</text>
       </view>
     );
@@ -121,17 +122,19 @@ export function Cloud({ iconColor, autoOpen }: CloudProps) {
 
   return (
     <view className="page-content">
-      <view className="page-head">
-        <text className="page-title">网盘</text>
-        <view className="row-actions">
-          <view className="page-head-action" bindtap={onTest}>
-            <text className="page-head-action-text">试连</text>
+      <PageHeader
+        title="网盘"
+        actions={
+          <view className="ios-nav-actions">
+            <view className="ios-text-button" bindtap={onTest}>
+              <text className="ios-text-button-label">试连</text>
+            </view>
+            <view className="ios-text-button" bindtap={onIntegrity}>
+              <text className="ios-text-button-label">校验</text>
+            </view>
           </view>
-          <view className="page-head-action" bindtap={onIntegrity}>
-            <text className="page-head-action-text">校验</text>
-          </view>
-        </view>
-      </view>
+        }
+      />
 
       {busy ? <text className="home-hint">{busy}</text> : null}
       {error ? <text className="home-error">{error}</text> : null}
@@ -162,7 +165,7 @@ export function Cloud({ iconColor, autoOpen }: CloudProps) {
         </view>
       ) : null}
 
-      <scroll-view className="results" scroll-orientation="vertical">
+      <scroll-view className="results" style={{ height: contentH + "px" }} scroll-orientation="vertical">
         {!current
           ? playlists.map((p) => (
               <view className="row" key={p.name} bindtap={() => onOpen(p.name, p.root)}>
