@@ -59,6 +59,7 @@ final class RootViewController: UIViewController {
             "autoPlay": ProcessInfo.processInfo.environment["TM_AUTOPLAY"] == "1",
             // 自动化冒烟：TM_OPEN_PLAYER=1 时播放开始后自动展开全屏播放页
             "openPlayer": ProcessInfo.processInfo.environment["TM_OPEN_PLAYER"] == "1",
+            "initialTab": ProcessInfo.processInfo.environment["TM_TAB"] ?? "home",
         ]
         if let baseUrl = backend.baseUrl { props["apiBase"] = baseUrl }
         if let token = backend.token { props["apiToken"] = token }

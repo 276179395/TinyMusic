@@ -4,7 +4,6 @@ import { api } from '@tinymusic/shared/api';
 import type { Track } from '@tinymusic/shared/types';
 
 import { Icon } from '../components/Icon.js';
-import { PlayerBar } from '../components/PlayerBar.js';
 import { player } from '../state/player.js';
 import { ensureTransport } from '../platform.js';
 
@@ -14,8 +13,8 @@ interface HomeProps {
   ready: boolean;
   /** 自动化冒烟：拿到结果后自动播第一首 */
   autoPlay?: boolean;
-  /** 点播放条展开全屏播放页 */
-  onOpenPlayer: () => void;
+  /** 点播放条展开全屏播放页（保留参数，播放条在 App 层） */
+  onOpenPlayer?: () => void;
 }
 
 function fmt(sec: number): string {
@@ -67,8 +66,17 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, onOpenPlayer }:
   useEffect(() => {
     'background only';
     if (!autoPlay || items.length === 0) return;
-    if (player.snapshot().current) return;
-    void player.playTrack(items[0], items);
+
+    // 竞态兜底：globalProps 可能比搜索结果晚到，这里最多试 10 次
+    let tries = 0;
+    const attempt = () => {
+      if (player.snapshot().current || tries >= 10) return;
+      tries += 1;
+      if (player.snapshot().status === 'loading') return;
+      void player.playTrack(items[0], items);
+      setTimeout(attempt, 1200);
+    };
+    setTimeout(attempt, 300);
   }, [autoPlay, items]);
 
   const onTapTrack = useCallback((track: Track) => {
@@ -112,9 +120,6 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, onOpenPlayer }:
         ))}
       </scroll-view>
 
-      <view bindtap={onOpenPlayer}>
-        <PlayerBar iconColor={iconColor} inkIconColor={inkIconColor} />
-      </view>
     </view>
   );
 }

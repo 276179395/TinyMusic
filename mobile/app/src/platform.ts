@@ -13,6 +13,7 @@ export interface HostProps {
   screenHeight?: number;
   autoPlay?: boolean | number;
   openPlayer?: boolean | number;
+  initialTab?: string;
 }
 
 /**

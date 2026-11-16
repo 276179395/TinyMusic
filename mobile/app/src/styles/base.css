@@ -418,3 +418,185 @@
   font-weight: 600;
   color: var(--foreground, #fafafa);
 }
+
+/* ---------- Tab 壳 ---------- */
+.tab-shell {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.tab-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.tabbar {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+  height: 52px;
+  border-top: 1px solid var(--line-soft, rgba(255, 255, 255, 0.06));
+}
+
+.tabbar-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex: 1;
+  height: 52px;
+}
+
+.tabbar-label {
+  font-size: 10px;
+  color: var(--fg3, #747474);
+}
+
+.tabbar-label--on {
+  color: var(--foreground, #fafafa);
+}
+
+/* ---------- 通用页面骨架 ---------- */
+.page-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  padding: 12px 16px 0;
+  overflow: hidden;
+}
+
+.page-head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.page-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--foreground, #fafafa);
+}
+
+.page-head-action {
+  padding: 6px 10px;
+  border-radius: 8px;
+  background-color: var(--bg3, rgba(255, 255, 255, 0.07));
+}
+
+.page-head-action-text {
+  font-size: 12px;
+  color: var(--fg2, #a4a4a4);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line-soft, rgba(255, 255, 255, 0.06));
+}
+
+.section-title {
+  font-size: 12px;
+  color: var(--fg3, #747474);
+}
+
+.section-value {
+  margin-top: 6px;
+  font-size: 14px;
+  color: var(--foreground, #fafafa);
+}
+
+.section-hint {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--fg3, #747474);
+}
+
+.quality-row {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.stepper {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 14px;
+  margin-top: 8px;
+}
+
+.stepper-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background-color: var(--bg3, rgba(255, 255, 255, 0.07));
+}
+
+.stepper-btn-text {
+  font-size: 16px;
+  color: var(--foreground, #fafafa);
+}
+
+.stepper-value {
+  font-size: 14px;
+  color: var(--foreground, #fafafa);
+}
+
+/* ---------- 下载页 ---------- */
+.failures {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: 12px;
+}
+
+.failure-head {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.failure-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line-soft, rgba(255, 255, 255, 0.06));
+}
+
+.failure-meta {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.failure-actions {
+  display: flex;
+  flex-direction: row;
+  gap: 14px;
+}
+
+.link-text {
+  font-size: 12px;
+  color: var(--brand, #54d2a4);
+}
+
+.link-text--muted {
+  color: var(--fg3, #747474);
+}

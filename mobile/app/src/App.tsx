@@ -4,7 +4,12 @@ import { useGlobalProps } from '@lynx-js/react';
 import '@tinymusic/theme/lynx.css';
 import './styles/base.css';
 import { Home } from './routes/Home.js';
+import { Downloads } from './routes/Downloads.js';
+import { Settings } from './routes/Settings.js';
 import { PlayerPage } from './routes/PlayerPage.js';
+import { TabBar, type TabKey } from './components/TabBar.js';
+import { PlayerBar } from './components/PlayerBar.js';
+import { player } from './state/player.js';
 import { ensureTransport, normalizeHostProps, transportError, type HostProps } from './platform.js';
 import { usePlayer } from './state/player.js';
 
@@ -17,8 +22,11 @@ export function App() {
     (useGlobalProps() ?? {}) as Record<string, unknown>
   );
   const [ready, setReady] = useState(false);
-  const player = usePlayer();
+  const snapshot = usePlayer();
   const [showPlayer, setShowPlayer] = useState(false);
+  const initialTab: TabKey =
+    props.initialTab === 'downloads' ? 'downloads' : props.initialTab === 'settings' ? 'settings' : 'home';
+  const [tab, setTab] = useState<TabKey>(initialTab);
 
   useEffect(() => {
     'background only';
@@ -28,8 +36,8 @@ export function App() {
   // 冒烟钩子：TM_OPEN_PLAYER=1 时，播放开始后自动展开全屏播放页
   useEffect(() => {
     'background only';
-    if (props.openPlayer && player.current) setShowPlayer(true);
-  }, [props.openPlayer, player.current]);
+    if (props.openPlayer && snapshot.current) setShowPlayer(true);
+  }, [props.openPlayer, snapshot.current]);
 
   const light = props.appTheme === 'light';
   const theme = light ? 'tm-light' : 'tm-dark';
@@ -47,20 +55,38 @@ export function App() {
               {transportError || props.backendError || '等待本地后端…'}
             </text>
           </view>
-        ) : showPlayer && player.current ? (
+        ) : showPlayer && snapshot.current ? (
           <PlayerPage
             iconColor={iconColor}
             inkIconColor={inkIconColor}
             onCollapse={() => setShowPlayer(false)}
           />
         ) : (
-          <Home
-            iconColor={iconColor}
-            inkIconColor={inkIconColor}
-            ready={ready}
-            autoPlay={props.autoPlay === true}
-            onOpenPlayer={() => setShowPlayer(true)}
-          />
+          <view className="tab-shell">
+            <view className="tab-body">
+              {tab === 'home' ? (
+                <Home
+                  iconColor={iconColor}
+                  inkIconColor={inkIconColor}
+                  ready={ready}
+                  autoPlay={props.autoPlay === true}
+                  onOpenPlayer={() => setShowPlayer(true)}
+                />
+              ) : null}
+              {tab === 'downloads' ? <Downloads iconColor={iconColor} /> : null}
+              {tab === 'settings' ? <Settings /> : null}
+            </view>
+            {/* 全局迷你播放条：切换 tab 也在，点了展开全屏 */}
+            <view bindtap={() => snapshot.current && setShowPlayer(true)}>
+              <PlayerBar iconColor={iconColor} inkIconColor={inkIconColor} />
+            </view>
+            <TabBar
+              current={tab}
+              iconColor={iconColor}
+              activeColor={light ? '#171717' : '#fafafa'}
+              onChange={(t) => setTab(t)}
+            />
+          </view>
         )}
       </view>
       <view style={{ height: String(props.safeAreaBottom ?? 0) + 'px' }} />
