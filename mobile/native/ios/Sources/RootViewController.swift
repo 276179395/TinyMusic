@@ -64,6 +64,7 @@ final class RootViewController: UIViewController {
             "playLocal": ProcessInfo.processInfo.environment["TM_PLAY_LOCAL"] == "1",
             "openArtist": ProcessInfo.processInfo.environment["TM_OPEN_ARTIST"] == "1",
             "openAlbum": ProcessInfo.processInfo.environment["TM_OPEN_ALBUM"] == "1",
+            "searchKind": ProcessInfo.processInfo.environment["TM_SEARCH_KIND"] ?? "",
         ]
         if let baseUrl = backend.baseUrl { props["apiBase"] = baseUrl }
         if let token = backend.token { props["apiToken"] = token }

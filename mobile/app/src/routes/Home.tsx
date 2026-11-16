@@ -20,6 +20,8 @@ interface HomeProps {
   onOpenPlayer?: () => void;
   /** 打开歌单详情 */
   onOpenPlaylist: (p: PlaylistRef) => void;
+  /** 冒烟：直接进搜索段（song / playlist） */
+  initialSearchKind?: string;
 }
 
 function fmt(sec: number): string {
@@ -32,13 +34,15 @@ function fmt(sec: number): string {
 /**
  * 首页 = 搜索 + 结果列表 + 底部播放条（P3 浏览骨架 + P5 播放的最小闭环）。
  */
-export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, onOpenPlaylist }: HomeProps) {
-  const [mode, setMode] = useState<'recommend' | 'search'>('recommend');
+export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, onOpenPlaylist, initialSearchKind }: HomeProps) {
+  const [mode, setMode] = useState<'recommend' | 'search'>(initialSearchKind ? 'search' : 'recommend');
   const [recSongs, setRecSongs] = useState<Track[]>([]);
   const [recLists, setRecLists] = useState<PlaylistRef[]>([]);
   const [recLoading, setRecLoading] = useState(false);
   const [recError, setRecError] = useState('');
   const [kw, setKw] = useState('周杰伦');
+  const [searchKind, setSearchKind] = useState<'song' | 'playlist'>(initialSearchKind === 'playlist' ? 'playlist' : 'song');
+  const [playlistHits, setPlaylistHits] = useState<PlaylistRef[]>([]);
   const [items, setItems] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -49,12 +53,14 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, o
     if (!key || !ensureTransport()) return;
     setLoading(true);
     setError('');
-    api
-      .search('kuwo', key, 1, 30)
-      .then((page) => setItems(page.items ?? []))
+    const req =
+      searchKind === 'song'
+        ? api.search('kuwo', key, 1, 30).then((page) => setItems(page.items ?? []))
+        : api.searchPlaylists('kuwo', key, 0, 30).then((page) => setPlaylistHits(page.items ?? []));
+    req
       .catch((e: unknown) => setError(String(e)))
       .finally(() => setLoading(false));
-  }, []);
+  }, [searchKind]);
 
   // 推荐：每日歌曲（需登录态）+ 推荐歌单（不需要），失败各自降级
   useEffect(() => {
@@ -170,6 +176,20 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, o
 
       {mode === 'search' ? (
         <view className="home">
+      <view className="segment segment--sub">
+        <view
+          className={'segment-item' + (searchKind === 'song' ? ' segment-item--on' : '')}
+          bindtap={() => setSearchKind('song')}
+        >
+          <text className="segment-text">单曲</text>
+        </view>
+        <view
+          className={'segment-item' + (searchKind === 'playlist' ? ' segment-item--on' : '')}
+          bindtap={() => setSearchKind('playlist')}
+        >
+          <text className="segment-text">歌单</text>
+        </view>
+      </view>
       <view className="search">
         <Icon icon={Search01Icon} size={18} color={iconColor} />
         <input
@@ -186,10 +206,25 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, o
 
       {error ? <text className="home-error">{error}</text> : null}
       {loading ? <text className="home-hint">搜索中…</text> : null}
-      {!loading && !error && items.length === 0 ? <text className="home-hint">没有结果</text> : null}
+      {!loading && !error && (searchKind === 'song' ? items.length : playlistHits.length) === 0 ? (
+        <text className="home-hint">没有结果</text>
+      ) : null}
 
       <scroll-view className="results" scroll-orientation="vertical">
-        {items.map((t) => (
+        {searchKind === 'playlist'
+          ? playlistHits.map((p) => (
+              <view className="row" key={'sp:' + p.id} bindtap={() => onOpenPlaylist(p)}>
+                {p.cover ? <image className="row-cover" src={p.cover} /> : <view className="row-cover row-cover--ph" />}
+                <view className="row-meta">
+                  <text className="row-title">{p.name}</text>
+                  <text className="row-sub">
+                    {(p.creator ?? '') + (p.track_count ? ` · ${p.track_count} 首` : '')}
+                  </text>
+                </view>
+              </view>
+            ))
+          : null}
+        {searchKind === 'song' && items.map((t) => (
           <view className="row" key={`${t.provider}:${t.id}`} bindtap={() => onTapTrack(t)}>
             {t.cover ? <image className="row-cover" src={t.cover} /> : <view className="row-cover row-cover--ph" />}
             <view className="row-meta">

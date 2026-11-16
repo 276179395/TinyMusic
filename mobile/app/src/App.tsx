@@ -126,6 +126,7 @@ export function App() {
                   autoDownload={props.autoDownload === true}
                   onOpenPlayer={() => setShowPlayer(true)}
                   onOpenPlaylist={(p) => setPlaylist(p)}
+                  initialSearchKind={props.searchKind}
                 />
               ) : null}
               {tab === 'downloads' ? <Downloads iconColor={iconColor} playLocal={props.playLocal === true} /> : null}

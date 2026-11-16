@@ -18,6 +18,7 @@ export interface HostProps {
   playLocal?: boolean | number;
   openArtist?: boolean | number;
   openAlbum?: boolean | number;
+  searchKind?: string;
 }
 
 /**
