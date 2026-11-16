@@ -22,6 +22,8 @@ interface PlayerPageProps {
   iconColor: string;
   inkIconColor: string;
   onCollapse: () => void;
+  onOpenArtist?: (id: string, name: string) => void;
+  onOpenAlbum?: (id: string, name: string) => void;
 }
 
 function fmt(sec: number): string {
@@ -37,7 +39,7 @@ const LINE_HEIGHT = 34;
  * 全屏播放页：封面 + 控制 + 音质 + 歌词。
  * 队列/随机/循环/音质门控全部来自 packages/shared，这里只做展示与手势。
  */
-export function PlayerPage({ iconColor, inkIconColor, onCollapse }: PlayerPageProps) {
+export function PlayerPage({ iconColor, inkIconColor, onCollapse, onOpenArtist, onOpenAlbum }: PlayerPageProps) {
   const p = usePlayer();
   const [caps, setCaps] = useState<{ value: Quality; label: string; available: boolean }[]>([]);
   const [scrollTop, setScrollTop] = useState(0);
@@ -158,6 +160,25 @@ export function PlayerPage({ iconColor, inkIconColor, onCollapse }: PlayerPagePr
             color={p.repeat === 'off' ? iconColor : '#54d2a4'}
           />
         </view>
+      </view>
+
+      <view className="player-links">
+        {p.current?.artist_id ? (
+          <view
+            className="player-link"
+            bindtap={() => onOpenArtist?.(String(p.current?.artist_id), p.current?.artist ?? '')}
+          >
+            <text className="player-link-text">歌手</text>
+          </view>
+        ) : null}
+        {p.current?.album_id ? (
+          <view
+            className="player-link"
+            bindtap={() => onOpenAlbum?.(String(p.current?.album_id), p.current?.album ?? '')}
+          >
+            <text className="player-link-text">专辑</text>
+          </view>
+        ) : null}
       </view>
 
       <view className="player-fav-row">

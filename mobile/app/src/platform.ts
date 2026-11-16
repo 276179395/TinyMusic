@@ -16,6 +16,8 @@ export interface HostProps {
   initialTab?: string;
   autoDownload?: boolean | number;
   playLocal?: boolean | number;
+  openArtist?: boolean | number;
+  openAlbum?: boolean | number;
 }
 
 /**
@@ -29,6 +31,8 @@ export function normalizeHostProps(raw: Record<string, unknown> | null | undefin
   props.openPlayer = Boolean(src.openPlayer);
   props.autoDownload = Boolean(src.autoDownload);
   props.playLocal = Boolean(src.playLocal);
+  props.openArtist = Boolean(src.openArtist);
+  props.openAlbum = Boolean(src.openAlbum);
   props.safeAreaTop = Number(src.safeAreaTop ?? 0) || 0;
   props.safeAreaBottom = Number(src.safeAreaBottom ?? 0) || 0;
   return props;

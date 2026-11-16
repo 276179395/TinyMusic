@@ -143,3 +143,12 @@ P4 结束，进入 P5（播放闭环）。
 ### 本轮保留的改动
 - `PlayerBar` 的 Icon import 修复。
 - `TmAudioModule` 里 `load/loadLocal/play` 的 NSLog（排查用，DEBUG 无害）。
+
+
+## Round 9
+
+- 新增 `mobile/scripts/smoke.sh`：一条命令完成 bundle 构建 → App 构建 → 安装 → 带 env 启动 → 截图 + 只抓 `[TinyMusic]` 日志。
+  例：`./mobile/scripts/smoke.sh /tmp/a.png TM_AUTOPLAY=1 TM_OPEN_PLAYER=1`
+- 歌手页 / 专辑页：播放页「歌手」「专辑」按钮进入，列表可点播/播放全部；截图 `p8-artist.png`、`p8-player-links.png`。
+- 冒烟钩子扩展：`TM_OPEN_ARTIST` / `TM_OPEN_ALBUM`，无人值守也能截图验证。
+- 迷你播放条刷新问题：本轮没有继续硬啃，先记录结论（见上节），功能面继续推进。

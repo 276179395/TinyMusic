@@ -9,6 +9,8 @@ import { Settings } from './routes/Settings.js';
 import { Account } from './routes/Account.js';
 import { Cloud } from './routes/Cloud.js';
 import { PlaylistPage } from './routes/PlaylistPage.js';
+import { ArtistPage } from './routes/ArtistPage.js';
+import { AlbumPage } from './routes/AlbumPage.js';
 import type { PlaylistRef } from '@tinymusic/shared/types';
 import { PlayerPage } from './routes/PlayerPage.js';
 import { TabBar, type TabKey } from './components/TabBar.js';
@@ -51,11 +53,22 @@ export function App() {
           : 'home';
   const [tab, setTab] = useState<TabKey>(initialTab);
   const [playlist, setPlaylist] = useState<PlaylistRef | null>(null);
+  const [artist, setArtist] = useState<{ id: string; name: string } | null>(null);
+  const [album, setAlbum] = useState<{ id: string; name: string } | null>(null);
 
   useEffect(() => {
     'background only';
     setReady(ensureTransport(props));
   }, [props.apiBase, props.apiToken]);
+
+  // 冒烟钩子：TM_OPEN_ARTIST / TM_OPEN_ALBUM=1 时，播放开始后直接进歌手/专辑页
+  useEffect(() => {
+    'background only';
+    const cur = snapshot.current;
+    if (!cur) return;
+    if (props.openArtist && cur.artist_id) setArtist({ id: String(cur.artist_id), name: cur.artist });
+    else if (props.openAlbum && cur.album_id) setAlbum({ id: String(cur.album_id), name: cur.album });
+  }, [props.openArtist, props.openAlbum, snapshot.current?.id]);
 
   // 冒烟钩子：TM_OPEN_PLAYER=1 时，播放开始后自动展开全屏播放页
   useEffect(() => {
@@ -79,6 +92,20 @@ export function App() {
               {transportError || props.backendError || '等待本地后端…'}
             </text>
           </view>
+        ) : artist ? (
+          <ArtistPage
+            provider="kuwo"
+            artistId={artist.id}
+            name={artist.name}
+            onBack={() => setArtist(null)}
+          />
+        ) : album ? (
+          <AlbumPage
+            provider="kuwo"
+            albumId={album.id}
+            name={album.name}
+            onBack={() => setAlbum(null)}
+          />
         ) : playlist ? (
           <PlaylistPage playlist={playlist} onBack={() => setPlaylist(null)} />
         ) : showPlayer && snapshot.current ? (
