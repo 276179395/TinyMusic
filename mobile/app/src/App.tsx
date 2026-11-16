@@ -6,6 +6,7 @@ import './styles/base.css';
 import { Home } from './routes/Home.js';
 import { Downloads } from './routes/Downloads.js';
 import { Settings } from './routes/Settings.js';
+import { Account } from './routes/Account.js';
 import { PlayerPage } from './routes/PlayerPage.js';
 import { TabBar, type TabKey } from './components/TabBar.js';
 import { PlayerBar } from './components/PlayerBar.js';
@@ -32,7 +33,13 @@ export function App() {
   const snapshot = usePlayer();
   const [showPlayer, setShowPlayer] = useState(false);
   const initialTab: TabKey =
-    props.initialTab === 'downloads' ? 'downloads' : props.initialTab === 'settings' ? 'settings' : 'home';
+    props.initialTab === 'downloads'
+      ? 'downloads'
+      : props.initialTab === 'account'
+        ? 'account'
+        : props.initialTab === 'settings'
+          ? 'settings'
+          : 'home';
   const [tab, setTab] = useState<TabKey>(initialTab);
 
   useEffect(() => {
@@ -82,6 +89,7 @@ export function App() {
                 />
               ) : null}
               {tab === 'downloads' ? <Downloads iconColor={iconColor} /> : null}
+              {tab === 'account' ? <Account /> : null}
               {tab === 'settings' ? <Settings /> : null}
             </view>
             {/* 全局迷你播放条：切换 tab 也在，点了展开全屏 */}

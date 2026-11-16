@@ -15,6 +15,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         // 之后创建 LynxView 不传 config，直接用这份全局配置。
         let config = LynxConfig(provider: TemplateProvider())
         config.register(TmAudioModule.self)
+        config.register(TmLoginModule.self)
         LynxEnv.sharedInstance().prepareConfig(config)
         NSLog("[TinyMusic] Lynx 全局配置已准备（含 TmAudio）")
 

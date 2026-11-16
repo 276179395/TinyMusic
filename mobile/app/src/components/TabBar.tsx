@@ -1,8 +1,8 @@
-import { Home01Icon, Download04Icon, Settings01Icon } from '@hugeicons/core-free-icons';
+import { Home01Icon, Download04Icon, Settings01Icon, UserIcon } from '@hugeicons/core-free-icons';
 
 import { Icon } from './Icon.js';
 
-export type TabKey = 'home' | 'downloads' | 'settings';
+export type TabKey = 'home' | 'downloads' | 'account' | 'settings';
 
 interface TabBarProps {
   current: TabKey;
@@ -14,6 +14,7 @@ interface TabBarProps {
 const TABS: { key: TabKey; label: string; icon: typeof Home01Icon }[] = [
   { key: 'home', label: '首页', icon: Home01Icon },
   { key: 'downloads', label: '下载', icon: Download04Icon },
+  { key: 'account', label: '账号', icon: UserIcon },
   { key: 'settings', label: '设置', icon: Settings01Icon },
 ];
 

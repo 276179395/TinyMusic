@@ -600,3 +600,45 @@
 .link-text--muted {
   color: var(--fg3, #747474);
 }
+
+/* ---------- 账号页 ---------- */
+.account-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.account-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 20px;
+  background-color: var(--bg3, rgba(255, 255, 255, 0.07));
+}
+
+.account-meta {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+}
+
+.login-btn {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  margin-top: 8px;
+  border-radius: 10px;
+  background-color: var(--ink, #ebebeb);
+}
+
+.login-btn--busy {
+  opacity: 0.7;
+}
+
+.login-btn-text {
+  font-size: 13px;
+  color: var(--ink-fg, #2a2a2a);
+}

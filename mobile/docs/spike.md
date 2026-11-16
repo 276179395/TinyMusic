@@ -88,3 +88,12 @@ P4 结束，进入 P5（播放闭环）。
 **同时修掉一个跨端 bug**：`packages/shared/src/api.ts` 里 6 个进度命令残留了 Channel 时代的
 `onProgress: ch`（`ch` 已不存在）→ `downloadStart` 一调用就抛 `ch is not defined`。
 桌面从 P3 起下载也是坏的，这次一起修好。
+
+
+## P7 网页登录（同日）
+
+- 原生模块 `TmLogin`：WKWebView 弹层（取消/完成），完成后读 `WKHTTPCookieStore` 全量 cookie，
+  交给 JS → `api.login(provider,'cookie',…) ` → `sessionGet` 确认。
+- 轮询式接口 `open / state / close`，与播放器同一套线程策略。
+- 账号页：两个平台的登录/已登录（头像、昵称、uid）/退出；截图 `p7-account.png`。
+- 仍未验证：真的在网页里登录并回填 session（需要在模拟器里手动输账号）。
