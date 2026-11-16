@@ -45,3 +45,11 @@
 - Lynx 不支持 `oklch()` / `color-mix()` / `backdrop-filter`；mobile 的令牌由 `packages/theme` 从 desktop 的 app.css 生成 hex/rgba，不要手改生成物。
 - Lynx 没有 `<audio>`、没有 `localStorage`；分别用原生播放器与 KV 注入接口。
 - mobile 的后端只绑 127.0.0.1，带每次启动的随机 token；不要把它暴露到 0.0.0.0。
+
+## 验收入口（mobile 已实现的功能）
+
+- 功能对照表：`mobile/docs/功能对照.md`（✅ 实测 / ⚠️ 待验 / ❌ 未做）
+- 踩坑记录：`mobile/docs/spike.md`（Lynx 双线程、原生模块、EQ tap、S3 桩等）
+- 一键冒烟：`./mobile/scripts/smoke.sh /tmp/a.png TM_AUTOPLAY=1 TM_OPEN_PLAYER=1`
+- 网盘离线验收：`cargo run -p tinymusic-server --example s3_stub -- --port 9100`
+- 内测包说明：`mobile/docs/内测包.md`
