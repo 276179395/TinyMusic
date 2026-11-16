@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from '@lynx-js/react';
 import { Search01Icon } from '@hugeicons/core-free-icons';
 import { api } from '@tinymusic/shared/api';
-import type { Track } from '@tinymusic/shared/types';
+import type { PlaylistRef, Track } from '@tinymusic/shared/types';
 
 import { Icon } from '../components/Icon.js';
 import { player } from '../state/player.js';
@@ -18,6 +18,8 @@ interface HomeProps {
   autoDownload?: boolean;
   /** 点播放条展开全屏播放页（保留参数，播放条在 App 层） */
   onOpenPlayer?: () => void;
+  /** 打开歌单详情 */
+  onOpenPlaylist: (p: PlaylistRef) => void;
 }
 
 function fmt(sec: number): string {
@@ -30,7 +32,12 @@ function fmt(sec: number): string {
 /**
  * 首页 = 搜索 + 结果列表 + 底部播放条（P3 浏览骨架 + P5 播放的最小闭环）。
  */
-export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, onOpenPlayer }: HomeProps) {
+export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, onOpenPlaylist }: HomeProps) {
+  const [mode, setMode] = useState<'recommend' | 'search'>('recommend');
+  const [recSongs, setRecSongs] = useState<Track[]>([]);
+  const [recLists, setRecLists] = useState<PlaylistRef[]>([]);
+  const [recLoading, setRecLoading] = useState(false);
+  const [recError, setRecError] = useState('');
   const [kw, setKw] = useState('周杰伦');
   const [items, setItems] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
@@ -49,11 +56,25 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, o
       .finally(() => setLoading(false));
   }, []);
 
+  // 推荐：每日歌曲（需登录态）+ 推荐歌单（不需要），失败各自降级
   useEffect(() => {
     'background only';
-    if (ready) search(kw);
-    // 只在后端可用后跑一次
-  }, [ready, search]);
+    if (!ready) return;
+    setRecLoading(true);
+    Promise.allSettled([api.recommendSongs('netease', 30), api.recommendPlaylists('netease')])
+      .then(([songs, lists]) => {
+        if (songs.status === 'fulfilled') setRecSongs(songs.value ?? []);
+        else setRecError('推荐歌曲取不到（可能未登录）');
+        if (lists.status === 'fulfilled') setRecLists(lists.value ?? []);
+      })
+      .finally(() => setRecLoading(false));
+  }, [ready]);
+
+  useEffect(() => {
+    'background only';
+    if (ready && mode === 'search') search(kw);
+    // 切到搜索时才请求
+  }, [ready, mode, search]);
 
   const onInput = useCallback((e: { detail?: { value?: string } }) => {
     'background only';
@@ -102,6 +123,51 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, o
 
   return (
     <view className="home">
+      <view className="segment">
+        <view
+          className={'segment-item' + (mode === 'recommend' ? ' segment-item--on' : '')}
+          bindtap={() => setMode('recommend')}
+        >
+          <text className="segment-text">推荐</text>
+        </view>
+        <view
+          className={'segment-item' + (mode === 'search' ? ' segment-item--on' : '')}
+          bindtap={() => setMode('search')}
+        >
+          <text className="segment-text">搜索</text>
+        </view>
+      </view>
+
+      {mode === 'recommend' ? (
+        <scroll-view className="results" scroll-orientation="vertical">
+          {recLoading ? <text className="home-hint">读取推荐…</text> : null}
+          {recError ? <text className="home-hint">{recError}</text> : null}
+          {recLists.length > 0 ? <text className="section-title">推荐歌单</text> : null}
+          {recLists.map((p) => (
+            <view className="row" key={'pl:' + p.id} bindtap={() => onOpenPlaylist(p)}>
+              {p.cover ? <image className="row-cover" src={p.cover} /> : <view className="row-cover row-cover--ph" />}
+              <view className="row-meta">
+                <text className="row-title">{p.name}</text>
+                <text className="row-sub">{p.creator ?? ''}</text>
+              </view>
+            </view>
+          ))}
+          {recSongs.length > 0 ? <text className="section-title">每日推荐</text> : null}
+          {recSongs.map((t) => (
+            <view className="row" key={'rec:' + t.provider + ':' + t.id} bindtap={() => onTapTrack(t)}>
+              {t.cover ? <image className="row-cover" src={t.cover} /> : <view className="row-cover row-cover--ph" />}
+              <view className="row-meta">
+                <text className="row-title">{t.title}</text>
+                <text className="row-sub">{t.artist}</text>
+              </view>
+              <text className="row-dur">{fmt(t.duration_sec)}</text>
+            </view>
+          ))}
+        </scroll-view>
+      ) : null}
+
+      {mode === 'search' ? (
+        <view className="home">
       <view className="search">
         <Icon icon={Search01Icon} size={18} color={iconColor} />
         <input
@@ -135,7 +201,8 @@ export function Home({ iconColor, inkIconColor, ready, autoPlay, autoDownload, o
           </view>
         ))}
       </scroll-view>
-
+        </view>
+      ) : null}
     </view>
   );
 }

@@ -8,6 +8,8 @@ import { Downloads } from './routes/Downloads.js';
 import { Settings } from './routes/Settings.js';
 import { Account } from './routes/Account.js';
 import { Cloud } from './routes/Cloud.js';
+import { PlaylistPage } from './routes/PlaylistPage.js';
+import type { PlaylistRef } from '@tinymusic/shared/types';
 import { PlayerPage } from './routes/PlayerPage.js';
 import { TabBar, type TabKey } from './components/TabBar.js';
 import { PlayerBar } from './components/PlayerBar.js';
@@ -44,6 +46,7 @@ export function App() {
           ? 'settings'
           : 'home';
   const [tab, setTab] = useState<TabKey>(initialTab);
+  const [playlist, setPlaylist] = useState<PlaylistRef | null>(null);
 
   useEffect(() => {
     'background only';
@@ -72,6 +75,8 @@ export function App() {
               {transportError || props.backendError || '等待本地后端…'}
             </text>
           </view>
+        ) : playlist ? (
+          <PlaylistPage playlist={playlist} onBack={() => setPlaylist(null)} />
         ) : showPlayer && snapshot.current ? (
           <PlayerPage
             iconColor={iconColor}
@@ -89,6 +94,7 @@ export function App() {
                   autoPlay={props.autoPlay === true}
                   autoDownload={props.autoDownload === true}
                   onOpenPlayer={() => setShowPlayer(true)}
+                  onOpenPlaylist={(p) => setPlaylist(p)}
                 />
               ) : null}
               {tab === 'downloads' ? <Downloads iconColor={iconColor} /> : null}
