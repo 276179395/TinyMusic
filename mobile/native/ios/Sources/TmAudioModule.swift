@@ -35,6 +35,7 @@ final class TmAudioModule: NSObject, LynxModule {
     private var pendingError: String?
     private var pendingCommand: [String: Any]?
     private var nowPlaying: [String: Any] = [:]
+    private var coverURL: String?
 
     override init() {
         super.init()
@@ -93,6 +94,7 @@ final class TmAudioModule: NSObject, LynxModule {
                 MPMediaItemPropertyPlaybackDuration: duration,
             ]
             MPNowPlayingInfoCenter.default().nowPlayingInfo = self.nowPlaying
+            self.coverURL = cover.isEmpty ? nil : cover
             if !cover.isEmpty, let coverUrl = URL(string: cover) {
                 self.loadArtwork(coverUrl)
             }
@@ -180,6 +182,15 @@ final class TmAudioModule: NSObject, LynxModule {
             let duration = self.player.currentItem?.duration.seconds ?? 0
             let position = self.player.currentTime().seconds
             payload["status"] = self.status
+            if let title = self.nowPlaying[MPMediaItemPropertyTitle] as? String {
+                payload["title"] = title
+            }
+            if let artist = self.nowPlaying[MPMediaItemPropertyArtist] as? String {
+                payload["artist"] = artist
+            }
+            if let cover = self.coverURL {
+                payload["cover"] = cover
+            }
             payload["position"] = position.isFinite ? position : 0
             payload["duration"] = duration.isFinite ? duration : 0
             if self.pendingEnded {

@@ -152,3 +152,20 @@ P4 结束，进入 P5（播放闭环）。
 - 歌手页 / 专辑页：播放页「歌手」「专辑」按钮进入，列表可点播/播放全部；截图 `p8-artist.png`、`p8-player-links.png`。
 - 冒烟钩子扩展：`TM_OPEN_ARTIST` / `TM_OPEN_ALBUM`，无人值守也能截图验证。
 - 迷你播放条刷新问题：本轮没有继续硬啃，先记录结论（见上节），功能面继续推进。
+
+
+## Round 9：迷你播放条修好了（根因 + 方案）
+
+**根因**：Lynx 双线程下模块级的 store 会有两份副本。从下载页/首页由 effect 触发的播放，
+写入的是后台 runtime 那份；而迷你播放条渲染/订阅时拿到的是另一份，于是永远显示"没有在播放"。
+（把 store 挂 globalThis、去 cleanup、App 传快照都无效，因为问题是"两份实例"而非订阅方式。）
+
+**方案**：播放条不再读 JS store，改成**直接轮询原生播放器状态**
+（`useNativeNowPlaying` → `TmAudio.state()`，500ms）。AVPlayer 在原生侧只有一份状态，
+顺带把标题/歌手/封面也从原生带回来（Now Playing 信息本来就有）。
+
+**验证**：
+- 首页推荐流起播 → 播放条显示 "You And Me / 0:11 / 2:42"（截图 `p8-miniplayer-recommend.png`）
+- 下载页离线起播 → 播放条显示 "东风破 / 0:13 / 5:15"（截图 `p8-miniplayer-local.png`）
+
+**留下的约定**：跨组件的播放态一律走原生状态；JS store 只负责队列/切歌策略。
