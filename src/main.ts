@@ -2,6 +2,7 @@ import { mount } from 'svelte';
 import App from './App.svelte';
 import './app.css';
 import { initTheme } from './lib/theme.svelte';
+import { initGlass } from './lib/glass.svelte';
 
 /**
  * 窗口外观按系统分开处理：
@@ -31,6 +32,8 @@ document.documentElement.dataset.chrome =
   shell === 'tauri' && os === 'windows' ? 'custom' : 'native';
 
 initTheme();
+// 引擎不认 backdrop-filter 时自动退到实色（见 app.css 第 20 节）
+initGlass();
 
 const app = mount(App, { target: document.getElementById('app')! });
 

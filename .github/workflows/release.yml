@@ -46,6 +46,15 @@ jobs:
         with:
           workspaces: '. -> target'
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 老引擎（macOS 11/12 的 WKWebView）用的 sRGB 兜底是从设计令牌算出来的，
+      # 令牌改了不重算就会悄悄过期：这里挡住。
+      - name: 校验 sRGB 兜底
+        run: python tools/srgb-fallback.py --check
+
       - name: 安装前端依赖
         run: pnpm install --no-frozen-lockfile
 

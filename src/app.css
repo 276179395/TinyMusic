@@ -100,6 +100,15 @@
   --glass-blur: blur(26px);
   --glass-blur-control: blur(14px);
 
+  /* ---- 没有模糊时顶替用的实色 ----
+     引擎不支持 backdrop-filter、系统要求减少透明、或者用户手动关了玻璃，
+     三种情况都换到这四个实色上；浅色主题在下面另给一份。
+     值 = 半透明玻璃压在当前页面上的合成色，所以层次和毛玻璃时一致。 */
+  --solid-panel: #161616;
+  --solid-bg2: #232323;
+  --solid-popover: #292929;
+  --solid-player: #171717;
+
   /* 墨色实心玻璃：顶上一道亮线，底下一道暗线 */
   --ink-solid: 86%;
   --ink-rim: oklch(1 0 0);
@@ -261,6 +270,12 @@
   --glass-blur: blur(26px) saturate(180%);
   --glass-blur-control: blur(14px);
 
+  /* 实色兜底：浅色页上的合成色，比页面亮一档，卡片才立得起来 */
+  --solid-panel: #ecedf1;
+  --solid-bg2: #f1f2f5;
+  --solid-popover: #fbfbfc;
+  --solid-player: #f7f7fa;
+
   --ink-solid: 88%;
   --ink-rim: oklch(1 0 0 / 30%);
   --ink-under: oklch(0 0 0 / 45%);
@@ -346,6 +361,17 @@ body,
 #app {
   height: 100%;
   margin: 0;
+}
+
+/* 最后一层兜底：万一整批颜色令牌在某个引擎上算不出来（老 WebKit 不认
+   oklch()），body 的背景会退化成 transparent，窗口直接变成一片白。
+   这里给 html 一个写死的底色，白底白字那种「界面没了」就不会发生。 */
+html {
+  background-color: #0d0d0d;
+}
+
+html[data-theme='light'] {
+  background-color: #e4e6eb;
 }
 
 body {
@@ -843,12 +869,12 @@ aside {
 /* 关闭是唯一带颜色的那颗：悬停整块变红、白叉，和系统窗口按钮的肌肉记忆一致 */
 .wc.close:hover {
   background-color: #c42b1c;
-  color: oklch(1 0 0);
+  color: #ffffff;
 }
 
 .wc.close:active {
   background-color: #a8281b;
-  color: oklch(1 0 0);
+  color: #ffffff;
 }
 
 .brand {
@@ -1410,11 +1436,11 @@ button.primary {
 
 /* 列表里的无损标记：淡金，和会员/试听提醒区分开 */
 .badge.sq {
-  background-color: color-mix(in oklch, oklch(0.78 0.12 85) 16%, transparent);
+  background-color: rgba(219, 177, 85, 0.16);
   box-shadow:
-    inset 0 1px 0 color-mix(in oklch, oklch(0.78 0.12 85) 35%, transparent),
-    inset 0 0 0 1px color-mix(in oklch, oklch(0.78 0.12 85) 28%, transparent);
-  color: oklch(0.72 0.1 85);
+    inset 0 1px 0 rgba(219, 177, 85, 0.35),
+    inset 0 0 0 1px rgba(219, 177, 85, 0.28);
+  color: #c1a057;
 }
 
 .badge.ok {
@@ -2258,7 +2284,7 @@ button.primary {
   backdrop-filter: var(--glass-blur-liquid);
   box-shadow:
     inset 0 1px 0 var(--player-rim),
-    inset 0 10px 22px -18px oklch(1 0 0 / 60%),
+    inset 0 10px 22px -18px rgba(255, 255, 255, 0.6),
     inset 0 -1px 0 var(--player-under), 0 0 0 1px var(--player-edge),
     0 30px 70px -24px var(--glass-shade), 0 10px 24px -10px var(--glass-lift);
 }
@@ -2272,7 +2298,7 @@ button.primary {
 
 /* 半透玻璃上的图标压一层很淡的影，透到浅色封面时仍然看得清 */
 .bar svg {
-  filter: drop-shadow(0 1px 1px oklch(0 0 0 / 30%));
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.3));
 }
 
 .tb {
@@ -2408,8 +2434,8 @@ button.primary {
   inset: 0;
   display: grid;
   place-items: center;
-  background-color: oklch(0 0 0 / 45%);
-  color: oklch(1 0 0);
+  background-color: rgba(0, 0, 0, 0.45);
+  color: #ffffff;
   opacity: 0;
   transition: opacity 150ms ease-out;
 }
@@ -2428,7 +2454,7 @@ button.primary {
   color: var(--bar-ink);
   font-size: 13px;
   font-weight: 600;
-  text-shadow: 0 1px 2px oklch(0 0 0 / 35%);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2438,7 +2464,7 @@ button.primary {
   margin-top: 2px;
   color: var(--bar-dim);
   font-size: 11px;
-  text-shadow: 0 1px 2px oklch(0 0 0 / 30%);
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2454,8 +2480,8 @@ button.primary {
   margin-right: 7px;
   padding: 1px 5px;
   border-radius: 5px;
-  background-color: oklch(1 0 0 / 10%);
-  box-shadow: inset 0 0 0 1px oklch(1 0 0 / 12%);
+  background-color: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
   color: var(--bar-ink);
   font-size: 9px;
   font-weight: 600;
@@ -2468,7 +2494,7 @@ button.primary {
   margin-left: 7px;
   padding: 1px 5px;
   border-radius: 5px;
-  background-color: oklch(1 0 0 / 16%);
+  background-color: rgba(255, 255, 255, 0.16);
   color: var(--bar-ink);
   font-size: 9px;
   font-weight: 600;
@@ -2958,7 +2984,7 @@ button.primary {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background-color: oklch(0 0 0 / 46%);
+  background-color: rgba(0, 0, 0, 0.46);
   -webkit-backdrop-filter: blur(8px) saturate(1.05);
   backdrop-filter: blur(8px) saturate(1.05);
   animation: fade-in 150ms ease-out;
@@ -3632,10 +3658,10 @@ button.primary {
   justify-content: center;
   border-radius: var(--r-sm);
   overflow: hidden;
-  background-color: oklch(1 0 0);
+  background-color: #ffffff;
   box-shadow:
     0 0 0 1px var(--glass-edge),
-    inset 0 1px 0 oklch(1 0 0 / 40%);
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
 .acct-card .acct-logo img {
@@ -5032,7 +5058,7 @@ aside .foot {
    ========================================================================== */
 
 :root[data-theme='light'] .modal-mask {
-  background-color: oklch(0.35 0.02 265 / 28%);
+  background-color: rgba(53, 59, 69, 0.28);
 }
 
 :root[data-theme='light'] .cover.ph,
@@ -5070,20 +5096,12 @@ select:-webkit-autofill {
     --glass-blur: none;
     --glass-blur-control: none;
     --glass-blur-liquid: none;
-    --player-bg: oklch(0.235 0 0);
     --player-sheen: none;
     --ink-solid: 100%;
-    --bg2: oklch(0.225 0 0);
-    --panel: oklch(0.19 0 0);
-    --popover: oklch(0.22 0 0);
-  }
-
-  :root[data-theme='light'] {
-    --bg2: oklch(0.958 0.005 265);
-    --panel: oklch(0.947 0.006 265);
-    --popover: oklch(0.98 0.003 265);
-    --player-bg: oklch(0.99 0 0);
-    --player-sheen: none;
+    --bg2: var(--solid-bg2);
+    --panel: var(--solid-panel);
+    --popover: var(--solid-popover);
+    --player-bg: var(--solid-player);
   }
 
   [data-glass='opaque'] .list,
@@ -5136,3 +5154,240 @@ select:-webkit-autofill {
     grid-template-columns: 1fr 1fr;
   }
 }
+
+/* ==========================================================================
+   20. 兼容层：老引擎（macOS 11 / 12 自带的 WKWebView）
+   --------------------------------------------------------------------------
+   macOS 上的 WKWebView 跟着系统走：系统停在 12，Safari 就停在能装上的最后一版，
+   用户没法单独升级。这一节是给这类机器的退路，现代引擎一条都不会命中。
+
+   1. 颜色：oklch() / color-mix() 换成等价的 sRGB 字面量。
+      整页的白、灰、发丝线、阴影全都长在令牌上；引擎不认这些颜色函数时，
+      丢掉的不是「模糊」而是整页的底色 —— 页面变白、卡片变透明、文字变黑，
+      看起来像材质全没了（issue 里的 macOS 12 截图就是这个形态）。
+   2. 材质：没有 backdrop-filter 时玻璃换成实色，底色 / 发丝线 / 阴影照旧，
+      卡片不会只剩一圈阴影。
+   3. 开关：html[data-glass='off'] 手动把全站换成实色。启动时检测到引擎不支持
+      毛玻璃会自动打开（src/lib/glass.svelte.ts）。
+   ========================================================================== */
+
+/* ---- 20.1 颜色的 sRGB 兜底 ----
+   由 tools/srgb-fallback.py 从第 1 节的令牌算出，不要手改。
+   改完令牌跑一次：python3 tools/srgb-fallback.py */
+/* @generated:srgb-fallback:start */
+@supports not (color: oklch(0 0 0)) {
+  :root {
+    --background: #0d0d0d;
+    --foreground: #fafafa;
+    --popover: rgba(27, 27, 27, 0.96);
+    --popover-solid: #1b1b1b;
+    --bg2: rgba(48, 48, 48, 0.46);
+    --bg3: rgba(255, 255, 255, 0.07);
+    --panel: rgba(255, 255, 255, 0.045);
+    --line: rgba(255, 255, 255, 0.11);
+    --line-soft: rgba(255, 255, 255, 0.06);
+    --line-strong: rgba(255, 255, 255, 0.16);
+    --fg2: #a4a4a4;
+    --fg3: #747474;
+    --ink: #ebebeb;
+    --ink-fg: #121212;
+    --danger: #ff6569;
+    --warn: #e6b55d;
+    --success: #4ac777;
+    --info: #73b6fa;
+    --brand: #54d2a4;
+    --glass-rim: rgba(255, 255, 255, 0.18);
+    --glass-inner: rgba(255, 255, 255, 0.05);
+    --glass-edge: rgba(255, 255, 255, 0.08);
+    --popover-edge: rgba(255, 255, 255, 0.1);
+    --popover-under: rgba(0, 0, 0, 0);
+    --glass-shade: rgba(0, 0, 0, 0.6);
+    --glass-contact: rgba(0, 0, 0, 0.1);
+    --glass-lift: rgba(0, 0, 0, 0.22);
+    --glass-control: rgba(255, 255, 255, 0.08);
+    --glass-control-rim: rgba(255, 255, 255, 0.14);
+    --glass-state: rgba(255, 255, 255, 0.09);
+    --glass-state-rim: rgba(255, 255, 255, 0.16);
+    --glass-state-edge: rgba(255, 255, 255, 0.09);
+    --glass-state-armed: rgba(255, 255, 255, 0.12);
+    --ink-rim: #ffffff;
+    --ink-under: rgba(0, 0, 0, 0.22);
+    --ink-inner: rgba(0, 0, 0, 0.07);
+    --field: rgba(255, 255, 255, 0.06);
+    --field-rim: rgba(255, 255, 255, 0.15);
+    --field-edge: rgba(255, 255, 255, 0.09);
+    --focus-line: rgba(255, 255, 255, 0.4);
+    --well-shade: rgba(0, 0, 0, 0.38);
+    --well-rim: rgba(255, 255, 255, 0.09);
+    --knob: #f5f5f5;
+    --knob-shade: rgba(0, 0, 0, 0.55);
+    --hover: rgba(255, 255, 255, 0.08);
+    --hover-faint: rgba(255, 255, 255, 0.04);
+    --thumb: rgba(255, 255, 255, 0.14);
+    --thumb-hover: rgba(255, 255, 255, 0.24);
+    --track: rgba(255, 255, 255, 0.1);
+    --track-soft: rgba(255, 255, 255, 0.06);
+    --sk-a: rgba(255, 255, 255, 0.05);
+    --sk-b: rgba(255, 255, 255, 0.1);
+    --cover-a: #383838;
+    --cover-b: #222222;
+    --player-bg: rgba(34, 34, 34, 0.24);
+    --player-sheen: radial-gradient(88% 150% at 12% -50%, rgba(255, 255, 255, 0.18), transparent 58%), linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, transparent 46%);
+    --player-rim: rgba(255, 255, 255, 0.52);
+    --player-under: rgba(0, 0, 0, 0.26);
+    --player-edge: rgba(255, 255, 255, 0.15);
+    --bar-tip-bg: rgba(31, 31, 31, 0.96);
+    --ly-ink: #f5f5f5;
+    --ly-veil-a: rgba(1, 1, 1, 0.58);
+    --ly-veil-b: rgba(0, 0, 0, 0.95);
+    --ly-veil-glow: rgba(255, 255, 255, 0.07);
+    --ly-glow: rgba(255, 255, 255, 0.18);
+    --ly-chip: rgba(255, 255, 255, 0.07);
+    --ly-chip-line: rgba(255, 255, 255, 0.11);
+    --ly-chip-hover: rgba(255, 255, 255, 0.13);
+    --ly-art-shadow: 0 30px 70px rgba(0, 0, 0, 0.55);
+    --knob-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 0 rgba(0, 0, 0, 0.14), 0 1px 2px var(--knob-shade);
+  }
+  :root[data-theme='light'] {
+    --background: #e4e6eb;
+    --foreground: #0d0d0d;
+    --popover: rgba(249, 250, 252, 0.96);
+    --popover-solid: #f9fafc;
+    --bg2: rgba(247, 248, 251, 0.6);
+    --bg3: rgba(41, 46, 56, 0.09);
+    --panel: rgba(245, 247, 250, 0.44);
+    --line: rgba(41, 46, 56, 0.13);
+    --line-soft: rgba(41, 46, 56, 0.07);
+    --line-strong: rgba(41, 46, 56, 0.2);
+    --fg2: #5b5b5b;
+    --fg3: #797979;
+    --ink: #161616;
+    --ink-fg: #fafafa;
+    --danger: #e40019;
+    --warn: #a56217;
+    --success: #00844a;
+    --info: #0061be;
+    --brand: #008964;
+    --glass-rim: rgba(255, 255, 255, 0.9);
+    --glass-inner: rgba(255, 255, 255, 0.35);
+    --glass-edge: rgba(59, 66, 83, 0.1);
+    --popover-edge: rgba(59, 66, 83, 0.22);
+    --popover-under: rgba(59, 66, 83, 0.16);
+    --glass-shade: rgba(31, 45, 76, 0.28);
+    --glass-contact: rgba(27, 33, 48, 0.06);
+    --glass-lift: rgba(27, 33, 48, 0.14);
+    --glass-control: rgba(255, 255, 255, 0.55);
+    --glass-control-rim: rgba(255, 255, 255, 0.8);
+    --glass-state: rgba(41, 46, 56, 0.09);
+    --glass-state-rim: rgba(255, 255, 255, 0.85);
+    --glass-state-edge: rgba(41, 46, 56, 0.13);
+    --glass-state-armed: rgba(41, 46, 56, 0.13);
+    --ink-rim: rgba(255, 255, 255, 0.3);
+    --ink-under: rgba(0, 0, 0, 0.45);
+    --ink-inner: rgba(255, 255, 255, 0.07);
+    --field: rgba(255, 255, 255, 0.6);
+    --field-rim: #ffffff;
+    --field-edge: rgba(41, 46, 56, 0.14);
+    --focus-line: rgba(22, 22, 22, 0.5);
+    --well-shade: rgba(31, 45, 76, 0.14);
+    --well-rim: rgba(255, 255, 255, 0.85);
+    --knob: #ffffff;
+    --knob-shade: rgba(31, 45, 76, 0.3);
+    --hover: rgba(41, 46, 56, 0.1);
+    --hover-faint: rgba(41, 46, 56, 0.055);
+    --thumb: rgba(41, 46, 56, 0.2);
+    --thumb-hover: rgba(41, 46, 56, 0.32);
+    --track: rgba(41, 46, 56, 0.13);
+    --track-soft: rgba(41, 46, 56, 0.07);
+    --sk-a: rgba(41, 46, 56, 0.06);
+    --sk-b: rgba(41, 46, 56, 0.11);
+    --cover-a: #d2d4da;
+    --cover-b: #b6bbc4;
+    --light-1: rgba(46, 177, 132, 0.07);
+    --light-2: rgba(127, 181, 220, 0.11);
+    --light-3: rgba(46, 177, 132, 0.04);
+    --player-bg: rgba(255, 255, 255, 0.55);
+    --player-sheen: radial-gradient(88% 150% at 12% -50%, rgba(255, 255, 255, 0.6), transparent 60%), linear-gradient(180deg, rgba(255, 255, 255, 0.4) 0%, transparent 50%);
+    --player-rim: #ffffff;
+    --player-under: rgba(59, 66, 83, 0.14);
+    --player-edge: rgba(59, 66, 83, 0.18);
+    --bar-tip-bg: rgba(250, 250, 250, 0.96);
+    --ly-ink: #0d0d0d;
+    --ly-veil-a: rgba(252, 252, 252, 0.62);
+    --ly-veil-b: rgba(240, 242, 244, 0.95);
+    --ly-veil-glow: rgba(255, 255, 255, 0.55);
+    --ly-glow: rgba(22, 22, 22, 0.1);
+    --ly-chip: rgba(255, 255, 255, 0.62);
+    --ly-chip-line: rgba(18, 22, 31, 0.11);
+    --ly-chip-hover: rgba(255, 255, 255, 0.96);
+    --ly-art-shadow: 0 30px 70px rgba(15, 22, 36, 0.22);
+  }
+}
+
+@supports not (background-color: color-mix(in oklch, #000 10%, transparent)) {
+  :root {
+    --warn-bg: rgba(230, 181, 93, 0.13);
+    --warn-border: rgba(230, 181, 93, 0.26);
+    --ok-bg: rgba(74, 199, 119, 0.13);
+    --ok-border: rgba(74, 199, 119, 0.26);
+    --danger-bg: rgba(255, 101, 105, 0.14);
+    --danger-border: rgba(255, 101, 105, 0.26);
+    --info-border: rgba(115, 182, 250, 0.3);
+    --info-bg: rgba(115, 182, 250, 0.12);
+    --ink-shadow-flat: inset 0 1px 0 rgba(255, 255, 255, 0.55), inset 0 -1px 0 rgba(0, 0, 0, 0.099);
+  }
+  :root[data-theme='light'] {
+    --warn-bg: rgba(165, 98, 23, 0.13);
+    --warn-border: rgba(165, 98, 23, 0.26);
+    --ok-bg: rgba(0, 132, 74, 0.13);
+    --ok-border: rgba(0, 132, 74, 0.26);
+    --danger-bg: rgba(228, 0, 25, 0.14);
+    --danger-border: rgba(228, 0, 25, 0.26);
+    --info-border: rgba(0, 97, 190, 0.3);
+    --info-bg: rgba(0, 97, 190, 0.12);
+    --ink-shadow-flat: inset 0 1px 0 rgba(255, 255, 255, 0.165), inset 0 -1px 0 rgba(0, 0, 0, 0.203);
+  }
+}
+/* @generated:srgb-fallback:end */
+
+/* ---- 20.2 没有 backdrop-filter：玻璃换成实色 ----
+   只换颜色令牌，边缘、阴影、圆角都不动；模糊本来就是可选项，不是结构。 */
+@supports not ((-webkit-backdrop-filter: blur(1px)) or (backdrop-filter: blur(1px))) {
+  :root {
+    --glass-blur: none;
+    --glass-blur-control: none;
+    --glass-blur-liquid: none;
+    --player-sheen: none;
+    --ink-solid: 100%;
+    --bg2: var(--solid-bg2);
+    --panel: var(--solid-panel);
+    --popover: var(--solid-popover);
+    --player-bg: var(--solid-player);
+  }
+}
+
+/* ---- 20.3 手动开关：html[data-glass='off'] ----
+   和 20.2 是同一组覆盖，给排查、演示和低端机留一个绕过毛玻璃的口子。 */
+:root[data-glass='off'] {
+  --glass-blur: none;
+  --glass-blur-control: none;
+  --glass-blur-liquid: none;
+  --player-sheen: none;
+  --ink-solid: 100%;
+  --bg2: var(--solid-bg2);
+  --panel: var(--solid-panel);
+  --popover: var(--solid-popover);
+  --player-bg: var(--solid-player);
+}
+
+:root[data-glass='off'] .list,
+:root[data-glass='off'] .card,
+:root[data-glass='off'] .modal,
+:root[data-glass='off'] .ctx-menu,
+:root[data-glass='off'] .queue-panel,
+:root[data-glass='off'] .bar,
+:root[data-glass='off'] .toast {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+

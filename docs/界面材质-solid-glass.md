@@ -95,10 +95,45 @@
 
 ## 无障碍
 
-- `prefers-reduced-transparency: reduce`：去掉模糊、玻璃换成实色，高光与阴影保留。
+- **玻璃材质开关**（设置 → 外观，或直接给 `<html>` 写 `data-glass="off"`）：
+  去掉模糊、玻璃换成实色，高光与阴影保留。启动时会检测引擎能力，
+  不支持 `backdrop-filter` 的机器自动打开（见 `src/lib/glass.svelte.ts`）。
   也可以用 `data-glass="opaque"` 单独标一块区域。
+- `prefers-reduced-transparency: reduce`：同一套实色退路，但**不要指望它在 macOS 上触发** ——
+  WebKit 至今（Safari 27）都没有实现这个媒体查询，Tauri 在 macOS 上用的就是系统 WKWebView。
+  这个分支留给 WebView2 / Chromium；macOS 上只能靠上面那个开关。
 - `prefers-reduced-motion: reduce`：所有动画与过渡关闭。动只表示「正在发生」
   （骨架、跳动的小竖线、进度扫光），结束或停下时不靠动画装饰。
+
+## 老引擎（macOS 11 / 12）
+
+macOS 上的 WKWebView 跟着系统走：系统停在 12，Safari 就停在能装上的最后一版，
+用户没法单独升级。这类机器上出问题的方式不是「模糊变弱」，而是**整页颜色失效**：
+
+- 令牌全部由 `oklch()`（Safari 15.4+）和 `color-mix()`（Safari 16.2+）写成。
+  引擎不认这两种写法时，`background-color: var(--bg)` 这类声明会在计算值阶段整条失效，
+  于是页面底色、卡片底色、发丝线、阴影一起消失 —— 看起来就是「材质全没了」，
+  只剩黑字浮在白底上。此时软件照常能用，所以很容易被误判成布局问题。
+- 模糊只是第二层：`backdrop-filter` 需要 `-webkit-` 前缀，没有模糊时玻璃必须换成实色，
+  否则半透明的卡片就只剩「白底上更白一点」。
+
+对应的三段兜底都在 `app.css` 第 20 节，现代引擎一条都不会命中：
+
+| 兜底 | 触发条件 | 做法 |
+| --- | --- | --- |
+| 颜色 | `@supports not (color: oklch(0 0 0))` | 令牌换成等价的 sRGB 字面量 |
+| 颜色 | `@supports not (background-color: color-mix(...))` | `color-mix` 令牌换成等价 `rgba()` |
+| 材质 | `@supports not ((-webkit-backdrop-filter: ...) or (backdrop-filter: ...))` | `--bg2` / `--panel` / `--popover` / `--player-bg` 换 `--solid-*` |
+
+sRGB 那一段是算出来的，不要手改：改了第 1 节的令牌之后跑
+`python3 tools/srgb-fallback.py`（CI 里用 `--check` 挡住过期）。
+
+两点容易踩的坑：
+
+- 探测值写成 `oklch(0 0 0)`，不是 `oklch(0% 0% 0%)`。后者的色相是百分比，
+  本来就不合法，条件永远判成「不支持」，现代引擎也会吃到兜底。
+- 组件里不要再写 `oklch()`：`app.css` 第 1 节的令牌是唯一入口，组件用 `var()` 引用。
+  需要一次性的颜色（阴影、文字投影）就写 `rgba()`。
 
 ## 想改的话
 

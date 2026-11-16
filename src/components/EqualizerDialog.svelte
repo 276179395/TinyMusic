@@ -263,13 +263,13 @@
     height: 18px;
     border-radius: 50%;
     background-color: var(--knob);
-    box-shadow: 0 1px 3px oklch(0 0 0 / 28%);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
     transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .eq-switch input:checked + .eq-switch-track {
     background-color: #0a84ff;
-    box-shadow: inset 0 0 0 1px oklch(0 0 0 / 8%);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
   }
 
   .eq-switch input:checked + .eq-switch-track::after {
@@ -310,7 +310,7 @@
     min-height: 0;
     overflow-y: auto;
     padding-bottom: 2px;
-    scrollbar-gutter: stabilize;
+    scrollbar-gutter: stable;
   }
 
   .eq-preset-head {

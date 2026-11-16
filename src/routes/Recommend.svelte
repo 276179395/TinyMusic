@@ -464,6 +464,8 @@
     color: #fff;
     font-size: 10px;
     letter-spacing: 0.04em;
+    /* 两个前缀都写：老 WebKit 只认 -webkit- 那条 */
+    -webkit-backdrop-filter: blur(6px);
     backdrop-filter: blur(6px);
   }
 
@@ -579,6 +581,7 @@
     color: #fff;
     background-color: color-mix(in oklch, var(--ink) 68%, transparent);
     box-shadow: 0 6px 16px rgb(0 0 0 / 0.35);
+    -webkit-backdrop-filter: blur(8px);
     backdrop-filter: blur(8px);
     opacity: 0;
     transform: translateY(4px);

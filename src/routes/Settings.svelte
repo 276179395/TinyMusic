@@ -7,6 +7,7 @@
   import { refreshAppCfg } from '../lib/config.svelte';
   import { setPreferredQuality } from '../lib/player.svelte';
   import { theme, setTheme, type ThemeMode } from '../lib/theme.svelte';
+  import { glass, oklchSupported, setGlassSolid } from '../lib/glass.svelte';
   import { getVersion } from '@tauri-apps/api/app';
   import { check } from '@tauri-apps/plugin-updater';
   import ProgressBar from '../components/ProgressBar.svelte';
@@ -227,6 +228,37 @@
             </button>
           {/each}
         </div>
+      </div>
+
+      <div class="st-row">
+        <div class="st-label">
+          玻璃材质
+          <span class="st-desc">
+            {#if glass.forced}
+              当前系统的 WebView 不支持毛玻璃，已改用实色
+            {:else if glass.solid}
+              已关闭 · 卡片、播放条与歌词页改用实色
+            {:else if !oklchSupported}
+              已开启 · 当前引擎不认 oklch()，颜色用 sRGB 兜底
+            {:else}
+              已开启 · 卡片、播放条与歌词页是一层毛玻璃
+            {/if}
+          </span>
+        </div>
+        <span class="st-value">{glass.solid ? '已关闭' : '已开启'}</span>
+        <label
+          class="st-switch"
+          title={glass.forced ? '当前系统不支持毛玻璃' : glass.solid ? '开启毛玻璃' : '关闭毛玻璃'}
+        >
+          <input
+            type="checkbox"
+            aria-label="开启毛玻璃"
+            checked={!glass.solid}
+            disabled={glass.forced}
+            onchange={(e) => setGlassSolid(!e.currentTarget.checked)}
+          />
+          <span class="st-switch-track" aria-hidden="true"></span>
+        </label>
       </div>
     </div>
   </section>
@@ -724,7 +756,7 @@
     color: var(--fg);
     box-shadow:
       inset 0 1px 0 var(--glass-rim),
-      0 1px 2px oklch(0 0 0 / 18%);
+      0 1px 2px rgba(0, 0, 0, 0.18);
   }
 
   .st-switch {
@@ -765,13 +797,13 @@
     height: 20px;
     border-radius: 50%;
     background-color: var(--knob);
-    box-shadow: 0 1px 3px oklch(0 0 0 / 28%);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
     transition: transform 160ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .st-switch input:checked + .st-switch-track {
     background-color: #0a84ff;
-    box-shadow: inset 0 0 0 1px oklch(0 0 0 / 8%);
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.08);
   }
 
   .st-switch input:checked + .st-switch-track::after {
@@ -781,6 +813,15 @@
   .st-switch input:focus-visible + .st-switch-track {
     outline: 2px solid var(--focus-line);
     outline-offset: 2px;
+  }
+
+  /* 引擎不支持毛玻璃时开关不可用：只是把状态说清楚，不做成第二个颜色 */
+  .st-switch input:disabled {
+    cursor: not-allowed;
+  }
+
+  .st-switch input:disabled + .st-switch-track {
+    opacity: 0.45;
   }
 
   .st-status {
