@@ -118,6 +118,7 @@ final class TmAudioModule: NSObject, LynxModule {
                 self.pendingError = "文件不存在：" + path
                 return
             }
+            NSLog("[TinyMusic] audio.loadLocal path=\(path)")
             let item = AVPlayerItem(url: fileURL)
             self.player.replaceCurrentItem(with: item)
             self.status = "loading"
@@ -138,6 +139,7 @@ final class TmAudioModule: NSObject, LynxModule {
 
     func play() {
         onMain {
+            NSLog("[TinyMusic] audio.play()")
             self.player.play()
             self.status = "playing"
         }

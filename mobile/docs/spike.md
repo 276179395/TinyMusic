@@ -123,3 +123,23 @@ P4 结束，进入 P5（播放闭环）。
   `download_list` 读出来时如果原路径不存在，会按文件名在当前 download_dir 里重找一遍（桌面路径存在时行为不变）。
 - 实测：播放页显示「东风破 / 周杰伦 / 0:13 / 5:15」，暂停图标可切换。
 - 遗留：下载页在「迷你播放条」上偶发不刷新（全屏播放页正常），下一轮查。
+
+
+## Round 8：迷你播放条不刷新的定位（未完成）
+
+现象：从下载页用 `TM_PLAY_LOCAL` 起播时，声音正常、日志有 `audio.loadLocal/play`，
+但底部迷你播放条一直显示空态；全屏播放页（PlayerPage）却能正常显示进度。
+
+已排除/确认：
+1. **真 bug（已修）**：`PlayerBar.tsx` 用了 `<Icon>` 却没 import，一旦有当前曲目就渲染失败 →
+   界面停在空态。这条本身就足以解释"永远空"。
+2. 播放链路没问题：`cur=东风破 st=playing pos=12.7` 是同一时刻从路由组件的 `usePlayer()` 读到的。
+3. 把 store 挂到 `globalThis` 单例、去 effect cleanup、改由 App 传快照，**都没有效果** ——
+   怀疑 Lynx 双线程下模块级 store 在两个 runtime 各有一份，某些组件（首屏渲染的）拿到的是主线程副本。
+
+下一轮计划：不再依赖模块单例，改成「后台线程 push → 主线程 state」的显式通道
+（或在页面级 hook 里订阅，实测路由组件可用），然后回归验证。
+
+### 本轮保留的改动
+- `PlayerBar` 的 Icon import 修复。
+- `TmAudioModule` 里 `load/loadLocal/play` 的 NSLog（排查用，DEBUG 无害）。
