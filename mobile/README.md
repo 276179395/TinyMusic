@@ -45,6 +45,13 @@
 - 网页登录的真实回填（需要在网页里手动输账号）
 - 真实云厂商桶（目前只用本地 S3 兼容桩验证过）
 
+## 真机调试
+
+    ./mobile/scripts/device-setup.sh <TEAM_ID> [BUNDLE_ID]   # 写入签名并重新生成工程
+    open mobile/native/ios/TinyMusic.xcworkspace             # 选你的 iPhone → ⌘R
+
+完整步骤与排错见 [docs/真机调试.md](docs/真机调试.md)。
+
 ## 冒烟脚本
 
     ./mobile/scripts/smoke.sh /tmp/a.png TM_AUTOPLAY=1 TM_OPEN_PLAYER=1   # 播放页

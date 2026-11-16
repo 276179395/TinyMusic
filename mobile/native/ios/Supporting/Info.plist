@@ -33,8 +33,11 @@
     </array>
     <key>UIRequiredDeviceCapabilities</key>
     <array>
-        <string>armv7</string>
+        <string>arm64</string>
     </array>
+    <!-- iOS 14+：连接 Mac 上的 rspeedy dev server 会触发「本地网络」权限弹窗 -->
+    <key>NSLocalNetworkUsageDescription</key>
+    <string>TinyMusic 需要访问本地网络，才能连接你电脑上的开发服务器与本地后端。</string>
     <key>UIFileSharingEnabled</key>
     <true/>
     <key>LSSupportsOpeningDocumentsInPlace</key>
