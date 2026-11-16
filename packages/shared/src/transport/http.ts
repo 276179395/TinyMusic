@@ -24,7 +24,7 @@ interface ProgressEntry {
 }
 
 export function createHttpTransport(opts: HttpTransportOptions): Transport {
-  const base = opts.baseUrl.replace(//$/, '');
+  const base = opts.baseUrl.replace(/\/+$/, '');
   const doFetch = opts.fetchImpl ?? fetch;
   const pollMs = opts.pollMs ?? 400;
 

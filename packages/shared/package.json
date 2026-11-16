@@ -13,7 +13,8 @@
     "./format": "./src/format.ts",
     "./quality": "./src/quality.ts",
     "./lyrics": "./src/lyrics.ts",
-    "./eq": "./src/eq.ts"
+    "./eq": "./src/eq.ts",
+    "./player/queue": "./src/player/queue.ts"
   },
   "scripts": {
     "test": "vitest run",

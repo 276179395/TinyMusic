@@ -8,9 +8,8 @@ final class RootViewController: UIViewController {
         super.viewDidLoad()
         view.backgroundColor = UIColor(red: 0.05, green: 0.05, blue: 0.05, alpha: 1)
 
-        let config = LynxConfig(provider: TemplateProvider())
+        // 全局配置在 AppDelegate 里已经 prepare（provider + TmAudio 模块）
         let lynxView = LynxView { builder in
-            builder.config = config
             builder.screenSize = self.view.bounds.size
             builder.fontScale = 1.0
         }
@@ -28,7 +27,9 @@ final class RootViewController: UIViewController {
         ])
 
         // 宿主能力通过 globalProps 交给前端：后端地址、token、主题、安全区
-        lynxView.updateGlobalProps(with: globalProps())
+        let props = globalProps()
+        lynxView.updateGlobalProps(with: props)
+        NSLog("[TinyMusic] globalProps: \(props)")
 
         // 资源名带上 .lynx：TemplateProvider 会拼成 main.lynx.bundle
         lynxView.loadTemplate(fromURL: "main.lynx", initData: nil)
@@ -54,6 +55,8 @@ final class RootViewController: UIViewController {
             "safeAreaRight": Double(insets.right),
             "screenWidth": Double(view.bounds.width),
             "screenHeight": Double(view.bounds.height),
+            // 自动化冒烟：TM_AUTOPLAY=1 时前端自动播第一条搜索结果
+            "autoPlay": ProcessInfo.processInfo.environment["TM_AUTOPLAY"] == "1",
         ]
         if let baseUrl = backend.baseUrl { props["apiBase"] = baseUrl }
         if let token = backend.token { props["apiToken"] = token }

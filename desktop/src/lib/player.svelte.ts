@@ -1,3 +1,11 @@
+import {
+  nextIndexManual,
+  nextIndexOnEnded,
+  prevIndexManual,
+  queueAfterRemove,
+  queueInsertAfterCurrent,
+} from '@tinymusic/shared/player/queue';
+
 import { api, formatLabel, qualityLabel, type AudioFormat, type LyricLine, type PlayerSource, type Quality, type QualityCapability, type Track, type TrackQualities } from './api';
 import { QUALITY_ORDER, qualityChoices } from './quality';
 
@@ -641,43 +649,32 @@ export function toggleMute() {
   }
 }
 
-/** 顺序/列表循环下按顺序，随机下随机挑一首 */
+/** 队列导航规则来自 packages/shared（与 mobile 共用，别在这里改语义） */
+function navState() {
+  return {
+    length: player.queue.length,
+    index: player.index,
+    shuffle: player.shuffle,
+    repeat: player.repeat,
+  };
+}
+
+/** 自然结束时的下一首（shuffle 随机、repeat=all 回开头、off 到底停） */
 function nextIndex(): number | null {
-  const n = player.queue.length;
-  if (!n) return null;
-  if (player.shuffle) {
-    if (n === 1) return 0;
-    let candidate = player.index;
-    // 避免随机到当前这首（列表大于 1 时）
-    for (let guard = 0; guard < 20 && candidate === player.index; guard++) {
-      candidate = Math.floor(Math.random() * n);
-    }
-    return candidate;
-  }
-  const i = player.index + 1;
-  if (i < n) return i;
-  return player.repeat === 'all' ? 0 : null;
+  return nextIndexOnEnded(navState());
 }
 
 /** 手动下一首：总是有下一步（到头回到第一首） */
 export function next() {
-  const n = player.queue.length;
-  if (!n) return;
-  if (player.shuffle) {
-    void startAt(nextIndex() ?? 0);
-    return;
-  }
-  void startAt((player.index + 1) % n);
+  const i = nextIndexManual(navState());
+  if (i === null) return;
+  void startAt(i);
 }
 
 export function prev() {
-  const n = player.queue.length;
-  if (!n) return;
-  if (player.shuffle) {
-    void startAt(nextIndex() ?? 0);
-    return;
-  }
-  void startAt((player.index - 1 + n) % n);
+  const i = prevIndexManual(navState());
+  if (i === null) return;
+  void startAt(i);
 }
 
 /** 音频自然播放结束：单曲循环自己重开，其余按循环方式决定下一步 */
@@ -705,18 +702,17 @@ export function jumpTo(i: number) {
 }
 
 export function removeAt(i: number) {
-  if (i < 0 || i >= player.queue.length) return;
-  const removingCurrent = i === player.index;
-  player.queue.splice(i, 1);
+  const result = queueAfterRemove(player.queue, player.index, i);
+  if (!result) return;
+  player.queue = result.queue;
+  player.index = result.index;
 
-  if (player.queue.length === 0) {
+  if (result.queue.length === 0) {
     clearQueue();
     return;
   }
-  if (i < player.index) player.index--;
-  if (removingCurrent) {
-    const target = Math.min(i, player.queue.length - 1);
-    void startAt(target);
+  if (result.playTarget !== null) {
+    void startAt(result.playTarget);
   } else {
     persistPlayback(true);
   }
@@ -763,15 +759,14 @@ export function playNext(track: Track) {
     return;
   }
   if (sameTrack(player.current, track)) return;
-  const exist = player.queue.findIndex(
-    (t) => t.provider === track.provider && t.id === track.id
+  const result = queueInsertAfterCurrent(
+    player.queue,
+    player.index,
+    track,
+    (a, b) => a.provider === b.provider && a.id === b.id
   );
-  if (exist >= 0) {
-    player.queue.splice(exist, 1);
-    if (exist < player.index) player.index--;
-  }
-  const at = Math.min(player.index + 1, player.queue.length);
-  player.queue.splice(at, 0, track);
+  player.queue = result.queue;
+  player.index = result.index;
   persistPlayback();
 }
 

@@ -37,3 +37,22 @@
 
 Lynx 4.2 + ReactLynx 这条路线在 iOS 上完全可用：UI、原生模块、Rust 后端、图标、模糊材质都没踩到硬墙。
 P4 结束，进入 P5（播放闭环）。
+
+
+## P5 播放闭环（同日）
+
+| 项 | 结果 | 关键点 |
+|---|---|---|
+| 原生模块可达性 | ✅ | 全局 `NativeModules` 在 ReactLynx 里是 undefined；正确入口是 `lynx.getNativeApp().nativeModuleProxy.TmAudio` |
+| 音频播放 | ✅ | `TmAudio.load/play` 走 AVPlayer，代理流 `127.0.0.1:PORT/stream/...` 正常播放（日志实测） |
+| 进度/状态回传 | ✅ | **轮询**而非推送：JS 每 400ms 调 `state(cb)` 拿 {status,position,duration,ended,error,command}，绕开「原生主线程不能直接调 JS 回调」的限制 |
+| 播放 UI | ✅ | 底部播放条：封面、标题、歌手、进度、上一首/播放暂停/下一首（见 `p5-playback.png`，0:16 / 5:15） |
+| 队列规则 | ✅ | 下一首/随机/循环走 `packages/shared/player/queue`（桌面同一份，34 个单测覆盖） |
+| globalProps 布尔 | ⚠️ | Lynx 会把 boolean 转成 1/0，前端要归一化 |
+
+### 踩坑总结（给后来的人）
+
+1. `NativeModules` 全局在 ReactLynx + rspeedy 的 bundle 里不存在（引擎只把它注入原生模块作用域），要从 `lynx.getNativeApp().nativeModuleProxy` 拿。
+2. 原生模块的方法只能在 **JS 线程**上回调 JS；AVPlayer 的 KVO/通知都在主线程 → 用轮询状态替代推送。
+3. `LynxModule` 协议必须实现 `init(param:)`（ObjC 的 optional 初始器会变成 Swift 必需）。
+4. `config.register(Module.self)` 配 `LynxEnv.prepareConfig(config)` 才进全局模块表；视图里再传 config 会覆盖。

@@ -32,6 +32,7 @@
 - [x] P4.2 Swift 壳 + Lynx 4.2.0 跑起来（模拟器）
 - [x] P4.3 本机 Rust 后端接入（`crates/ffi` → `tm_start`），前端 `fetch` 打通
 - [x] P4.4 安全区 / Hugeicons SVG / XElement blur-view / dev server 热更新 全部验证通过
-- [ ] P5 播放闭环 / 歌词 / 均衡器
+- [x] P5 播放闭环（AVPlayer + 轮询状态 + 队列规则共用 shared）
+- [ ] P5.2 全屏播放页 / 歌词 / 音质切换 / 均衡器
 - [ ] P6 下载 / 设置
 - [ ] P7 网盘 / 账号

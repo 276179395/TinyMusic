@@ -11,6 +11,13 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         // Lynx 引擎的全局初始化必须先于任何 LynxView 创建
         LynxEnv.sharedInstance()
 
+        // 按官方文档：config（provider + 原生模块）准备好后交给 LynxEnv，
+        // 之后创建 LynxView 不传 config，直接用这份全局配置。
+        let config = LynxConfig(provider: TemplateProvider())
+        config.register(TmAudioModule.self)
+        LynxEnv.sharedInstance().prepareConfig(config)
+        NSLog("[TinyMusic] Lynx 全局配置已准备（含 TmAudio）")
+
         #if DEBUG
         // 调试开关：接上 Lynx DevTool 后可以看元素树 / console / 截图
         LynxEnv.prepareDevToolForDevelopmentBeforeInit()
