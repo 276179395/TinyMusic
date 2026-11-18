@@ -42,6 +42,37 @@ pub const RES_MANAGE_HOST: &str = "deliver.kuwo.cn";
 
 pub const COVER_BASE: &str = "https://img1.kuwo.cn/star/albumcover/";
 
+/// 下载 / 内嵌封面时请求的尺寸段。
+///
+/// 搜索结果只带 `web_albumpic_short`（120px），歌单详情带 240，
+/// 但同一张图换掉 `star/albumcover/<尺寸>/` 里的数字就能拿到大图。
+/// CDN 只缩不放：请求值超过源图时按源图返回（实测源图 2048，
+/// 请求 2000/4000/9000 分别回 2000/2048/2048），所以给个足够大的值
+/// 就等于「要原图」，不会把 120px 的小图放大成假高清。
+pub const COVER_HIRES_SIZE: u32 = 4096;
+
+/// 把酷我封面 URL 的尺寸段换成原图请求（下载内嵌用）。
+///
+/// 只处理 `star/albumcover/<尺寸>/<路径>.jpg` 这种形态；
+/// 不是相册封面的（歌单/头像等）返回 `None`。
+pub fn hires_cover_url(url: &str) -> Option<String> {
+    let u = url.trim();
+    let marker = "/star/albumcover/";
+    let at = u.find(marker)?;
+    let rest = &u[at + marker.len()..];
+    let (size, tail) = rest.split_once('/')?;
+    let size: u32 = size.parse().ok()?;
+    if tail.is_empty() || size >= COVER_HIRES_SIZE {
+        return None;
+    }
+    Some(format!(
+        "{}/star/albumcover/{}/{}",
+        &u[..at],
+        COVER_HIRES_SIZE,
+        tail
+    ))
+}
+
 /// 歌手资料：头像 + 简介 + 基本资料
 #[derive(Debug, Clone, Default)]
 pub struct SingerProfile {
@@ -1019,6 +1050,10 @@ impl MusicProvider for KuwoProvider {
         "kuwo"
     }
 
+    fn cover_hires(&self, url: &str) -> Option<String> {
+        hires_cover_url(url)
+    }
+
     fn display_name(&self) -> &'static str {
         "酷我音乐"
     }
@@ -1553,6 +1588,34 @@ mod tests {
         let r =
             KuwoProvider::parse_playlist_detail(r#"{"result":"fail","reason":"PARAM_ERROR"}"#, "1");
         assert!(matches!(r, Err(Error::NotFound(_))));
+    }
+
+    #[test]
+    fn hires_cover_swaps_size_segment() {
+        // 搜索结果只给 120，下载内嵌要原图（CDN 按源图封顶，不会放大）
+        assert_eq!(
+            hires_cover_url("https://img1.kuwo.cn/star/albumcover/120/s4s0/93/1794217775.jpg")
+                .as_deref(),
+            Some("https://img1.kuwo.cn/star/albumcover/4096/s4s0/93/1794217775.jpg")
+        );
+        // 歌单详情给 240，同样换
+        assert_eq!(
+            hires_cover_url("https://img4.kuwo.cn/star/albumcover/240/s4s32/71/2716993423.jpg")
+                .as_deref(),
+            Some("https://img4.kuwo.cn/star/albumcover/4096/s4s32/71/2716993423.jpg")
+        );
+        // 已经是大图（1000px 以上）也统一走原图请求，免得漏掉 2048 的源
+        assert_eq!(
+            hires_cover_url("https://img1.kuwo.cn/star/albumcover/2000/a/b.jpg").as_deref(),
+            Some("https://img1.kuwo.cn/star/albumcover/4096/a/b.jpg")
+        );
+        // 比请求值还大就不动
+        assert!(hires_cover_url("https://img1.kuwo.cn/star/albumcover/5000/a/b.jpg").is_none());
+        // 歌单 / 头像这类不是相册封面的地址不碰
+        assert!(hires_cover_url("https://img1.kuwo.cn/star/userpl2015/a/700.jpg").is_none());
+        assert!(hires_cover_url("https://img1.kuwo.cn/star/starheads/x.jpg").is_none());
+        assert!(hires_cover_url("").is_none());
+        assert!(hires_cover_url("not a url").is_none());
     }
 
     #[test]

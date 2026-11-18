@@ -345,6 +345,16 @@ pub trait MusicProvider: Send + Sync {
     fn display_name(&self) -> &'static str;
     fn info(&self) -> ProviderInfo;
 
+    /// 下载 / 内嵌用的封面 URL：尽量给原图。
+    ///
+    /// 列表接口给的都是缩略图（酷我 `web_albumpic_short` 只有 120px、
+    /// 网易云 `?param=300y300`），原样内嵌进音频文件就还是糊的。
+    /// 平台按自己 CDN 的规则换成原图地址（CDN 只缩不放，源图小就是小，不会假放大）；
+    /// 返回 `None` 表示不升级，调用方沿用原 URL。
+    fn cover_hires(&self, _url: &str) -> Option<String> {
+        None
+    }
+
     async fn search(&self, kw: &str, page: u32, limit: u32) -> crate::Result<SearchPage>;
 
     /// 取流地址。实现内部负责占位文件识别与音质降级。

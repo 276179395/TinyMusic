@@ -39,16 +39,34 @@ use std::time::Duration;
 /// 而应用页面跑在 Tauri 的自定义协议上，WebView 会把这种图片当混合内容拦掉 ——
 /// 表现就是一张都加载不出来。这里统一升到 https：`p*.music.126.net` 两种都支持。
 pub fn cover_url(raw: &str, size: u32) -> Option<String> {
+    let base = cover_base(raw)?;
+    Some(format!("{}?param={}y{}", base, size, size))
+}
+
+/// 图片的 https 基础地址（丢掉 `param` 之类的尺寸参数）。
+fn cover_base(raw: &str) -> Option<String> {
     let raw = raw.trim();
     if raw.is_empty() {
         return None;
     }
     let base = raw.split('?').next().unwrap_or(raw);
-    let base = match base.strip_prefix("http://") {
+    Some(match base.strip_prefix("http://") {
         Some(rest) => format!("https://{}", rest),
         None => base.to_string(),
-    };
-    Some(format!("{}?param={}y{}", base, size, size))
+    })
+}
+
+/// 下载 / 内嵌用的封面：**原图**，不指定尺寸。
+///
+/// 列表里给的是 `?param=300y300` 缩略图，直接写进 ID3 就是糊的；
+/// 去掉 `param` 拿到的就是源图（实测常见 1080 / 3000，源图本身小于 1000 时也就那么大，
+/// CDN 不会放大）。只认网易云自己的图片域名，其他来源返回 `None`。
+pub fn hires_cover_url(raw: &str) -> Option<String> {
+    let base = cover_base(raw)?;
+    if !base.contains("music.126.net") {
+        return None;
+    }
+    Some(base)
 }
 
 /// 播放策略
@@ -549,6 +567,10 @@ impl NeteaseProvider {
 impl MusicProvider for NeteaseProvider {
     fn id(&self) -> &'static str {
         "netease"
+    }
+
+    fn cover_hires(&self, url: &str) -> Option<String> {
+        hires_cover_url(url)
     }
 
     fn display_name(&self) -> &'static str {
@@ -1157,7 +1179,7 @@ impl NeteaseProvider {
 
 #[cfg(test)]
 mod cover_tests {
-    use super::cover_url;
+    use super::{cover_url, hires_cover_url};
 
     /// 接口给 http 时必须升到 https，否则 WebView 当混合内容拦掉（一张图都不显示）
     #[test]
@@ -1182,5 +1204,22 @@ mod cover_tests {
     #[test]
     fn empty_is_none() {
         assert!(cover_url("  ", 300).is_none());
+    }
+
+    /// 下载内嵌用的是原图：列表里的 param=300y300 要整段去掉
+    #[test]
+    fn hires_drops_thumbnail_param() {
+        assert_eq!(
+            hires_cover_url("https://p1.music.126.net/a==/1.jpg?param=300y300").as_deref(),
+            Some("https://p1.music.126.net/a==/1.jpg")
+        );
+        // http 也要升 https，否则 WebView / 部分播放器取不到
+        assert_eq!(
+            hires_cover_url("http://p2.music.126.net/b==/2.jpg").as_deref(),
+            Some("https://p2.music.126.net/b==/2.jpg")
+        );
+        // 不是网易云图床的地址不猜
+        assert!(hires_cover_url("https://img1.kuwo.cn/star/albumcover/120/a/b.jpg").is_none());
+        assert!(hires_cover_url("").is_none());
     }
 }

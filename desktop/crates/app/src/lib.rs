@@ -536,36 +536,38 @@ pub async fn build_extras(
             .filter(|u| !u.is_empty())
             .map(str::to_string)
         {
-            let res = with_retries(move |_| {
+            // 列表接口给的封面是缩略图（酷我 120px、网易云 param=300y300），
+            // 直接内嵌进音频文件就还是糊的。下载一律尽量要原图：
+            // 平台按自己 CDN 的规则给出「原图」地址，取不到再退回列表里的缩略图——
+            // 升级封面不能把封面本身弄丢。
+            let candidates = cover_candidates(&url, provider.cover_hires(&url));
+
+            let mut fetched = None;
+            let mut last_error = String::new();
+            for candidate in candidates {
                 let http = http.clone();
-                let url = url.clone();
-                async move {
-                    let resp =
-                        tokio::time::timeout(Duration::from_secs(10), http.get_range(&url, None))
-                            .await
-                            .map_err(|_| CoreError::Http("封面请求超时".into()))??;
-                    if !resp.status().is_success() {
-                        return Err(CoreError::Http(format!(
-                            "封面 HTTP {}",
-                            resp.status().as_u16()
-                        )));
+                let res = with_retries(move |_| {
+                    let http = http.clone();
+                    let url = candidate.clone();
+                    async move { fetch_cover_bytes(http, url).await }
+                })
+                .await;
+                match res {
+                    Ok(bytes) => {
+                        fetched = Some(bytes);
+                        break;
                     }
-                    let bytes = resp.bytes().await?.to_vec();
-                    if bytes.is_empty() || bytes.len() >= 8 * 1024 * 1024 {
-                        return Err(CoreError::Http("封面内容不合法".into()));
-                    }
-                    Ok(bytes)
+                    Err(e) => last_error = e,
                 }
-            })
-            .await;
-            match res {
-                Ok(bytes) => {
+            }
+            match fetched {
+                Some(bytes) => {
                     extras.cover_mime = sniff_image_mime(&bytes).to_string();
                     extras.cover = Some(bytes);
                 }
-                Err(e) => failures.push(FailedPart {
+                None => failures.push(FailedPart {
                     part: "cover".into(),
-                    error: e,
+                    error: last_error,
                 }),
             }
         }
@@ -599,6 +601,41 @@ pub async fn build_extras(
     }
 
     (extras, failures)
+}
+
+
+/// 封面候选地址：先原图（高清），再列表里的缩略图；两者相同只留一个。
+pub fn cover_candidates(url: &str, hires: Option<String>) -> Vec<String> {
+    match hires {
+        Some(h) if h != url => vec![h, url.to_string()],
+        _ => vec![url.to_string()],
+    }
+}
+
+
+/// 抓一张封面图。
+///
+/// 原图常见 1080 / 2048 / 3000 边长、几百 KB 到 3 MB（实测酷我 2048 最大 3.4 MB、
+/// 网易云 3000 约 2 MB）；上限放到 8 MB，只为挡住错误页 / 异常大文件，
+/// 正常封面不会被误杀。
+async fn fetch_cover_bytes(
+    http: Arc<HttpClient>,
+    url: String,
+) -> std::result::Result<Vec<u8>, CoreError> {
+    let resp = tokio::time::timeout(Duration::from_secs(10), http.get_range(&url, None))
+        .await
+        .map_err(|_| CoreError::Http("封面请求超时".into()))??;
+    if !resp.status().is_success() {
+        return Err(CoreError::Http(format!(
+            "封面 HTTP {}",
+            resp.status().as_u16()
+        )));
+    }
+    let bytes = resp.bytes().await?.to_vec();
+    if bytes.is_empty() || bytes.len() >= 8 * 1024 * 1024 {
+        return Err(CoreError::Http("封面内容不合法".into()));
+    }
+    Ok(bytes)
 }
 
 
@@ -3368,6 +3405,24 @@ mod tests {
         .await;
         assert_eq!(res.unwrap(), 2);
         assert_eq!(calls.load(Ordering::SeqCst), 2);
+    }
+
+    /// 下载内嵌封面：先试高清，失败再退回列表里的缩略图
+    #[test]
+    fn cover_candidates_prefer_hires() {
+        assert_eq!(
+            cover_candidates("https://a/120.jpg", Some("https://a/1080.jpg".into())),
+            vec!["https://a/1080.jpg", "https://a/120.jpg"]
+        );
+        // 平台不升级 / 升级后地址没变时只抓一次
+        assert_eq!(
+            cover_candidates("https://a/1.jpg", None),
+            vec!["https://a/1.jpg"]
+        );
+        assert_eq!(
+            cover_candidates("https://a/1.jpg", Some("https://a/1.jpg".into())),
+            vec!["https://a/1.jpg"]
+        );
     }
 
     /// 换设备后靠对象目录把歌单找回来：只取前缀下的一级目录
