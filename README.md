@@ -4,7 +4,7 @@
 
 **[官网与下载](https://redcarl.github.io/TinyMusic/)** · **[源码](https://github.com/RedCarl/TinyMusic)** · **[问题反馈](https://github.com/RedCarl/TinyMusic/issues)**
 
-![TinyMusic 主界面：左侧导航、每日推荐、歌单与底部播放器](site/assets/screenshot.jpg)
+![TinyMusic 主界面：左侧导航、每日推荐、歌单与底部播放器](desktop/site/assets/screenshot.jpg)
 
 ---
 
@@ -19,16 +19,20 @@ TinyMusic 是一个 Windows / macOS 上的音乐客户端。它把「找歌 → 
 
 ## 仓库结构
 
-    desktop/         桌面端（Svelte 5 + Tauri 2）
-    mobile/          跨端 App（ReactLynx + iOS 原生壳 + 本地 Rust 后端）
-    crates/core      平台无关协议层（酷我 / 网易云 / S3 / 下载 / SQLite / Range 代理 / ID3）
-    crates/app       业务层：AppState + dispatch，桌面与 mobile 共用同一份实现
-    crates/server    本地 HTTP API（mobile 调用；也能单独跑起来 curl 验收）
-    crates/ffi       C ABI（tm_start/tm_stop/tm_free），原生壳用它启动后端
-    packages/shared  前端公共库（类型 / API 契约 / 传输层 / 格式化 / 音质 / 歌词 / EQ 预设）
-    packages/theme   设计令牌单源（desktop/src/app.css → Lynx 可用的 hex/rgba）
+    desktop/                 桌面端（Svelte 5 + Tauri 2）
+    desktop/crates/core      平台无关底座（酷我 / 网易云 / S3 / 下载 / SQLite / 文件缓存 / ID3）
+    desktop/crates/app       桌面业务层：AppState + dispatch
+    desktop/crates/server    本地 HTTP API（桌面调试 / S3 桩；iOS 不再链接）
+    desktop/packages/shared  前端公共库（桌面仍在用：类型 / API 契约 / 队列 / 格式化 / 歌词 / EQ 预设）
+    desktop/packages/theme   设计令牌单源（desktop/src/app.css；native 用系统色/材质）
+    desktop/site             官网与隐私政策（GitHub Pages）
+    desktop/tools            开发脚本
+    desktop/docs             项目文档
+    ios/                     原生 iOS App（SwiftUI + Liquid Glass；S3 网盘播放 + 离线缓存）
+    ios/crates/ffi           S3-only C ABI（tm_start/tm_invoke/tm_stop/tm_free），iOS 直接 FFI
+    lynx/                    旧 Lynx 壳归档（不参与构建）
 
-一个 bug 只修一处：业务规则在 crates/app 或 packages/shared，两端口只做薄适配。
+一个 bug 只修一处：业务规则在 desktop/crates/app 或 desktop/packages/shared，两端口只做薄适配。
 
 ---
 
@@ -147,12 +151,13 @@ TinyMusic 是一个 Windows / macOS 上的音乐客户端。它把「找歌 → 
 
 - 源码与问题反馈：<https://github.com/RedCarl/TinyMusic>
 - 如果它好用，欢迎点个 Star。
-- 给开发者看的技术细节在 [`docs/`](docs/)：音质调研、界面材质、音源扩展。
+- 给开发者看的技术细节在 [`desktop/docs/`](desktop/docs/)：音质调研、界面材质、音源扩展。
 
 <details>
 <summary>开发与构建</summary>
 
 ```bash
+cd desktop
 pnpm install
 pnpm tauri dev          # 开发
 pnpm tauri build        # 打包

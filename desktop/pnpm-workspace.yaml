@@ -1,0 +1,8 @@
+packages:
+  - 'packages/*'
+
+allowBuilds:
+  '@hugeicons/svelte': true
+  esbuild: true
+
+verifyDepsBeforeRun: false

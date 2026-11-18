@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>隐私政策 · TinyMusic</title>
+<style>:root { color-scheme: light dark; --fg:#17171a; --muted:#666; --bg:#fafafa; --card:#fff; --line:#e5e5e5; --accent:#ff3b30; }
+@media (prefers-color-scheme: dark) { :root { --fg:#f2f2f2; --muted:#a0a0a0; --bg:#111; --card:#1b1b1d; --line:#2c2c2e; --accent:#ff453a; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.75 -apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif; }
+main { max-width:720px; margin:0 auto; padding:56px 24px 80px; }
+a { color:var(--accent); }
+h1 { font-size:32px; letter-spacing:-0.03em; margin:0 0 8px; }
+h2 { font-size:19px; margin:36px 0 10px; }
+p, li { color:var(--muted); }
+.card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:24px; margin-top:24px; }
+nav { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:28px; font-size:14px; }
+nav a { color:var(--muted); text-decoration:none; }
+nav a:hover { color:var(--fg); }
+.small { font-size:13px; }
+</style>
+</head>
+<body>
+<main>
+<nav><a href="./index.html">TinyMusic</a><a href="./support.html">支持</a><a href="./terms.html">内容声明</a></nav>
+<h1>隐私政策</h1>
+<p class="small">最后更新：2026 年 11 月 17 日</p>
+<div class="card">
+<p>TinyMusic iOS 是一个播放你自己 S3 兼容存储内容的本地播放器。我们没有账号系统、没有在线曲库、没有广告，也不做用户画像。</p>
+</div>
+
+<h2>我们不收集什么</h2>
+<ul>
+<li>不收集姓名、邮箱、手机号、位置、通讯录、相册或广告标识符。</li>
+<li>不接入第三方统计、崩溃上报或广告 SDK。</li>
+<li>不上传你的播放记录、收藏、歌单或缓存文件。</li>
+</ul>
+
+<h2>保存在你设备上的数据</h2>
+<ul>
+<li><strong>S3 凭据</strong>：Access Key / Secret Key 只写入 iOS Keychain；开启 iCloud 钥匙串时可能通过 Apple 的端到端加密同步到你自己的设备。</li>
+<li><strong>播放器设置</strong>：S3 endpoint、bucket、prefix、缓存上限、仅 Wi-Fi、EQ 等非敏感设置保存在本机，可能通过 iCloud Key-Value Storage 在你自己的设备间同步。</li>
+<li><strong>离线缓存</strong>：音频、歌词、封面只存在 App 沙盒，排除 iCloud 备份，不能导出或分享。</li>
+<li><strong>收藏</strong>：默认写到你 S3 桶里的 favorites.json；只读密钥时只保存在本机。</li>
+</ul>
+
+<h2>网络请求</h2>
+<p>App 只连接你在设置中填写的 S3 endpoint，以及 Apple 提供的 iCloud/Keychain 服务。音频、歌词、封面和收藏都直接与你的存储服务交换，不经过 TinyMusic 的中转服务器。</p>
+
+<h2>你的控制</h2>
+<p>你可以在设置里断开 S3、清除缓存，或在系统设置中删除 App 以移除本机数据。S3 桶里的 favorites.json 需要你在自己的存储服务中删除。</p>
+
+<h2>儿童</h2>
+<p>App 不面向 13 岁以下儿童，也不收集任何年龄信息。</p>
+
+<h2>变更与联系</h2>
+<p>政策变更会更新本页日期。问题请通过 <a href="https://github.com/RedCarl/TinyMusic/issues">GitHub Issues</a> 联系。</p>
+</main>
+</body>
+</html>

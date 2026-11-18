@@ -16,8 +16,8 @@ crate-type = ["rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tinymusic-core = { path = "../../crates/core" }
-tinymusic-app = { path = "../../crates/app" }
+tinymusic-core = { path = "../crates/core" }
+tinymusic-app = { path = "../crates/app" }
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
