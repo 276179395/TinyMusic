@@ -20,6 +20,14 @@ import re
 import sys
 from pathlib import Path
 
+# Windows 的默认控制台编码是 cp1252，直接 print 中文会 UnicodeEncodeError。
+# 这个脚本要跨平台跑（release 的 Windows job 也会调 --check），先切到 UTF-8。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")  # type: ignore[attr-defined]
+    except Exception:  # 老 Python / 被重定向的流：保持原样
+        pass
+
 CSS_PATH = Path(__file__).resolve().parent.parent / "src" / "app.css"
 START = "/* @generated:srgb-fallback:start */"
 END = "/* @generated:srgb-fallback:end */"
