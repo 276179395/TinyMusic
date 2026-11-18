@@ -4,7 +4,7 @@
 
 ## 当前状态：已上传并可内部测试
 
-- **Build 21** 已上传 TestFlight，版本 `1.0.0 (21)`，包含 **iCloud entitlement** 和缓存/喜欢页修复。
+- **Build 26** 已上传 TestFlight，版本 `1.0.0 (26)`，包含 **iCloud entitlement**、缓存/喜欢修复、歌单播放、播放列表面板、首启 S3 提醒和离线缓存歌单、封面加载修复、歌单播放状态。
 - 内部测试群组 **「内部测试」** 已创建，自动分发已开启。
 - 已邀请测试员 `carl030101@icloud.com`（孙磊，账户持有人）。
 - 构建 21 的 entitlements 已核对：
@@ -16,7 +16,7 @@
 
 1. iPhone 安装 **TestFlight**（App Store 免费）。
 2. 用 `carl030101@icloud.com` 的 Apple ID 登录 TestFlight。
-3. 接受 TinyMusic 的内部测试邀请，安装 **1.0.0 (21)**。
+3. 接受 TinyMusic 的内部测试邀请，安装 **1.0.0 (26)**。
 4. 如果没收到邀请邮件：App Store Connect → TestFlight → 内部测试 →「内部测试」→ 测试员，确认状态为「已邀请」，可重新发送邀请。
 
 内部测试不需要 Beta App Review；外部测试才需要。
@@ -56,4 +56,4 @@
 
 - TestFlight 内部测试员必须是 App Store Connect 用户；外部测试员不需要，但要 Beta App Review。
 - 新增测试员：App Store Connect → 用户和访问 添加用户，再到 TestFlight 群组里勾选。
-- 构建 17–20 是旧包，仍在群组里；测试请选 **21**。
+- 构建 17–25 是旧包，仍在群组里；测试请选 **26**。

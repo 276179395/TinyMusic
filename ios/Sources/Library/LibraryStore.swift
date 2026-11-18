@@ -10,6 +10,7 @@ final class LibraryStore {
     private(set) var loadingPlaylists = false
     private(set) var loadingTracks = false
     private(set) var loadingFavorites = false
+    private(set) var lastLoadFailed = false
     private(set) var error: String?
     private(set) var favoriteSyncWarning: String?
 
@@ -25,8 +26,10 @@ final class LibraryStore {
         do {
             let result: [Playlist] = try await backend.call("s3_playlists")
             playlists = result
+            lastLoadFailed = false
             error = nil
         } catch {
+            lastLoadFailed = true
             self.error = error.localizedDescription
         }
     }
@@ -51,8 +54,10 @@ final class LibraryStore {
                 "root": .bool(playlist.root),
             ])
             tracksByPlaylist[playlist.name] = result
+            lastLoadFailed = false
             error = nil
         } catch {
+            lastLoadFailed = true
             self.error = error.localizedDescription
         }
     }
@@ -251,6 +256,7 @@ final class LibraryStore {
         playlists = []
         tracksByPlaylist = [:]
         favorites = []
+        lastLoadFailed = false
         error = nil
         favoriteSyncWarning = nil
     }

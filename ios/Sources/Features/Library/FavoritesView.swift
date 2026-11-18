@@ -24,7 +24,7 @@ struct FavoritesView: View {
                                     isCaching: model.cache.active.contains(favorite.id),
                                     cacheProgress: model.cache.progress[favorite.id],
                                     onPlay: {
-                                        model.player.play(track: favorite.asTrack, in: tracks)
+                                        model.player.play(track: favorite.asTrack, in: tracks, context: "喜欢")
                                         model.player.showNowPlaying = true
                                     },
                                     onFavorite: {
@@ -40,12 +40,18 @@ struct FavoritesView: View {
                         .padding(.vertical, 10)
                         .padding(.bottom, 76)
                     }
-                    .refreshable { await model.library.pullFavorites() }
+                    .refreshable {
+                        if model.settings.isConfigured {
+                            await model.library.pullFavorites()
+                        }
+                    }
                 }
             }
             .navigationTitle("喜欢")
             .task {
-                await model.library.pullFavorites()
+                if model.settings.isConfigured {
+                    await model.library.pullFavorites()
+                }
             }
             .overlay(alignment: .bottom) {
                 if let warning = model.library.favoriteSyncWarning {

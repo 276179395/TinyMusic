@@ -2,11 +2,12 @@ import SwiftUI
 
 struct MiniPlayer: View {
     let player: PlayerEngine
+    @State private var showQueue = false
 
     var body: some View {
         if let current = player.current {
             HStack(spacing: 10) {
-                CoverImage(url: current.cover, cornerRadius: 8)
+                CoverImage(url: player.currentCoverURL, cornerRadius: 8)
                     .frame(width: 38, height: 38)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(current.title)
@@ -30,15 +31,15 @@ struct MiniPlayer: View {
                 .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
 
                 Button {
-                    player.next()
+                    showQueue = true
                 } label: {
-                    Image(systemName: "forward.fill")
-                        .font(.system(size: 15, weight: .semibold))
+                    Image(systemName: "list.bullet")
+                        .font(.system(size: 16, weight: .semibold))
                         .frame(width: 32, height: 34)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("下一首")
+                .accessibilityLabel("播放列表")
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
@@ -47,6 +48,9 @@ struct MiniPlayer: View {
             .padding(.bottom, 12)
             .contentShape(Rectangle())
             .onTapGesture { player.showNowPlaying = true }
+            .sheet(isPresented: $showQueue) {
+                PlaybackQueueView(player: player)
+            }
         }
     }
 }

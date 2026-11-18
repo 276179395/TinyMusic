@@ -22,10 +22,19 @@ struct PlaylistView: View {
         }
     }
 
-    private var tracks: [Track] { model.library.tracks(for: playlist) }
+    private var isOffline: Bool {
+        !model.settings.isConfigured || model.library.lastLoadFailed
+    }
+
+    private var tracks: [Track] {
+        isOffline ? model.cache.cachedTracks(in: playlist.name) : model.library.tracks(for: playlist)
+    }
+
     private var playableTracks: [Track] { tracks.filter(\.playable) }
+
     private var moveTargets: [Playlist] {
-        model.library.playlists.filter { !$0.root && $0.name != playlist.name }
+        guard !isOffline else { return [] }
+        return model.library.playlists.filter { !$0.root && $0.name != playlist.name }
     }
     private var activeCacheCount: Int {
         tracks.filter { model.cache.active.contains($0.key) }.count
@@ -50,43 +59,49 @@ struct PlaylistView: View {
         .navigationTitle(playlist.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                HStack(spacing: 10) {
-                    Menu {
-                        Button("缓存全部 \(playableTracks.count) 首") {
-                            Task { await cacheTracks(playableTracks) }
+            if !isOffline {
+                ToolbarItem(placement: .topBarTrailing) {
+                    HStack(spacing: 10) {
+                        Menu {
+                            Button("缓存全部 \(playableTracks.count) 首") {
+                                Task { await cacheTracks(playableTracks) }
+                            }
+                            Button("选择歌曲缓存…") { showPicker = true }
+                        } label: {
+                            if caching {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Image(systemName: "arrow.down.circle")
+                            }
                         }
-                        Button("选择歌曲缓存…") { showPicker = true }
-                    } label: {
-                        if caching {
-                            ProgressView().controlSize(.small)
-                        } else {
-                            Image(systemName: "arrow.down.circle")
-                        }
-                    }
-                    .disabled(tracks.isEmpty || caching)
-                    .accessibilityLabel("缓存到本地")
+                        .disabled(tracks.isEmpty || caching)
+                        .accessibilityLabel("缓存到本地")
 
-                    Menu {
-                        Button("重命名歌单") {
-                            showRename = true
+                        Menu {
+                            Button("重命名歌单") {
+                                showRename = true
+                            }
+                            Button("删除歌单", role: .destructive) {
+                                confirm = .deletePlaylist
+                            }
+                        } label: {
+                            Image(systemName: "ellipsis.circle")
                         }
-                        Button("删除歌单", role: .destructive) {
-                            confirm = .deletePlaylist
-                        }
-                    } label: {
-                        Image(systemName: "ellipsis.circle")
+                        .disabled(playlist.root)
+                        .accessibilityLabel("歌单操作")
                     }
-                    .disabled(playlist.root)
-                    .accessibilityLabel("歌单操作")
                 }
             }
         }
         .task {
-            await model.library.loadTracks(for: playlist)
+            if !isOffline {
+                await model.library.loadTracks(for: playlist)
+            }
         }
         .refreshable {
-            await model.library.loadTracks(for: playlist)
+            if !isOffline {
+                await model.library.loadTracks(for: playlist)
+            }
         }
         .sheet(isPresented: $showPicker) {
             CacheSelectionSheet(tracks: tracks, playlistName: playlist.name) { selected in
@@ -163,7 +178,7 @@ struct PlaylistView: View {
                     Text(playlist.name)
                         .font(.title2.weight(.bold))
                         .lineLimit(2)
-                    Text("\(tracks.count) 首")
+                    Text(isOffline ? "离线缓存 · \(tracks.count) 首" : "\(tracks.count) 首")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -180,17 +195,19 @@ struct PlaylistView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(playableTracks.isEmpty)
 
-                Menu {
-                    Button("缓存全部 \(playableTracks.count) 首") {
-                        Task { await cacheTracks(playableTracks) }
+                if !isOffline {
+                    Menu {
+                        Button("缓存全部 \(playableTracks.count) 首") {
+                            Task { await cacheTracks(playableTracks) }
+                        }
+                        Button("选择歌曲缓存…") { showPicker = true }
+                    } label: {
+                        Label("缓存", systemImage: "arrow.down.circle")
+                            .frame(maxWidth: .infinity)
                     }
-                    Button("选择歌曲缓存…") { showPicker = true }
-                } label: {
-                    Label("缓存", systemImage: "arrow.down.circle")
-                        .frame(maxWidth: .infinity)
+                    .buttonStyle(.bordered)
+                    .disabled(tracks.isEmpty || caching)
                 }
-                .buttonStyle(.bordered)
-                .disabled(tracks.isEmpty || caching)
             }
 
             if activeCacheCount > 0 {
@@ -218,28 +235,31 @@ struct PlaylistView: View {
 
     @ViewBuilder
     private var trackList: some View {
-        if model.library.loadingTracks && tracks.isEmpty {
+        if !isOffline && model.library.loadingTracks && tracks.isEmpty {
             ProgressView("读取曲目…")
                 .frame(maxWidth: .infinity)
                 .padding(.top, 40)
         } else if tracks.isEmpty {
-            ContentUnavailableView("这个歌单是空的", systemImage: "music.note")
-                .padding(.top, 40)
+            ContentUnavailableView(
+                isOffline ? "这个歌单没有缓存歌曲" : "这个歌单是空的",
+                systemImage: "music.note"
+            )
+            .padding(.top, 40)
         } else {
             LazyVStack(spacing: 8) {
                 ForEach(tracks) { track in
                     TrackRow(
                         track: track,
-                        isFavorite: model.library.isFavorite(track),
+                        isFavorite: !isOffline && model.library.isFavorite(track),
                         coverURL: model.cache.coverURL(for: track.key)?.absoluteString,
                         isCached: model.cache.isCached(track.key),
                         isCaching: model.cache.active.contains(track.key),
                         cacheProgress: model.cache.progress[track.key],
                         onPlay: {
-                            model.player.play(track: track, in: tracks)
+                            model.player.play(track: track, in: tracks, context: playlist.name)
                             model.player.showNowPlaying = true
                         },
-                        onFavorite: {
+                        onFavorite: isOffline ? nil : {
                             Task {
                                 if model.library.isFavorite(track) {
                                     _ = await model.library.removeFavorite(track)
@@ -248,13 +268,13 @@ struct PlaylistView: View {
                                 }
                             }
                         },
-                        onCache: {
+                        onCache: isOffline ? nil : {
                             toggleCache(track)
                         },
                         onPlayNext: {
                             model.player.playNext(track)
                         },
-                        onDelete: {
+                        onDelete: isOffline ? nil : {
                             confirm = .deleteTrack(track)
                         },
                         moveTargets: moveTargets,
@@ -275,7 +295,7 @@ struct PlaylistView: View {
 
     private func playAll() {
         guard let first = playableTracks.first else { return }
-        model.player.play(track: first, in: playableTracks)
+        model.player.play(track: first, in: playableTracks, context: playlist.name)
         model.player.showNowPlaying = true
     }
 

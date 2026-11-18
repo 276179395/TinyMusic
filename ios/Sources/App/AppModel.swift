@@ -68,7 +68,7 @@ final class AppModel {
             let tracks = library.tracks(for: first)
             if let track = tracks.first {
                 if AppConfiguration.autoPlay {
-                    player.play(track: track, in: tracks)
+                    player.play(track: track, in: tracks, context: first.name)
                     player.showNowPlaying = ["player", "eq", "lyrics"].contains(AppConfiguration.screen ?? "")
                 }
                 if AppConfiguration.autoCache {

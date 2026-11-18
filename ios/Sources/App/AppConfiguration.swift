@@ -19,10 +19,11 @@ enum AppConfiguration {
     static var screen: String? { value(for: "-screen") }
     static var initialTab: Int {
         switch screen {
-        case "favorites": return 1
+        case "favorites": return 0
+        case "library": return 1
         case "cache": return 2
         case "settings": return 3
-        default: return 0
+        default: return 1
         }
     }
     static var isAutomatedRun: Bool {
@@ -43,7 +44,7 @@ enum AppConfiguration {
     static let eqTest = false
     static let playCached = false
     static let screen: String? = nil
-    static let initialTab = 0
+    static let initialTab = 1
     static let isAutomatedRun = false
     #endif
 

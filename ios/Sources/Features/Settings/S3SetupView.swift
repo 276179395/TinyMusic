@@ -47,8 +47,6 @@ struct S3SetupView: View {
                     Toggle("Path style 寻址", isOn: $pathStyle)
                 } header: {
                     Text("S3 连接")
-                } footer: {
-                    Text("公网地址必须使用 HTTPS；本机/局域网地址允许 HTTP。只读 key 即可播放和缓存。")
                 }
 
                 Section {
@@ -66,12 +64,6 @@ struct S3SetupView: View {
                     .disabled(!AppConfiguration.hasICloudAccount)
                 } header: {
                     Text("凭据")
-                } footer: {
-                    if AppConfiguration.hasICloudAccount {
-                        Text("密钥只存本机/ iCloud 钥匙串，不写入 settings 文件。收藏回写 favorites.json 需要 S3 PutObject 权限。")
-                    } else {
-                        Text("当前构建/账号未启用 iCloud，密钥只存本机钥匙串。")
-                    }
                 }
 
                 if let message {

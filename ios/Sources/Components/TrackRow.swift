@@ -122,24 +122,26 @@ struct TrackRow: View {
 
     @ViewBuilder
     private var contextMenu: some View {
-        Button {
-            onPlayNext?()
-        } label: {
-            Label("下一首播放", systemImage: "text.line.first.and.arrowtriangle.forward")
-        }
-        Button {
-            if isFavorite {
-                confirmUnfavorite = true
-            } else {
-                onFavorite?()
+        if let onPlayNext {
+            Button(action: onPlayNext) {
+                Label("下一首播放", systemImage: "text.line.first.and.arrowtriangle.forward")
             }
-        } label: {
-            Label(isFavorite ? "取消喜欢" : "喜欢", systemImage: isFavorite ? "heart.slash" : "heart")
         }
-        Button {
-            onCache?()
-        } label: {
-            Label(isCached ? "删除缓存" : "缓存到本地", systemImage: isCached ? "trash" : "arrow.down.circle")
+        if let onFavorite {
+            Button {
+                if isFavorite {
+                    confirmUnfavorite = true
+                } else {
+                    onFavorite()
+                }
+            } label: {
+                Label(isFavorite ? "取消喜欢" : "喜欢", systemImage: isFavorite ? "heart.slash" : "heart")
+            }
+        }
+        if let onCache {
+            Button(action: onCache) {
+                Label(isCached ? "删除缓存" : "缓存到本地", systemImage: isCached ? "trash" : "arrow.down.circle")
+            }
         }
         if !moveTargets.isEmpty, let onMove {
             Menu {

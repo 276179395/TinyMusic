@@ -79,6 +79,26 @@ final class CacheStore {
         return allowed.contains(ext) ? ext : "m4a"
     }
 
+    /// 断网/断开 S3 时，资料库用它显示离线歌单。
+    var cachedPlaylists: [Playlist] {
+        let groups = Dictionary(grouping: entries.values.filter { $0.status == .done }) { entry in
+            entry.playlist.isEmpty ? "未分类" : entry.playlist
+        }
+        return groups.map { name, list in
+            let sorted = list.sorted { $0.cachedAt < $1.cachedAt }
+            let cover = sorted.first.flatMap { coverURL(for: $0.key)?.absoluteString }
+            return Playlist(name: name, count: sorted.count, cover: cover, root: name == "未分类")
+        }
+        .sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
+    }
+
+    func cachedTracks(in playlist: String) -> [Track] {
+        entries.values
+            .filter { $0.status == .done && (($0.playlist.isEmpty ? "未分类" : $0.playlist) == playlist) }
+            .sorted { $0.cachedAt < $1.cachedAt }
+            .map(\.track)
+    }
+
     func isCached(_ key: String) -> Bool {
         localURL(for: key) != nil
     }

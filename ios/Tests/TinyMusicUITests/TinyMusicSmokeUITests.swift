@@ -17,7 +17,18 @@ final class TinyMusicSmokeUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = launchArguments
         app.launch()
-        XCTAssertTrue(app.staticTexts["资料库"].waitForExistence(timeout: 30))
+        XCTAssertTrue(app.staticTexts["歌单"].waitForExistence(timeout: 30))
+    }
+
+    func testMiniPlayerOpensQueueSheet() {
+        let app = XCUIApplication()
+        app.launchArguments = launchArguments + ["-autoPlay"]
+        app.launch()
+        let queueButton = app.buttons["播放列表"]
+        XCTAssertTrue(queueButton.waitForExistence(timeout: 30))
+        queueButton.tap()
+        XCTAssertTrue(app.navigationBars["播放列表"].waitForExistence(timeout: 10))
+        XCTAssertTrue(app.buttons["关闭"].exists)
     }
 
     func testCacheTabShowsOfflineCache() {

@@ -2,17 +2,17 @@ import SwiftUI
 
 struct MainTabView: View {
     let model: AppModel
-    @State private var selection = AppConfiguration.initialTab
+    @Binding var selection: Int
 
     var body: some View {
         ZStack {
             TabView(selection: $selection) {
-                tabContent(LibraryView(model: model))
-                    .tabItem { Label("资料库", systemImage: "music.note.list") }
-                    .tag(0)
-
                 tabContent(FavoritesView(model: model))
                     .tabItem { Label("喜欢", systemImage: "heart") }
+                    .tag(0)
+
+                tabContent(LibraryView(model: model))
+                    .tabItem { Label("歌单", systemImage: "music.note.list") }
                     .tag(1)
 
                 tabContent(CacheView(model: model))

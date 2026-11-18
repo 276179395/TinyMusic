@@ -48,7 +48,7 @@ struct CoverImage: View {
                     .interpolation(.high)
                     .antialiased(true)
                     .scaledToFill()
-            } else if failed {
+            } else if failed || url == nil {
                 placeholder
             } else {
                 placeholder.overlay(ProgressView().controlSize(.small))
@@ -76,7 +76,7 @@ struct CoverImage: View {
     private func load() async {
         guard let url, let parsed = URL(string: url) else {
             image = nil
-            failed = false
+            failed = true
             return
         }
         if let cached = CoverImageCache.shared.image(for: url) {

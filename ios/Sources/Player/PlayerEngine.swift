@@ -10,6 +10,8 @@ final class PlayerEngine {
     private(set) var queue: [Track] = []
     private(set) var index = -1
     private(set) var current: Track?
+    /// 当前队列来自哪个歌单；用于资料库卡片的播放状态。
+    private(set) var playlistContext: String?
     private(set) var isPlaying = false
     private(set) var position: TimeInterval = 0
     private(set) var duration: TimeInterval = 0
@@ -18,6 +20,11 @@ final class PlayerEngine {
     var shuffle = false
     var repeatMode: RepeatMode = .off
     var showNowPlaying = false
+
+    var currentCoverURL: String? {
+        guard let current else { return nil }
+        return cache.coverURL(for: current.key)?.absoluteString ?? current.cover
+    }
 
     private let backend: RustBackend
     private let cache: CacheStore
@@ -62,13 +69,15 @@ final class PlayerEngine {
         }
     }
 
-    func play(track: Track, in tracks: [Track]) {
+    func play(track: Track, in tracks: [Track], context: String? = nil) {
         queue = tracks
         index = tracks.firstIndex(of: track) ?? 0
+        playlistContext = context
         load(track)
     }
 
     func play(track: Track) {
+        playlistContext = nil
         let tracks = queue.isEmpty ? [track] : queue
         if let existing = tracks.firstIndex(of: track) {
             index = existing
@@ -116,6 +125,37 @@ final class PlayerEngine {
         queue = next
     }
 
+    /// 从当前队列删掉一首；如果删的是正在播放的，自动接上下一首。
+    func removeFromQueue(_ track: Track) {
+        guard let idx = queue.firstIndex(where: { $0.key == track.key }),
+              let result = PlaybackQueue.queueAfterRemove(queue, index: index, removeAt: idx) else { return }
+        queue = result.queue
+        guard !queue.isEmpty else {
+            clearQueue()
+            return
+        }
+        index = result.index
+        if let target = result.playTarget {
+            index = target
+            load(queue[target])
+        }
+    }
+
+    func clearQueue() {
+        queue.removeAll()
+        index = -1
+        playlistContext = nil
+        stop()
+        buffering = false
+        showNowPlaying = false
+    }
+
+    func jump(to track: Track) {
+        guard let idx = queue.firstIndex(where: { $0.key == track.key }) else { return }
+        index = idx
+        load(track)
+    }
+
     func previous() {
         guard !queue.isEmpty else { return }
         if position > 3 {
@@ -150,6 +190,7 @@ final class PlayerEngine {
 
     func setQueue(_ tracks: [Track], startingAt index: Int) {
         queue = tracks
+        playlistContext = nil
         self.index = max(0, min(index, tracks.count - 1))
         if queue.indices.contains(self.index) {
             load(queue[self.index])
