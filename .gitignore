@@ -5,9 +5,6 @@
 # Node
 node_modules
 dist
-# 例外：设计令牌产物要进版本库，CI 用它判断「app.css 改了但没重新生成」
-!desktop/packages/theme/dist/
-!desktop/packages/theme/dist/**
 
 # 本地/机密
 *.key

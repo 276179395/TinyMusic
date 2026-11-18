@@ -1,0 +1,55 @@
+name: desktop
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/desktop.yml'
+  pull_request:
+    paths:
+      - 'desktop/**'
+      - '.github/workflows/desktop.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    # 桌面壳依赖 tauri，Linux 上要另装 webkit2gtk；macOS runner 开箱即用
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: 'desktop -> target'
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安装前端依赖
+        run: cd desktop && pnpm install --no-frozen-lockfile
+
+      - name: 公共库测试
+        run: cd desktop && pnpm -F @tinymusic/shared test
+
+      - name: Rust 测试（workspace）
+        run: cd desktop && cargo test --workspace
+
+      - name: 前端构建
+        run: cd desktop && pnpm -s build
+
+      # 老引擎（macOS 11/12 的 WKWebView）用的 sRGB 兜底是从设计令牌算出来的，
+      # 令牌改了不重算就会悄悄过期：这里挡住。
+      - name: 校验 sRGB 兜底
+        run: cd desktop && python tools/srgb-fallback.py --check
