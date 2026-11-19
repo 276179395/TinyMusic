@@ -73,3 +73,13 @@
 - S3：`S3 网盘` 行最右侧新增「断开」按钮，只有连接正常（绿点：地址/桶/密钥齐全且最近保存或测试无报错）时才显示；断开后按钮自动消失，底部独立断开区块已移除。
 - 构建：`./scripts/build.sh` 成功，`TinyMusicTests` 29 项全过。
 
+## 构建 32（2026-11-19 14:00）
+
+- 版本：**1.0.0 (32)**，`BUILD_NUMBER=32 ./scripts/testflight.sh` 归档并上传成功（`Upload succeeded` / `EXPORT SUCCEEDED`）。
+- 内容：iOS 性能审计落地的 11 项修复，不改 JSON 契约、不改界面文案、不动桌面端。详见 `ios/docs/perf-audit-2026-11-19.md`。
+  - 播放位置拆进 `PlayerProgressRow`，now-playing 改成事件驱动
+  - 下载进度改按 key 的 `@Observable` 盒子，去掉逐行 `fileExists`
+  - 缓存索引 2 s 防抖、文件校验移到后台、总量增量维护
+  - 收藏 O(1) 索引，封面 URL 与取色解码加缓存/移出主线程，EQ 落盘 300 ms 防抖
+- 测试：`./scripts/test.sh`（`TinyMusicTests` + 本地 S3 桩）通过。
+- 注意：build 31 已在 2026-11-18 19:10（PST）上传过，所以本次从 32 起。
