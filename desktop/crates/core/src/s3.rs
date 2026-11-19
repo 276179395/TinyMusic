@@ -12,6 +12,13 @@ use sha2::{Digest, Sha256};
 
 type HmacSha256 = Hmac<Sha256>;
 
+/// 超过这个体积改走分片上传。反向代理（openresty / nginx）常把
+/// `client_max_body_size` 限制在 50MB，整包 PUT 会被 413 挡掉。
+const MULTIPART_THRESHOLD: usize = 24 * 1024 * 1024;
+
+/// 单个分片大小：留足余量，任何常见的 50MB 反代上限都不会碰到。
+const MULTIPART_PART_SIZE: usize = 16 * 1024 * 1024;
+
 /// 网盘配置（全部来自设置页）
 #[derive(Debug, Clone, Default)]
 pub struct S3Config {
@@ -133,10 +140,23 @@ impl S3 {
         Ok((url, path))
     }
 
-    /// 写入一个对象
+    /// 写入一个对象。
+    ///
+    /// 大文件走分片上传（CreateMultipartUpload / UploadPart / CompleteMultipartUpload）：
+    /// 反向代理（openresty / nginx）常见配置把 `client_max_body_size` 卡在 50MB，
+    /// 整包 PUT 会直接被挡成 413。分片后单个请求只有 16MB。
     pub async fn put_object(&self, key: &str, body: Vec<u8>, content_type: &str) -> Result<()> {
+        if body.len() > MULTIPART_THRESHOLD {
+            self.put_object_multipart(key, body, content_type).await
+        } else {
+            self.put_object_single(key, &body, content_type).await
+        }
+    }
+
+    /// 整包 PUT（小文件：封面、歌词、收藏标记等）
+    async fn put_object_single(&self, key: &str, body: &[u8], content_type: &str) -> Result<()> {
         let (url, path) = self.object_path(key)?;
-        let payload_hash = sha256_hex(&body);
+        let payload_hash = sha256_hex(body);
         let headers = self.sign("PUT", &path, "", &payload_hash, &[])?;
 
         let mut req = self
@@ -148,19 +168,157 @@ impl S3 {
             req = req.header(k.as_str(), v);
         }
         let resp = req
-            .body(body)
+            .body(body.to_vec())
             .send()
             .await
             .map_err(|e| Error::Http(format!("S3 上传请求失败：{}", e)))?;
         if !resp.status().is_success() {
             let status = resp.status().as_u16();
             let text = resp.text().await.unwrap_or_default();
-            let brief: String = text.chars().take(240).collect();
-            return Err(Error::Http(format!(
-                "S3 上传失败（HTTP {}）：{}",
-                status, brief
-            )));
+            return Err(upload_error(status, &text));
         }
+        Ok(())
+    }
+
+    /// 分片上传：初始化 → 逐段 PUT → 合并；任一步失败都 abort，避免留下孤儿分片
+    async fn put_object_multipart(
+        &self,
+        key: &str,
+        body: Vec<u8>,
+        content_type: &str,
+    ) -> Result<()> {
+        let (url, path) = self.object_path(key)?;
+        let upload_id = self.initiate_multipart(&url, &path, content_type).await?;
+        match self.upload_parts(&url, &path, &upload_id, &body).await {
+            Ok(parts) => {
+                self.complete_multipart(&url, &path, &upload_id, &parts)
+                    .await
+            }
+            Err(e) => {
+                let _ = self.abort_multipart(&url, &path, &upload_id).await;
+                Err(e)
+            }
+        }
+    }
+
+    async fn initiate_multipart(
+        &self,
+        url: &str,
+        path: &str,
+        content_type: &str,
+    ) -> Result<String> {
+        let empty_hash = sha256_hex(&[]);
+        // 规范查询串里空值参数写成 `uploads=`
+        let headers = self.sign("POST", path, "uploads=", &empty_hash, &[])?;
+        let mut req = self
+            .http
+            .post(format!("{}?uploads", url))
+            .header(reqwest::header::CONTENT_TYPE, content_type)
+            .header(reqwest::header::CONTENT_LENGTH, "0");
+        for (k, v) in &headers {
+            req = req.header(k.as_str(), v);
+        }
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| Error::Http(format!("S3 分片初始化失败：{}", e)))?;
+        let status = resp.status().as_u16();
+        let text = resp.text().await.unwrap_or_default();
+        if !(200..300).contains(&status) {
+            return Err(upload_error(status, &text));
+        }
+        extract_tag(&text, "UploadId").ok_or_else(|| {
+            Error::Http(format!(
+                "S3 分片初始化没有返回 UploadId：{}",
+                text.chars().take(200).collect::<String>()
+            ))
+        })
+    }
+
+    async fn upload_parts(
+        &self,
+        url: &str,
+        path: &str,
+        upload_id: &str,
+        body: &[u8],
+    ) -> Result<Vec<(u32, String)>> {
+        let encoded_id = uri_encode(upload_id, true);
+        let mut parts = Vec::new();
+        for (idx, chunk) in body.chunks(MULTIPART_PART_SIZE).enumerate() {
+            let number = (idx + 1) as u32;
+            let query = format!("partNumber={}&uploadId={}", number, encoded_id);
+            let payload_hash = sha256_hex(chunk);
+            let headers = self.sign("PUT", path, &query, &payload_hash, &[])?;
+            let mut req = self
+                .http
+                .put(format!("{}?{}", url, query))
+                .header(reqwest::header::CONTENT_LENGTH, chunk.len().to_string());
+            for (k, v) in &headers {
+                req = req.header(k.as_str(), v);
+            }
+            let resp = req
+                .body(chunk.to_vec())
+                .send()
+                .await
+                .map_err(|e| Error::Http(format!("S3 分片 {} 上传失败：{}", number, e)))?;
+            let status = resp.status().as_u16();
+            if !(200..300).contains(&status) {
+                let text = resp.text().await.unwrap_or_default();
+                return Err(upload_error(status, &text));
+            }
+            let etag = resp
+                .headers()
+                .get(reqwest::header::ETAG)
+                .and_then(|v| v.to_str().ok())
+                .map(|v| v.to_string())
+                .ok_or_else(|| Error::Http(format!("S3 分片 {} 没有返回 ETag", number)))?;
+            parts.push((number, etag));
+        }
+        Ok(parts)
+    }
+
+    async fn complete_multipart(
+        &self,
+        url: &str,
+        path: &str,
+        upload_id: &str,
+        parts: &[(u32, String)],
+    ) -> Result<()> {
+        let xml = complete_multipart_body(parts);
+        let payload_hash = sha256_hex(xml.as_bytes());
+        let query = format!("uploadId={}", uri_encode(upload_id, true));
+        let headers = self.sign("POST", path, &query, &payload_hash, &[])?;
+        let mut req = self
+            .http
+            .post(format!("{}?{}", url, query))
+            .header(reqwest::header::CONTENT_TYPE, "application/xml")
+            .header(reqwest::header::CONTENT_LENGTH, xml.len().to_string());
+        for (k, v) in &headers {
+            req = req.header(k.as_str(), v);
+        }
+        let resp = req
+            .body(xml)
+            .send()
+            .await
+            .map_err(|e| Error::Http(format!("S3 分片合并失败：{}", e)))?;
+        let status = resp.status().as_u16();
+        let text = resp.text().await.unwrap_or_default();
+        // S3 允许在 200 响应里返回错误 XML
+        if !(200..300).contains(&status) || text.contains("<Error>") {
+            return Err(upload_error(status, &text));
+        }
+        Ok(())
+    }
+
+    async fn abort_multipart(&self, url: &str, path: &str, upload_id: &str) -> Result<()> {
+        let empty_hash = sha256_hex(&[]);
+        let query = format!("uploadId={}", uri_encode(upload_id, true));
+        let headers = self.sign("DELETE", path, &query, &empty_hash, &[])?;
+        let mut req = self.http.delete(format!("{}?{}", url, query));
+        for (k, v) in &headers {
+            req = req.header(k.as_str(), v);
+        }
+        let _ = req.send().await;
         Ok(())
     }
 
@@ -506,6 +664,35 @@ fn content_type_for_key(key: &str) -> &'static str {
     }
 }
 
+/// CompleteMultipartUpload 的请求体
+fn complete_multipart_body(parts: &[(u32, String)]) -> String {
+    let mut xml =
+        String::from("<?xml version=\"1.0\" encoding=\"UTF-8\"?><CompleteMultipartUpload>");
+    for (number, etag) in parts {
+        xml.push_str(&format!(
+            "<Part><PartNumber>{}</PartNumber><ETag>{}</ETag></Part>",
+            number, etag
+        ));
+    }
+    xml.push_str("</CompleteMultipartUpload>");
+    xml
+}
+
+/// 上传失败时的报错：413 单独给出可操作的提示
+fn upload_error(status: u16, body: &str) -> Error {
+    let brief: String = body.chars().take(240).collect();
+    if status == 413 {
+        Error::Http(format!(
+            "S3 上传失败（HTTP 413）：请求体超过服务器上限。前面若有 nginx/openresty，\
+             把 client_max_body_size 调大（本端已按 {}MB 分片）。响应：{}",
+            MULTIPART_PART_SIZE / 1024 / 1024,
+            brief
+        ))
+    } else {
+        Error::Http(format!("S3 上传失败（HTTP {}）：{}", status, brief))
+    }
+}
+
 /// AWS 风格 percent-encoding：只保留 unreserved 字符（`/` 按需保留）
 fn uri_encode(input: &str, encode_slash: bool) -> String {
     let mut out = String::with_capacity(input.len());
@@ -630,6 +817,28 @@ mod tests {
         let stamp = format!("{:04}{:02}{:02}", y, m, d);
         assert_eq!(stamp, "20231114");
         assert_eq!((rem / 3600, (rem % 3600) / 60, rem % 60), (22, 13, 20));
+    }
+
+    #[test]
+    fn builds_complete_multipart_body() {
+        let parts = vec![
+            (1u32, "\"etag-1\"".to_string()),
+            (2, "\"etag-2\"".to_string()),
+        ];
+        let xml = complete_multipart_body(&parts);
+        assert!(xml.contains("<PartNumber>1</PartNumber><ETag>\"etag-1\"</ETag>"));
+        assert!(xml.contains("<PartNumber>2</PartNumber><ETag>\"etag-2\"</ETag>"));
+        assert!(xml.ends_with("</CompleteMultipartUpload>"));
+    }
+
+    #[test]
+    fn explains_413_as_proxy_limit() {
+        let err = upload_error(413, "<html>413</html>").to_string();
+        assert!(err.contains("client_max_body_size"));
+        assert!(err.contains("16MB"));
+        let other = upload_error(403, "AccessDenied").to_string();
+        assert!(other.contains("HTTP 403"));
+        assert!(!other.contains("client_max_body_size"));
     }
 
     #[test]

@@ -259,3 +259,36 @@ async fn s3_favorites_follow_liked_folder() {
     let _ = std::fs::remove_dir_all(&dir);
 }
 
+
+/// 超过阈值必须走分片：反向代理把 client_max_body_size 卡在 50MB 时，
+/// 整包 PUT 会被 413 挡掉，30MB 的曲子必须还能传上去。
+///
+/// 真机跑法：
+/// S3_EP=... S3_BUCKET=... S3_AK=... S3_SK=... \
+///   cargo test -p tinymusic-core --test s3_live multipart -- --ignored --nocapture
+#[tokio::test]
+#[ignore]
+async fn s3_multipart_upload_roundtrip() {
+    let s3 = client();
+    let suffix = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    let key = format!("TinyMusic/__multipart_test_{suffix}.bin");
+
+    // 30MB ＞ 24MB 阈值：必定走分片；内容可校验，避免「传上去是空的」
+    let size = 30 * 1024 * 1024;
+    let body: Vec<u8> = (0..size).map(|i| (i % 251) as u8).collect();
+    println!("UPLOAD {} bytes", body.len());
+    s3.put_object(&key, body.clone(), "application/octet-stream")
+        .await
+        .expect("multipart put");
+
+    let got = s3.get_object(&key).await.expect("get").expect("exists");
+    println!("DOWNLOAD {} bytes", got.len());
+    assert_eq!(got.len(), body.len(), "分片上传后大小应一致");
+    assert!(got == body, "内容应逐字节一致");
+
+    s3.delete_object(&key).await.expect("cleanup delete");
+    println!("MULTIPART OK, cleanup done");
+}
