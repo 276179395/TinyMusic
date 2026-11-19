@@ -49,8 +49,12 @@ final class PlayerEngine {
         player.allowsExternalPlayback = true
         statusObservation = player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
             Task { @MainActor in
-                self?.isPlaying = player.timeControlStatus == .playing
-                self?.buffering = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+                guard let self else { return }
+                let playing = player.timeControlStatus == .playing
+                let changed = playing != self.isPlaying
+                self.isPlaying = playing
+                self.buffering = player.timeControlStatus == .waitingToPlayAtSpecifiedRate
+                if changed { self.updateNowPlaying() }
             }
         }
         timeObserver = player.addPeriodicTimeObserver(
@@ -62,9 +66,17 @@ final class PlayerEngine {
                 self.position = time.seconds.isFinite ? time.seconds : 0
                 if let item = self.player.currentItem {
                     let value = item.duration.seconds
-                    if value.isFinite, value > 0 { self.duration = value }
+                    if value.isFinite, value > 0 {
+                        // 时长是**异步**就绪的：切歌时先推的那次 updateNowPlaying 里 duration 还是 0，
+                        // 于是 nowPlayingInfo 里没有总时长，锁屏/控制中心的进度条就不能拖。
+                        // 所以在「时长第一次拿到」时补推一次——每首歌只会触发一次。
+                        let learnedDuration = self.duration <= 0
+                        self.duration = value
+                        if learnedDuration { self.updateNowPlaying() }
+                    }
                 }
-                self.updateNowPlaying()
+                // 除此之外这里**不要**调 updateNowPlaying()：那是跨进程 IPC，
+                // 而系统会用 elapsedPlaybackTime + playbackRate 自己外推进度。
             }
         }
     }
@@ -171,6 +183,8 @@ final class PlayerEngine {
     func seek(to seconds: TimeInterval) {
         let time = CMTime(seconds: max(0, seconds), preferredTimescale: 600)
         player.seek(to: time, toleranceBefore: .zero, toleranceAfter: .zero)
+        // 拖动进度会改变 elapsedPlaybackTime，锁屏上的时间要跟着走。
+        updateNowPlaying()
     }
 
     func stop() {
@@ -279,6 +293,7 @@ final class PlayerEngine {
             repeatMode: repeatMode
         ), queue.indices.contains(target) else {
             isPlaying = false
+            updateNowPlaying()
             return
         }
         index = target
@@ -311,6 +326,7 @@ final class PlayerEngine {
                 Task { @MainActor in
                     self?.player.pause()
                     self?.isPlaying = false
+                    self?.updateNowPlaying()
                 }
             }
         }
@@ -322,9 +338,12 @@ final class PlayerEngine {
             guard let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
                   let reason = AVAudioSession.RouteChangeReason(rawValue: raw),
                   reason == .oldDeviceUnavailable else { return }
+            // 这里已经把 `isPlaying` 手动置为 false 了，KVO 里「只在变化时推」的
+            // 判断会因此短路，所以锁屏信息得在这里显式推一次（拔耳机后不能还显示在播）。
             Task { @MainActor in
                 self?.player.pause()
                 self?.isPlaying = false
+                self?.updateNowPlaying()
             }
         }
     }
@@ -335,6 +354,7 @@ final class PlayerEngine {
             Task { @MainActor in
                 self?.player.play()
                 self?.isPlaying = true
+                self?.updateNowPlaying()
             }
             return .success
         }
@@ -342,6 +362,7 @@ final class PlayerEngine {
             Task { @MainActor in
                 self?.player.pause()
                 self?.isPlaying = false
+                self?.updateNowPlaying()
             }
             return .success
         }

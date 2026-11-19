@@ -25,7 +25,7 @@ struct FavoritesView: View {
                                     coverURL: model.cache.coverURL(for: favorite.id)?.absoluteString,
                                     isCached: model.cache.isCached(favorite.id),
                                     isCaching: model.cache.active.contains(favorite.id),
-                                    cacheProgress: model.cache.progress[favorite.id],
+                                    cacheProgress: model.cache.progressBox(for: favorite.id),
                                     onPlay: {
                                         model.player.play(track: favorite.asTrack, in: tracks, context: Self.contextName)
                                         model.player.showNowPlaying = true

@@ -15,7 +15,8 @@ struct PlaybackQueueView: View {
                 } else {
                     List {
                         Section {
-                            ForEach(Array(player.queue.enumerated()), id: \.offset) { _, track in
+                            // 用 `Track.id`（= key）而不是下标：删一首时后面的行不会全体换身份。
+                            ForEach(player.queue) { track in
                                 queueRow(track)
                             }
                         } header: {

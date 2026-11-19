@@ -62,22 +62,7 @@ struct NowPlayingView: View {
                             .accessibilityLabel(L("返回封面"))
                         }
 
-                        VStack(spacing: 8) {
-                            SeekBar(
-                                value: player.duration > 0 ? min(player.position, player.duration) : 0,
-                                total: max(1, player.duration)
-                            ) { target in
-                                player.seek(to: target)
-                            }
-                            HStack {
-                                Text(timeText(player.position))
-                                Spacer()
-                                Text(timeText(player.duration))
-                            }
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                            .frame(width: 280)
-                        }
+                        PlayerProgressRow(player: player, lyrics: lyrics)
                     }
                     .padding(.horizontal, 20)
 
@@ -175,9 +160,6 @@ struct NowPlayingView: View {
                 if AppConfiguration.screen == "eq" { showEQ = true }
                 if AppConfiguration.screen == "lyrics" { showLyrics = true }
             }
-            .onChange(of: player.position) { _, position in
-                lyrics.update(position: position)
-            }
         }
     }
 
@@ -256,9 +238,49 @@ struct NowPlayingView: View {
         }
     }
 
-    private func timeText(_ seconds: TimeInterval) -> String {
-        guard seconds.isFinite, seconds >= 0 else { return "0:00" }
-        let total = Int(seconds)
-        return String(format: "%d:%02d", total / 60, total % 60)
+}
+
+/// 播放进度条 + 两个时间标签。
+///
+/// 单独成视图是有原因的：`player.position` 每 0.25 秒变一次，**任何读它的 body 都会重算**。
+/// 播放页是全 app 最重的一棵树（全屏模糊封面、三段渐变、玻璃按钮、多个 `L()`），
+/// 所以让这 4 Hz 只重算这一层薄视图。
+///
+/// ⚠️ `.onChange(of: player.position)` 也必须留在这里：它同样会在 body 求值时读 `position`，
+/// 留在 `NowPlayingView` 里就等于白拆了。
+private struct PlayerProgressRow: View {
+    let player: PlayerEngine
+    let lyrics: LyricsStore
+
+    var body: some View {
+        VStack(spacing: 8) {
+            SeekBar(
+                value: player.duration > 0 ? min(player.position, player.duration) : 0,
+                total: max(1, player.duration)
+            ) { target in
+                player.seek(to: target)
+            }
+            HStack {
+                Text(timeText(player.position))
+                Spacer()
+                Text(timeText(player.duration))
+            }
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(.secondary)
+            .frame(width: 280)
+        }
+        .onChange(of: player.position) { _, position in
+            lyrics.update(position: position)
+        }
+        .onAppear {
+            // 暂停状态下不会再收到 tick，进来时先对一次当前行。
+            lyrics.update(position: player.position)
+        }
     }
+}
+
+private func timeText(_ seconds: TimeInterval) -> String {
+    guard seconds.isFinite, seconds >= 0 else { return "0:00" }
+    let total = Int(seconds)
+    return String(format: "%d:%02d", total / 60, total % 60)
 }

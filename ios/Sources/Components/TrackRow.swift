@@ -6,7 +6,9 @@ struct TrackRow: View {
     var coverURL: String? = nil
     var isCached: Bool = false
     var isCaching: Bool = false
-    var cacheProgress: Double? = nil
+    /// 下载进度盒子（不是进度值）：这样这一行只观察自己那个盒子，
+    /// 别的歌在下载时不会把整页每一行都牵动一遍。
+    var cacheProgress: CacheProgress? = nil
     var onPlay: (() -> Void)?
     var onFavorite: (() -> Void)?
     var onCache: (() -> Void)?
@@ -63,7 +65,7 @@ struct TrackRow: View {
                     ZStack {
                         Circle().fill(Color(.tertiarySystemFill).opacity(0.55))
                         if isCaching {
-                            ProgressRing(progress: cacheProgress ?? 0, size: 22, lineWidth: 2.5)
+                            ProgressRing(progress: cacheProgress?.value ?? 0, size: 22, lineWidth: 2.5)
                         } else {
                             Image(systemName: isCached ? "checkmark.circle.fill" : "arrow.down.circle")
                                 .font(.system(size: 18, weight: .semibold))
@@ -99,7 +101,7 @@ struct TrackRow: View {
         .padding(.vertical, 7)
 
         if isCaching {
-            ProgressView(value: cacheProgress ?? 0)
+            ProgressView(value: cacheProgress?.value ?? 0)
                 .tint(.accentColor)
                 .scaleEffect(x: 1, y: 0.7, anchor: .center)
                 .padding(.horizontal, 10)

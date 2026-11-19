@@ -6,6 +6,12 @@ final class CacheManager: NSObject, URLSessionDownloadDelegate, @unchecked Senda
     private var session: URLSession!
     private var backgroundCompletionHandler: (() -> Void)?
 
+    /// 进度合流。网络回调是「每个数据块一次」（几十到几百次/秒），直接发布会让
+    /// 所有读 `CacheStore.progress` 的界面跟着重算一遍，所以先攒最新值，最多 4 Hz 刷一次。
+    private let progressLock = NSLock()
+    private var pendingProgress: [String: Double] = [:]
+    private var hasScheduledFlush = false
+
     override init() {
         super.init()
         let config = URLSessionConfiguration.background(withIdentifier: "cn.carljoy.tinymusic.cache")
@@ -70,7 +76,7 @@ final class CacheManager: NSObject, URLSessionDownloadDelegate, @unchecked Senda
         let value = totalBytesExpectedToWrite > 0
             ? Double(totalBytesWritten) / Double(totalBytesExpectedToWrite)
             : 0
-        Task { @MainActor in CacheStore.shared.updateProgress(info.key, value) }
+        recordProgress(info.key, value)
     }
 
     func urlSession(
@@ -123,6 +129,33 @@ final class CacheManager: NSObject, URLSessionDownloadDelegate, @unchecked Senda
         let handler = backgroundCompletionHandler
         backgroundCompletionHandler = nil
         DispatchQueue.main.async { handler?() }
+    }
+
+    // MARK: - 进度合流
+
+    /// 只记最新值；第一次写入时排一次 250 ms 后的刷新，后续数据块都并进同一批。
+    private func recordProgress(_ key: String, _ value: Double) {
+        progressLock.lock()
+        pendingProgress[key] = value
+        let shouldSchedule = !hasScheduledFlush
+        hasScheduledFlush = true
+        progressLock.unlock()
+
+        guard shouldSchedule else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(250)) { [weak self] in
+            self?.flushProgress()
+        }
+    }
+
+    private func flushProgress() {
+        progressLock.lock()
+        let batch = pendingProgress
+        pendingProgress.removeAll(keepingCapacity: true)
+        hasScheduledFlush = false
+        progressLock.unlock()
+
+        guard !batch.isEmpty else { return }
+        Task { @MainActor in CacheStore.shared.updateProgress(batch) }
     }
 
     private func fetchSidecars(_ info: CacheTaskInfo) async {

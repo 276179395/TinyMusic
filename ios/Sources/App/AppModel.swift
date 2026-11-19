@@ -46,6 +46,9 @@ final class AppModel {
             ready = true
             status = L("就绪")
             error = nil
+            // 缓存文件校验挪到启动之后的后台任务里跑（见 CacheStore.reconcileFiles()），
+            // 否则缓存几百首时这几百次文件打开全堵在主线程上。
+            Task { await self.cache.reconcileFiles() }
             if AppConfiguration.eqTest {
                 player.eq.applyPreset("rock")
             }

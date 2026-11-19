@@ -8,31 +8,41 @@ struct CacheView: View {
 
     private var cache: CacheStore { model.cache }
 
-    private var doneEntries: [CacheEntry] {
-        cache.entries.values.filter { $0.status == .done }
-    }
-
-    private var groups: [CacheGroup] {
-        Dictionary(grouping: doneEntries, by: { $0.playlist.isEmpty ? L("未分类") : $0.playlist })
-            .map { name, entries in
-                CacheGroup(
-                    name: name,
-                    entries: entries.sorted { $0.cachedAt > $1.cachedAt },
-                    bytes: entries.reduce(0) { $0 + $1.audioBytes }
-                )
+    /// 一次遍历算出全部四类条目。
+    ///
+    /// 原来是 4 个独立计算属性：每趟 body 扫 4 遍 `entries.values`，
+    /// 再加一次 `Dictionary(grouping:)` 和两次排序。而缓存进行时这段每 250 ms 就重算一次。
+    private var snapshot: CacheSnapshot {
+        var done: [CacheEntry] = []
+        var downloading: [CacheEntry] = []
+        var failed: [CacheEntry] = []
+        done.reserveCapacity(cache.entries.count)
+        for entry in cache.entries.values {
+            switch entry.status {
+            case .done: done.append(entry)
+            case .downloading: downloading.append(entry)
+            case .failed: failed.append(entry)
             }
-            .sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
-    }
+        }
 
-    private var activeEntries: [CacheEntry] {
-        cache.entries.values.filter { $0.status == .downloading }
-    }
+        var grouped: [String: [CacheEntry]] = [:]
+        for entry in done {
+            grouped[entry.playlist.isEmpty ? L("未分类") : entry.playlist, default: []].append(entry)
+        }
+        let groups = grouped.map { name, entries in
+            CacheGroup(
+                name: name,
+                entries: entries.sorted { $0.cachedAt > $1.cachedAt },
+                bytes: entries.reduce(0) { $0 + $1.audioBytes }
+            )
+        }
+        .sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
 
-    private var failedEntries: [CacheEntry] {
-        cache.entries.values.filter { $0.status == .failed }
+        return CacheSnapshot(done: done, active: downloading, failed: failed, groups: groups)
     }
 
     var body: some View {
+        let snap = snapshot
         NavigationStack {
             List {
                 Section {
@@ -59,29 +69,29 @@ struct CacheView: View {
                     ))
                 }
 
-                if !activeEntries.isEmpty {
+                if !snap.active.isEmpty {
                     Section {
-                        ForEach(activeEntries) { entry in
-                            CacheRow(entry: entry, progress: cache.progress[entry.key] ?? 0, cache: cache)
+                        ForEach(snap.active) { entry in
+                            CacheRow(entry: entry, progress: cache.progressBox(for: entry.key), cache: cache)
                         }
                     }
                 }
 
-                if !failedEntries.isEmpty {
+                if !snap.failed.isEmpty {
                     Section {
-                        ForEach(failedEntries) { entry in
+                        ForEach(snap.failed) { entry in
                             FailedCacheRow(entry: entry, cache: cache)
                         }
                     }
                 }
 
-                if doneEntries.isEmpty && activeEntries.isEmpty && failedEntries.isEmpty {
+                if snap.done.isEmpty && snap.active.isEmpty && snap.failed.isEmpty {
                     Section {
                         ContentUnavailableView(L("还没有缓存"), systemImage: "arrow.down.circle")
                     }
-                } else if !groups.isEmpty {
+                } else if !snap.groups.isEmpty {
                     Section {
-                        ForEach(groups) { group in
+                        ForEach(snap.groups) { group in
                             groupHeader(group)
                             if expanded.contains(group.name) {
                                 ForEach(group.entries) { entry in
@@ -231,6 +241,13 @@ struct CacheView: View {
     }
 }
 
+private struct CacheSnapshot {
+    let done: [CacheEntry]
+    let active: [CacheEntry]
+    let failed: [CacheEntry]
+    let groups: [CacheGroup]
+}
+
 private struct CacheGroup: Identifiable {
     let name: String
     let entries: [CacheEntry]
@@ -240,7 +257,7 @@ private struct CacheGroup: Identifiable {
 
 private struct CacheRow: View {
     let entry: CacheEntry
-    let progress: Double
+    let progress: CacheProgress?
     let cache: CacheStore
 
     var body: some View {
@@ -255,7 +272,7 @@ private struct CacheRow: View {
                     .lineLimit(1)
             }
             Spacer()
-            ProgressRing(progress: progress, size: 24)
+            ProgressRing(progress: progress?.value ?? 0, size: 24)
         }
     }
 }

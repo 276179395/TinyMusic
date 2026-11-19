@@ -46,6 +46,12 @@ final class Localization {
     @ObservationIgnored private var forced: AppLanguage?
     /// 已加载的 `.lproj` bundle。`@ObservationIgnored`：避免在 body 求值时写观察属性。
     @ObservationIgnored private var bundles: [AppLanguage: Bundle] = [:]
+    /// `language` 的解析结果缓存。
+    ///
+    /// `L()` 在 body 里被调用几十次，而 `.system`（没改过语言设置时的默认值）每次都要走
+    /// `Locale.preferredLanguages` —— 实测约 1.7 µs，比一次字典查找贵一个数量级。
+    /// 只有 `selection` 会改变解析结果（系统语言变了 iOS 会重启 App），所以在 `select` 里失效即可。
+    @ObservationIgnored private var cachedLanguage: AppLanguage?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -75,12 +81,18 @@ final class Localization {
     /// 先无条件读一次 `selection`：否则带上 `-uiTestLanguage` 强制值时，
     /// `forced ?? selection` 会短路，Observation 就登记不到依赖，界面不刷新。
     var language: AppLanguage {
-        let stored = selection
-        switch forced ?? stored {
-        case .zh: return .zh
-        case .en: return .en
-        case .system: return Self.systemLanguage
+        // 无条件读一次 `selection`：即使命中缓存也要登记 Observation 依赖，
+        // 否则 `-uiTestLanguage` 之类的路径会让界面在切语言后不刷新。
+        _ = selection
+        if let cachedLanguage { return cachedLanguage }
+        let resolved: AppLanguage
+        switch forced ?? selection {
+        case .zh: resolved = .zh
+        case .en: resolved = .en
+        case .system: resolved = Self.systemLanguage
         }
+        cachedLanguage = resolved
+        return resolved
     }
 
     /// 当前语言的 `Locale`：交给 SwiftUI 的 `environment(\.locale)`，
@@ -101,6 +113,7 @@ final class Localization {
         forced = nil
         guard value != selection else { return }
         selection = value
+        cachedLanguage = nil
         defaults.set(value.rawValue, forKey: Self.defaultsKey)
     }
 

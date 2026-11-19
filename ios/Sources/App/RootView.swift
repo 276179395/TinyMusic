@@ -5,6 +5,7 @@ struct RootView: View {
 
     @State private var selectedTab = AppConfiguration.initialTab
     @State private var showS3Reminder = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Group {
@@ -33,6 +34,13 @@ struct RootView: View {
             if showing { showS3Reminder = false }
         }
         .animation(.easeInOut(duration: 0.2), value: model.ready)
+        .onChange(of: scenePhase) { _, phase in
+            guard phase != .active else { return }
+            // 缓存索引（lastPlayedAt）和均衡器增益都是防抖写入，
+            // 进后台前补一次，别让它们停在窗口里被系统挂起。
+            model.cache.flushSave()
+            model.player.eq.flush()
+        }
     }
 }
 

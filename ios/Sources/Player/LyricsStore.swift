@@ -47,7 +47,11 @@ final class LyricsStore {
     }
 
     func update(position: TimeInterval) {
-        activeIndex = Self.activeIndex(lines: lines, positionMs: Int(position * 1000))
+        let next = Self.activeIndex(lines: lines, positionMs: Int(position * 1000))
+        // 播放器每 0.25 秒推一次进度，歌词却要几秒才换一行。`@Observable` 不做等值判断，
+        // 无条件赋值会让整个歌词列表每 0.25 秒重算一次。
+        guard next != activeIndex else { return }
+        activeIndex = next
     }
 
     nonisolated static func activeIndex(lines: [LyricLine], positionMs: Int) -> Int {

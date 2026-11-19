@@ -5,16 +5,26 @@ import UIKit
 private final class CoverImageCache {
     static let shared = CoverImageCache()
     private let cache = NSCache<NSString, UIImage>()
+    /// `key(for:)` 的解析结果缓存。
+    ///
+    /// `CoverImage.init` 在父视图每趟求值时都会跑一次（结果会被 SwiftUI 丢掉），
+    /// 而 `URLComponents(string:)` 每次都是一次完整解析。播放页 4 Hz × 3 个封面
+    /// 就是每秒 12 次纯浪费。presigned URL 的 query 每次都不同，所以直接按原串做 key。
+    private let keys = NSCache<NSString, NSString>()
 
     init() {
         cache.countLimit = 240
+        keys.countLimit = 400
     }
 
     func key(for urlString: String) -> String {
+        if let cached = keys.object(forKey: urlString as NSString) { return cached as String }
         guard var components = URLComponents(string: urlString) else { return urlString }
         components.query = nil
         components.fragment = nil
-        return components.string ?? urlString
+        let key = components.string ?? urlString
+        keys.setObject(key as NSString, forKey: urlString as NSString)
+        return key
     }
 
     func image(for urlString: String?) -> UIImage? {

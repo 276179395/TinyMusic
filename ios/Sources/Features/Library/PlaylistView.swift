@@ -36,14 +36,9 @@ struct PlaylistView: View {
         guard !isOffline else { return [] }
         return model.library.playlists.filter { !$0.root && $0.name != playlist.name }
     }
-    private var activeCacheCount: Int {
-        tracks.filter { model.cache.active.contains($0.key) }.count
-    }
-    private var cacheOverallProgress: Double {
-        let values = tracks.compactMap { model.cache.active.contains($0.key) ? (model.cache.progress[$0.key] ?? 0) : nil }
-        guard !values.isEmpty else { return 0 }
-        return values.reduce(0, +) / Double(values.count)
-    }
+    // 注意：这里**不要**再算「正在缓存 N 首 / 总进度」。
+    // 那几个值要读每个进度盒子，读在 PlaylistView.body 里就等于把整页（含所有 TrackRow）
+    // 重新挂到 4 Hz 的下载进度上——单独抽出来的 CacheProgressHeader 就白拆了。
 
     var body: some View {
         ScrollView {
@@ -212,21 +207,7 @@ struct PlaylistView: View {
                 }
             }
 
-            if activeCacheCount > 0 {
-                VStack(spacing: 5) {
-                    HStack {
-                        Text(L("正在缓存 %@ 首", "\(activeCacheCount)"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Spacer()
-                        Text("\(Int(cacheOverallProgress * 100))%")
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                    ProgressView(value: cacheOverallProgress)
-                        .tint(.accentColor)
-                }
-            }
+            CacheProgressHeader(tracks: tracks, cache: model.cache)
         }
         .padding(16)
         .background(
@@ -256,7 +237,7 @@ struct PlaylistView: View {
                         coverURL: model.cache.coverURL(for: track.key)?.absoluteString,
                         isCached: model.cache.isCached(track.key),
                         isCaching: model.cache.active.contains(track.key),
-                        cacheProgress: model.cache.progress[track.key],
+                        cacheProgress: model.cache.progressBox(for: track.key),
                         onPlay: {
                             model.player.play(track: track, in: tracks, context: playlist.name)
                             model.player.showNowPlaying = true
@@ -314,6 +295,45 @@ struct PlaylistView: View {
                 }
             } catch {
                 cacheMessage = L("缓存失败：%@", error.localizedDescription)
+            }
+        }
+    }
+
+    private struct CacheProgressHeader: View {
+        let tracks: [Track]
+        let cache: CacheStore
+
+        private var activeCount: Int {
+            var count = 0
+            for track in tracks where cache.active.contains(track.key) { count += 1 }
+            return count
+        }
+
+        private var overallProgress: Double {
+            var sum = 0.0
+            var count = 0
+            for track in tracks where cache.active.contains(track.key) {
+                sum += cache.progressBox(for: track.key)?.value ?? 0
+                count += 1
+            }
+            return count > 0 ? sum / Double(count) : 0
+        }
+
+        var body: some View {
+            if activeCount > 0 {
+                VStack(spacing: 5) {
+                    HStack {
+                        Text(L("正在缓存 %@ 首", "\(activeCount)"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(Int(overallProgress * 100))%")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                    ProgressView(value: overallProgress)
+                        .tint(.accentColor)
+                }
             }
         }
     }

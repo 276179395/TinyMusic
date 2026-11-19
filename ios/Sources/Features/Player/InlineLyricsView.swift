@@ -36,8 +36,10 @@ struct InlineLyricsView: View {
 
                         ScrollView(.vertical, showsIndicators: false) {
                             LazyVStack(spacing: 20) {
-                                ForEach(Array(store.lines.enumerated()), id: \.offset) { index, line in
-                                    lyricLine(index: index, line: line)
+                                // 用 `indices` 而不是 `Array(lines.enumerated())`：后者每趟 body 都要新建数组。
+                                // 下标身份保持不变，与原来的 `id: \.offset` 等价。
+                                ForEach(store.lines.indices, id: \.self) { index in
+                                    lyricLine(index: index, line: store.lines[index])
                                         .id(index)
                                 }
                             }

@@ -7,6 +7,10 @@ final class LibraryStore {
     private(set) var playlists: [Playlist] = []
     private(set) var tracksByPlaylist: [String: [Track]] = [:]
     private(set) var favorites: [FavoriteTrack] = []
+    /// 「喜欢」的快速索引。`isFavorite` 在每行每趟 body 都会调用，
+    /// 而 `favoriteKey` 每次要分配 3 个字符串（实测约 2 µs），遍历收藏列表就是 O(F)。
+    @ObservationIgnored private var favoriteKeyIndex: Set<String> = []
+    @ObservationIgnored private var favoriteIDIndex: Set<String> = []
     private(set) var loadingPlaylists = false
     private(set) var loadingTracks = false
     private(set) var loadingFavorites = false
@@ -77,6 +81,7 @@ final class LibraryStore {
                 guard favorite.provider == "s3" else { return false }
                 return seen.insert(Self.favoriteKey(title: favorite.title, artist: favorite.artist)).inserted
             }
+            rebuildFavoriteIndex()
             error = nil
         } catch {
             self.error = error.localizedDescription
@@ -84,10 +89,16 @@ final class LibraryStore {
     }
 
     func isFavorite(_ track: Track) -> Bool {
-        let key = Self.favoriteKey(title: track.title, artist: track.artist)
-        return favorites.contains {
-            $0.id == track.key || Self.favoriteKey(title: $0.title, artist: $0.artist) == key
-        }
+        // 先读一次 `favorites` 登记 Observation 依赖：心形图标必须跟着收藏列表变化刷新。
+        // 索引本身是 @ObservationIgnored，读它不会建立依赖。
+        _ = favorites.count
+        if favoriteIDIndex.contains(track.key) { return true }
+        return favoriteKeyIndex.contains(Self.favoriteKey(title: track.title, artist: track.artist))
+    }
+
+    private func rebuildFavoriteIndex() {
+        favoriteIDIndex = Set(favorites.map(\.id))
+        favoriteKeyIndex = Set(favorites.map { Self.favoriteKey(title: $0.title, artist: $0.artist) })
     }
 
     @discardableResult
@@ -114,6 +125,7 @@ final class LibraryStore {
                 artist: track.artist,
                 cover: track.cover
             ))
+            rebuildFavoriteIndex()
             favoriteSyncWarning = nil
             return true
         } catch {
@@ -137,6 +149,7 @@ final class LibraryStore {
             favorites.removeAll {
                 $0.id == track.key || Self.favoriteKey(title: $0.title, artist: $0.artist) == key
             }
+            rebuildFavoriteIndex()
             favoriteSyncWarning = nil
             return true
         } catch {
@@ -219,6 +232,7 @@ final class LibraryStore {
                 tracksByPlaylist[name] = tracks.filter { $0.key != track.key }
             }
             favorites.removeAll { $0.id == track.key }
+            rebuildFavoriteIndex()
             error = nil
             return true
         } catch {
@@ -266,6 +280,7 @@ final class LibraryStore {
         playlists = []
         tracksByPlaylist = [:]
         favorites = []
+        rebuildFavoriteIndex()
         lastLoadFailed = false
         error = nil
         favoriteSyncWarning = nil

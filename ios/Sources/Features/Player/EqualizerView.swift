@@ -35,7 +35,8 @@ struct EqualizerView: View {
                 }
 
                 Section(header: Text(L("频段"))) {
-                    ForEach(Array(EQLibrary.bands.enumerated()), id: \.offset) { index, hz in
+                    ForEach(EQLibrary.bands.indices, id: \.self) { index in
+                        let hz = EQLibrary.bands[index]
                         VStack(alignment: .leading, spacing: 2) {
                             HStack {
                                 Text(label(for: hz))
@@ -91,6 +92,8 @@ struct EqualizerView: View {
             }
             .navigationTitle(L("均衡器"))
             .navigationBarTitleDisplayMode(.inline)
+            // 落盘有 300 ms 防抖（拖动滑块时不能每帧编码一次），离开这一页要把它冲掉。
+            .onDisappear { eq.flush() }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(L("完成")) { dismiss() }
