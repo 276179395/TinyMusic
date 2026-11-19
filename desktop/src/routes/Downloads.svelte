@@ -9,6 +9,7 @@
   import DownloadsSkeleton from '../components/DownloadsSkeleton.svelte';
   import { delayedVisible } from '../lib/loading.svelte';
   import ErrorNotice from '../components/ErrorNotice.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   let rows = $state<DownloadRow[]>([]);
   let loaded = $state(false);
@@ -43,7 +44,7 @@
       await api.downloadClear();
       rows = [];
       confirmClear = false;
-      showToast('已清除下载记录');
+      showToast(t('已清除下载记录'));
     } catch (e) {
       err = String(e);
     } finally {
@@ -81,19 +82,19 @@
         ? []
         : [
             {
-              label: '打开下载目录',
+              label: t('打开下载目录'),
               icon: icons.folder,
               run: () => api.openDownloadDir().catch(() => {}),
             },
           ]),
       {
-        label: '复制文件路径',
+        label: t('复制文件路径'),
         icon: icons.link,
-        run: () => copyText(r.path || '记录里还没有落盘路径', '已复制路径'),
+        run: () => copyText(r.path || t('记录里还没有落盘路径'), t('已复制路径')),
       },
       { sep: true },
       {
-        label: '重新下载',
+        label: t('重新下载'),
         icon: icons.download,
         run: () => requestDownload([rowTrack(r)]),
       },
@@ -101,30 +102,30 @@
   }
 
   function statusLabel(s: string): string {
-    if (s === 'done') return '已完成';
-    if (s === 'running') return '进行中';
-    if (s.startsWith('failed')) return '失败';
+    if (s === 'done') return t('已完成');
+    if (s === 'running') return t('进行中');
+    if (s.startsWith('failed')) return t('失败');
     return s;
   }
 </script>
 
 <div class="page">
   <div class="summary">
-    下载记录
+    {t('下载记录')}
     <button class="mini" onclick={() => api.openDownloadDir().catch(() => {})}>
       <HugeiconsIcon icon={icons.folder} size={ICON_SIZE.inline} />
-      打开目录
+      {t('打开目录')}
     </button>
     {#if failureUi.items.length > 0}
       <button class="mini warn" onclick={openFailures}>
         <HugeiconsIcon icon={icons.refresh} size={ICON_SIZE.inline} />
-        {failureUi.items.length} 首没下完整
+        {t('{n} 首没下完整', { n: failureUi.items.length })}
       </button>
     {/if}
     {#if rows.length > 0}
       <button class="mini" onclick={() => (confirmClear = true)}>
         <HugeiconsIcon icon={icons.trash} size={ICON_SIZE.inline} />
-        清除记录
+        {t('清除记录')}
       </button>
     {/if}
   </div>
@@ -140,24 +141,31 @@
       <div class="big" aria-hidden="true">
         <HugeiconsIcon icon={icons.download} size={ICON_SIZE.empty} />
       </div>
-      <p>还没有下载记录</p>
+      <p>{t('还没有下载记录')}</p>
     </div>
   {:else}
     <table class="dl">
       <thead>
-        <tr><th>歌曲</th><th>艺人</th><th>音质</th><th>位置</th><th>大小</th><th>状态</th></tr>
+        <tr>
+          <th>{t('歌曲')}</th>
+          <th>{t('艺人')}</th>
+          <th>{t('音质')}</th>
+          <th>{t('位置')}</th>
+          <th>{t('大小')}</th>
+          <th>{t('状态')}</th>
+        </tr>
       </thead>
       <tbody>
         {#each rows as r (r.task_id)}
           <tr oncontextmenu={(e) => rowMenu(e, r)}>
             <td>{r.title}</td>
             <td>{r.artist}</td>
-            <td>{qualityLabel(r.quality)}</td>
+            <td>{t(qualityLabel(r.quality))}</td>
             <td class="loc">
               {#if r.path.startsWith('s3://')}
-                <span class="loc-tag cloud">网盘</span>
+                <span class="loc-tag cloud">{t('网盘')}</span>
               {:else}
-                <span class="loc-tag">本地</span>
+                <span class="loc-tag">{t('本地')}</span>
               {/if}
             </td>
             <td>{fmtBytes(r.bytes)}</td>
@@ -181,20 +189,22 @@
       if (e.target === e.currentTarget) confirmClear = false;
     }}
   >
-    <div class="modal narrow" role="dialog" aria-modal="true" aria-label="清除下载记录">
+    <div class="modal narrow" role="dialog" aria-modal="true" aria-label={t('清除下载记录')}>
       <div class="modal-head">
-        <h2>清除下载记录</h2>
-        <button class="icon" onclick={() => (confirmClear = false)} aria-label="关闭">
+        <h2>{t('清除下载记录')}</h2>
+        <button class="icon" onclick={() => (confirmClear = false)} aria-label={t('关闭')}>
           <HugeiconsIcon icon={icons.close} size={ICON_SIZE.inline} />
         </button>
       </div>
       <p class="modal-note">
-        只清空这份记录，不会删除已经下载到本地或网盘的文件。
+        {t('只清空这份记录，不会删除已经下载到本地或网盘的文件。')}
       </p>
       <div class="modal-actions">
-        <button class="mini" onclick={() => (confirmClear = false)} disabled={clearing}>取消</button>
+        <button class="mini" onclick={() => (confirmClear = false)} disabled={clearing}
+          >{t('取消')}</button
+        >
         <button class="mini danger" onclick={doClear} disabled={clearing}>
-          {clearing ? '清除中…' : '清除'}
+          {clearing ? t('清除中…') : t('清除')}
         </button>
       </div>
     </div>

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../lib/i18n.svelte';
+
   /**
    * 与真实曲目列表（TrackRow 的 .row）同一套网格：
    * 直接把骨架放在 .row 的列里，窗口变窄时和真实行一样收起专辑/热度列。
@@ -19,7 +21,7 @@
 <div
   class="sk-block"
   role={status ? 'status' : undefined}
-  aria-label={status ? '加载中' : undefined}
+  aria-label={status ? t('加载中') : undefined}
   aria-hidden={status ? undefined : 'true'}
 >
   {#if toolbar === 'search'}

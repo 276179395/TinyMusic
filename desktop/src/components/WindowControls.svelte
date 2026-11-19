@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { getCurrentWindow } from '@tauri-apps/api/window';
+  import { t } from '../lib/i18n.svelte';
 
   /**
    * 窗口按钮（Windows 自绘标题栏的一部分）。
@@ -63,8 +64,8 @@
 </script>
 
 {#if hasWindow}
-  <div class="win-controls" role="group" aria-label="窗口控制">
-    <button class="wc" onclick={minimize} title="最小化" aria-label="最小化">
+  <div class="win-controls" role="group" aria-label={t('窗口控制')}>
+    <button class="wc" onclick={minimize} title={t('最小化')} aria-label={t('最小化')}>
       <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
         <path d="M1 6h10" />
       </svg>
@@ -73,8 +74,8 @@
     <button
       class="wc"
       onclick={toggle}
-      title={maximized ? '向下还原' : '最大化'}
-      aria-label={maximized ? '向下还原' : '最大化'}
+      title={maximized ? t('向下还原') : t('最大化')}
+      aria-label={maximized ? t('向下还原') : t('最大化')}
       aria-pressed={maximized}
     >
       <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
@@ -87,7 +88,7 @@
       </svg>
     </button>
 
-    <button class="wc close" onclick={close} title="关闭" aria-label="关闭">
+    <button class="wc close" onclick={close} title={t('关闭')} aria-label={t('关闭')}>
       <svg viewBox="0 0 12 12" width="12" height="12" aria-hidden="true">
         <path d="M1.5 1.5 10.5 10.5M10.5 1.5 1.5 10.5" />
       </svg>

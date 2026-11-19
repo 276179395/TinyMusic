@@ -17,6 +17,8 @@ enum AppConfiguration {
     static var eqTest: Bool { ProcessInfo.processInfo.arguments.contains("-eqTest") }
     static var playCached: Bool { ProcessInfo.processInfo.arguments.contains("-playCached") }
     static var screen: String? { value(for: "-screen") }
+    /// UI 测试 / 截图固定语言：`-uiTestLanguage zh`；只在本进程生效，不写 UserDefaults。
+    static var uiTestLanguage: String? { value(for: "-uiTestLanguage") }
     static var initialTab: Int {
         switch screen {
         case "favorites": return 0
@@ -44,6 +46,7 @@ enum AppConfiguration {
     static let eqTest = false
     static let playCached = false
     static let screen: String? = nil
+    static let uiTestLanguage: String? = nil
     static let initialTab = 1
     static let isAutomatedRun = false
     #endif

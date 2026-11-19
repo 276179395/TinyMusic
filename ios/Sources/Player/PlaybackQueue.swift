@@ -7,9 +7,9 @@ enum RepeatMode: String, CaseIterable, Sendable {
 
     var label: String {
         switch self {
-        case .off: return "不循环"
-        case .all: return "列表循环"
-        case .one: return "单曲循环"
+        case .off: return L("不循环")
+        case .all: return L("列表循环")
+        case .one: return L("单曲循环")
         }
     }
 }

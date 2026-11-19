@@ -21,7 +21,7 @@ struct PlaylistNameSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("歌单名", text: $name)
+                    TextField(L("歌单名"), text: $name)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                 }
@@ -37,14 +37,14 @@ struct PlaylistNameSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(L("取消")) { dismiss() }
                         .disabled(busy)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         Task { await save() }
                     } label: {
-                        if busy { ProgressView().controlSize(.small) } else { Text("保存") }
+                        if busy { ProgressView().controlSize(.small) } else { Text(L("保存")) }
                     }
                     .disabled(busy || name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
@@ -59,7 +59,7 @@ struct PlaylistNameSheet: View {
         if ok {
             dismiss()
         } else {
-            error = "保存失败，请检查名称或 S3 写权限"
+            error = L("保存失败，请检查名称或 S3 写权限")
         }
     }
 }

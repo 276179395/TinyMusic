@@ -48,7 +48,7 @@ struct SeekBar: View {
                 }
         )
         .accessibilityElement()
-        .accessibilityLabel("播放进度")
+        .accessibilityLabel(L("播放进度"))
         .accessibilityValue(String(format: "%d%%", Int(progress * 100)))
     }
 }

@@ -12,8 +12,8 @@ enum KeychainError: LocalizedError, Sendable {
 
     var errorDescription: String? {
         switch self {
-        case .status(let status): return "钥匙串操作失败（\(status)）"
-        case .encode: return "钥匙串数据无法编码"
+        case .status(let status): return L("钥匙串操作失败（%@）", "\(status)")
+        case .encode: return L("钥匙串数据无法编码")
         }
     }
 }

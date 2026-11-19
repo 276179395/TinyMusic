@@ -4,6 +4,7 @@
   import { fmtDuration } from '../lib/api';
   import { icons, ICON_SIZE } from '../lib/icons';
   import { openTrackMenu } from '../lib/trackMenu.svelte';
+  import { t } from '../lib/i18n.svelte';
   import {
     player,
     jumpTo,
@@ -56,22 +57,22 @@
   <div
     class="queue-panel"
     role="dialog"
-    aria-label="播放列表"
+    aria-label={t('播放列表')}
     transition:fly={{ y: 10, duration: 180, opacity: 0 }}
   >
     <div class="qp-head">
-      <span class="qp-title">播放列表 <em>{player.queue.length} 首</em></span>
+      <span class="qp-title">{t('播放列表')} <em>{t('{n} 首', { n: player.queue.length })}</em></span>
       <div class="qp-actions">
         <button
           class="qp-icon"
-          title="清空播放列表"
-          aria-label="清空播放列表"
+          title={t('清空播放列表')}
+          aria-label={t('清空播放列表')}
           disabled={player.queue.length === 0}
           onclick={clearQueue}
         >
           <HugeiconsIcon icon={icons.trash} size={ICON_SIZE.inline} />
         </button>
-        <button class="qp-icon" title="收起" aria-label="收起播放列表" onclick={closeQueue}>
+        <button class="qp-icon" title={t('收起')} aria-label={t('收起播放列表')} onclick={closeQueue}>
           <HugeiconsIcon icon={icons.chevronUp} size={ICON_SIZE.inline} />
         </button>
       </div>
@@ -79,20 +80,20 @@
 
 
     {#if player.queue.length === 0}
-      <div class="qp-empty">播放列表是空的 —— 在歌曲上点播放就会自动填充</div>
+      <div class="qp-empty">{t('播放列表是空的 —— 在歌曲上点播放就会自动填充')}</div>
     {:else}
       <div class="qp-list" bind:this={listEl}>
-        {#each player.queue as t, i (t.provider + t.id + i)}
+        {#each player.queue as track, i (track.provider + track.id + i)}
           <div
             class="qp-row"
             class:on={i === player.index}
             role="group"
             oncontextmenu={(e) =>
-              openTrackMenu(e, t, {
+              openTrackMenu(e, track, {
                 queue: player.queue,
                 extra: [
                   {
-                    label: '从播放列表移除',
+                    label: t('从播放列表移除'),
                     icon: icons.trash,
                     danger: true,
                     run: () => removeAt(i),
@@ -103,8 +104,8 @@
             <button
               class="qp-item"
               onclick={() => jumpTo(i)}
-              title="播放：{t.title}"
-              aria-label="播放 {t.title}"
+              title={t('播放：{title}', { title: track.title })}
+              aria-label={t('播放 {title}', { title: track.title })}
             >
               <span class="qp-i">
                 {#if i === player.index}
@@ -123,19 +124,19 @@
               </span>
               <span class="qp-t">
                 <span class="qp-name">
-                  {t.title}
-                  {#if t.available_qualities?.includes('lossless')}
-                    <span class="badge sq">无损</span>
+                  {track.title}
+                  {#if track.available_qualities?.includes('lossless')}
+                    <span class="badge sq">{t('无损')}</span>
                   {/if}
                 </span>
-                <span class="qp-artist">{t.artist || '未知艺人'}</span>
+                <span class="qp-artist">{track.artist || t('未知艺人')}</span>
               </span>
-              <span class="qp-d">{fmtDuration(t.duration_sec)}</span>
+              <span class="qp-d">{fmtDuration(track.duration_sec)}</span>
             </button>
             <button
               class="qp-x"
-              title="从列表移除"
-              aria-label="从列表移除 {t.title}"
+              title={t('从列表移除')}
+              aria-label={t('从列表移除 {title}', { title: track.title })}
               onclick={() => removeAt(i)}
             >
               <HugeiconsIcon icon={icons.close} size={12} />

@@ -23,11 +23,11 @@ struct LibraryView: View {
         NavigationStack(path: $path) {
             Group {
                 if model.library.loadingPlaylists && playlists.isEmpty && !isOffline {
-                    ProgressView("读取歌单…")
+                    ProgressView(L("读取歌单…"))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if playlists.isEmpty {
                     ContentUnavailableView(
-                        isOffline ? "还没有缓存歌单" : "还没有歌单",
+                        isOffline ? L("还没有缓存歌单") : L("还没有歌单"),
                         systemImage: "music.note.list"
                     )
                 } else {
@@ -41,8 +41,8 @@ struct LibraryView: View {
                                     .buttonStyle(.plain)
                                     .contextMenu {
                                         if !isOffline && !playlist.root {
-                                            Button("重命名歌单") { renaming = playlist }
-                                            Button("删除歌单", role: .destructive) { deleting = playlist }
+                                            Button(L("重命名歌单")) { renaming = playlist }
+                                            Button(L("删除歌单"), role: .destructive) { deleting = playlist }
                                         }
                                     }
 
@@ -62,7 +62,7 @@ struct LibraryView: View {
                     }
                 }
             }
-            .navigationTitle("歌单")
+            .navigationTitle(L("歌单"))
             .navigationDestination(for: Playlist.self) { playlist in
                 PlaylistView(model: model, playlist: playlist)
             }
@@ -75,7 +75,7 @@ struct LibraryView: View {
                             Image(systemName: "plus")
                         }
                         .disabled(isOffline)
-                        .accessibilityLabel("新建歌单")
+                        .accessibilityLabel(L("新建歌单"))
 
                         Button {
                             Task { await model.library.refreshAll() }
@@ -88,7 +88,7 @@ struct LibraryView: View {
                             }
                         }
                         .disabled(model.library.loadingPlaylists)
-                        .accessibilityLabel("刷新歌单")
+                        .accessibilityLabel(L("刷新歌单"))
                     }
                 }
             }
@@ -113,27 +113,27 @@ struct LibraryView: View {
                 }
             }
             .sheet(isPresented: $showCreate) {
-                PlaylistNameSheet(title: "新建歌单") { name in
+                PlaylistNameSheet(title: L("新建歌单")) { name in
                     await model.library.createPlaylist(named: name)
                 }
             }
             .sheet(item: $renaming) { playlist in
-                PlaylistNameSheet(title: "重命名歌单", initialName: playlist.name) { name in
+                PlaylistNameSheet(title: L("重命名歌单"), initialName: playlist.name) { name in
                     await model.library.renamePlaylist(playlist, to: name)
                 }
             }
-            .confirmationDialog("删除「\(deleting?.name ?? "")」？", isPresented: Binding(
+            .confirmationDialog(L("删除「%@」？", deleting?.name ?? ""), isPresented: Binding(
                 get: { deleting != nil },
                 set: { if !$0 { deleting = nil } }
             ), titleVisibility: .visible) {
-                Button("删除歌单和云端歌曲", role: .destructive) {
+                Button(L("删除歌单和云端歌曲"), role: .destructive) {
                     guard let playlist = deleting else { return }
                     Task { _ = await model.library.deletePlaylist(playlist) }
                     deleting = nil
                 }
-                Button("取消", role: .cancel) { deleting = nil }
+                Button(L("取消"), role: .cancel) { deleting = nil }
             } message: {
-                Text("会删除 S3 上的歌单目录和里面的歌曲，无法撤销。")
+                Text(L("会删除 S3 上的歌单目录和里面的歌曲，无法撤销。"))
             }
         }
     }
@@ -174,7 +174,9 @@ struct LibraryView: View {
         }
         .buttonStyle(.plain)
         .disabled(playlist.count == 0 || startingPlaylist != nil)
-        .accessibilityLabel(isCurrent ? (model.player.isPlaying ? "暂停歌单" : "继续播放歌单") : "播放整个歌单")
+        .accessibilityLabel(isCurrent
+            ? (model.player.isPlaying ? L("暂停歌单") : L("继续播放歌单"))
+            : L("播放整个歌单"))
         .accessibilityIdentifier("playlist-play-\(playlist.name)")
     }
 

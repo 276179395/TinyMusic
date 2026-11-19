@@ -3,6 +3,7 @@ import App from './App.svelte';
 import './app.css';
 import { initTheme } from './lib/theme.svelte';
 import { initGlass } from './lib/glass.svelte';
+import { initI18n } from './lib/i18n.svelte';
 
 /**
  * 窗口外观按系统分开处理：
@@ -31,10 +32,16 @@ document.documentElement.dataset.shell = shell;
 document.documentElement.dataset.chrome =
   shell === 'tauri' && os === 'windows' ? 'custom' : 'native';
 
-initTheme();
-// 引擎不认 backdrop-filter 时自动退到实色（见 app.css 第 20 节）
-initGlass();
+/**
+ * 启动顺序：先把主题和材质定下来，再挂载。
+ * 材质要等桌面壳回一次系统版本（老系统走边框材质），所以这里等一小会儿 ——
+ * 宁可晚一帧挂载，也不要先画一帧毛玻璃再换掉。
+ */
+async function bootstrap() {
+  initI18n();
+  initTheme();
+  await initGlass();
+  mount(App, { target: document.getElementById('app')! });
+}
 
-const app = mount(App, { target: document.getElementById('app')! });
-
-export default app;
+void bootstrap();

@@ -16,7 +16,7 @@ struct InlineLyricsView: View {
                 VStack(spacing: 10) {
                     Image(systemName: "text.alignleft")
                         .font(.title3)
-                    Text("暂无歌词")
+                    Text(L("暂无歌词"))
                         .font(.headline)
                 }
                 .foregroundStyle(.secondary)

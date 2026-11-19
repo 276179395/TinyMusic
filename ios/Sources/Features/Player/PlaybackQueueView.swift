@@ -11,7 +11,7 @@ struct PlaybackQueueView: View {
         NavigationStack {
             Group {
                 if player.queue.isEmpty {
-                    ContentUnavailableView("播放列表为空", systemImage: "list.bullet")
+                    ContentUnavailableView(L("播放列表为空"), systemImage: "list.bullet")
                 } else {
                     List {
                         Section {
@@ -19,33 +19,33 @@ struct PlaybackQueueView: View {
                                 queueRow(track)
                             }
                         } header: {
-                            Text("\(player.queue.count) 首")
+                            Text(L("%@ 首", "\(player.queue.count)"))
                         }
                     }
                     .listStyle(.plain)
                 }
             }
-            .navigationTitle("播放列表")
+            .navigationTitle(L("播放列表"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("关闭") { dismiss() }
+                    Button(L("关闭")) { dismiss() }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("清空", role: .destructive) {
+                    Button(L("清空"), role: .destructive) {
                         showClearConfirm = true
                     }
                     .disabled(player.queue.isEmpty)
                 }
             }
-            .confirmationDialog("清空播放列表？", isPresented: $showClearConfirm, titleVisibility: .visible) {
-                Button("清空", role: .destructive) {
+            .confirmationDialog(L("清空播放列表？"), isPresented: $showClearConfirm, titleVisibility: .visible) {
+                Button(L("清空"), role: .destructive) {
                     player.clearQueue()
                     dismiss()
                 }
-                Button("取消", role: .cancel) {}
+                Button(L("取消"), role: .cancel) {}
             } message: {
-                Text("会停止播放并移除整个当前播放列表，不会删除歌单或 S3 文件。")
+                Text(L("会停止播放并移除整个当前播放列表，不会删除歌单或 S3 文件。"))
             }
         }
         .presentationDetents([.medium, .large])
@@ -79,7 +79,7 @@ struct PlaybackQueueView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("播放 \(track.title)")
+            .accessibilityLabel(L("播放 %@", track.title))
 
             Button(role: .destructive) {
                 player.removeFromQueue(track)
@@ -90,13 +90,13 @@ struct PlaybackQueueView: View {
                     .frame(width: 30, height: 30)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("从播放列表移除 \(track.title)")
+            .accessibilityLabel(L("从播放列表移除 %@", track.title))
         }
         .swipeActions {
             Button(role: .destructive) {
                 player.removeFromQueue(track)
             } label: {
-                Label("移除", systemImage: "trash")
+                Label(L("移除"), systemImage: "trash")
             }
         }
     }

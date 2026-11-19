@@ -71,3 +71,54 @@ async fn bad_args_and_unknown_cmd_are_reported() {
         .unwrap_err();
     assert!(err.contains("参数错误") || err.contains("缺少进度回调"), "{err}");
 }
+
+#[tokio::test]
+async fn favorite_check_recognises_same_song_under_liked_copy() {
+    use tinymusic_core::model::Track;
+
+    let st = state("favcheck").await;
+    // 收藏存在「喜欢」目录里，id 是那边的副本 key：
+    // 歌单里那首用原始 key 查不到，要按歌名 + 歌手认出来。
+    st.storage
+        .add_favorite(&Track {
+            provider: "s3".into(),
+            id: "TinyMusic/喜欢/Artist - Song.mp3".into(),
+            title: "Song".into(),
+            artist: "Artist".into(),
+            ..Track::default()
+        })
+        .unwrap();
+
+    let ok = dispatch::dispatch(
+        &st,
+        "favorite_check",
+        json!({
+            "provider": "s3",
+            "id": "TinyMusic/Test/Artist - Song.mp3",
+            "title": "Song",
+            "artist": "Artist",
+        }),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(ok, json!(true), "同一首歌不能因为 key 不同就显示成未收藏");
+
+    let no = dispatch::dispatch(
+        &st,
+        "favorite_check",
+        json!({
+            "provider": "s3",
+            "id": "TinyMusic/Test/Artist - Other.mp3",
+            "title": "Other",
+            "artist": "Artist",
+        }),
+        None,
+        None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(no, json!(false));
+}
+

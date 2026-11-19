@@ -8,6 +8,7 @@
   import { go, router } from '../lib/router.svelte';
   import { showToast } from '../lib/toast.svelte';
   import { loginNetease, syncNeteaseSession } from '../lib/neteaseLogin';
+  import { t } from '../lib/i18n.svelte';
 
   // 平台列表：所有平台都是一个「登录」按钮，点了各自打开网页登录窗口
   const PLATFORMS = [
@@ -99,7 +100,7 @@
     neErr = '';
     try {
       const s = await loginNetease();
-      showToast(`已登录网易云：${s.nickname || s.user_id}`);
+      showToast(t('已登录网易云：{name}', { name: s.nickname || s.user_id }));
     } catch (e) {
       neErr = String(e);
     } finally {
@@ -112,7 +113,7 @@
     clearNetease();
     // 登出后「推荐」会从侧边栏消失，停在那一页就成了无入口的死页面
     if (router.route.name === 'recommend') go({ name: 'search' });
-    showToast('已登出网易云');
+    showToast(t('已登出网易云'));
   }
 
   function openNeteasePlaylists() {
@@ -139,7 +140,7 @@
 </script>
 
 <div class="page">
-  <h1>账号</h1>
+  <h1>{t('账号')}</h1>
 
   {#if err}<ErrorNotice text={err} />{/if}
 
@@ -152,17 +153,17 @@
         class:clickable={!!account.uid}
         role={account.uid ? 'button' : undefined}
         tabindex={account.uid ? 0 : undefined}
-        aria-label={p.name}
-        title={account.uid ? '查看账号歌单' : undefined}
+        aria-label={t(p.name)}
+        title={account.uid ? t('查看账号歌单') : undefined}
         onclick={() => account.uid && go({ name: 'accountplaylists' })}
         onkeydown={(e) =>
           onCardKey(e, !!account.uid, () => go({ name: 'accountplaylists' }))}
       >
         <span class="acct-logo">
-          <img src={p.logo} alt={p.name} />
+          <img src={p.logo} alt={t(p.name)} />
         </span>
         {#if account.uid}
-          <button class="mini" onclick={(e) => { e.stopPropagation(); logout(); }}>登出</button>
+          <button class="mini" onclick={(e) => { e.stopPropagation(); logout(); }}>{t('登出')}</button>
         {:else}
           <button
             class="mini primary"
@@ -171,11 +172,11 @@
           >
             {#if loginBusy}
               <span class="spin"><HugeiconsIcon icon={icons.loading} size={ICON_SIZE.inline} /></span>
-              正在打开…
+              {t('正在打开…')}
             {:else if webLogging}
-              等待登录…
+              {t('等待登录…')}
             {:else}
-              登录
+              {t('登录')}
             {/if}
           </button>
         {/if}
@@ -188,29 +189,29 @@
       class:clickable={!!account.netease.uid}
       role={account.netease.uid ? 'button' : undefined}
       tabindex={account.netease.uid ? 0 : undefined}
-      aria-label="网易云音乐"
-      title={account.netease.uid ? '查看每日推荐' : undefined}
+      aria-label={t('网易云音乐')}
+      title={account.netease.uid ? t('查看每日推荐') : undefined}
       onclick={openNeteasePlaylists}
       onkeydown={(e) => onCardKey(e, !!account.netease.uid, openNeteasePlaylists)}
     >
       <span class="acct-logo wordmark">
-        <img src="/netease-logo.png" alt="网易云音乐" />
+        <img src="/netease-logo.png" alt={t('网易云音乐')} />
       </span>
       {#if account.netease.uid}
         <span class="acct-name">{account.netease.nickname || account.netease.uid}</span>
-        <button class="mini" onclick={(e) => { e.stopPropagation(); neteaseLogout(); }}>登出</button>
+        <button class="mini" onclick={(e) => { e.stopPropagation(); neteaseLogout(); }}>{t('登出')}</button>
       {:else}
         <button
           class="mini primary"
           onclick={(e) => { e.stopPropagation(); neteaseLogin(); }}
           disabled={neBusy}
-          title="在应用内打开网易云网页完成登录"
+          title={t('在应用内打开网易云网页完成登录')}
         >
           {#if neBusy}
             <span class="spin"><HugeiconsIcon icon={icons.loading} size={ICON_SIZE.inline} /></span>
-            等待登录…
+            {t('等待登录…')}
           {:else}
-            登录
+            {t('登录')}
           {/if}
         </button>
       {/if}

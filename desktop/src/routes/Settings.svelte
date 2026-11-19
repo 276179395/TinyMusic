@@ -7,7 +7,7 @@
   import { refreshAppCfg } from '../lib/config.svelte';
   import { setPreferredQuality } from '../lib/player.svelte';
   import { theme, setTheme, type ThemeMode } from '../lib/theme.svelte';
-  import { glass, oklchSupported, setGlassSolid } from '../lib/glass.svelte';
+  import { glass, setGlassEnabled } from '../lib/glass.svelte';
   import { getVersion } from '@tauri-apps/api/app';
   import { check } from '@tauri-apps/plugin-updater';
   import ProgressBar from '../components/ProgressBar.svelte';
@@ -23,6 +23,7 @@
     setEqualizerEnabled
   } from '../lib/equalizer.svelte';
   import { showToast } from '../lib/toast.svelte';
+  import { t, i18n, setLanguage, type LanguageSetting } from '../lib/i18n.svelte';
 
   /** 关掉动画就别展开收起，直接跳 */
   const REDUCE_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -48,9 +49,11 @@
     try {
       const u = await check();
       setPendingUpdate(u ?? null);
-      updMsg = u ? `发现新版本 ${u.version}` : '已经是最新版本';
+      updMsg = u
+        ? t('发现新版本 {version}', { version: u.version })
+        : t('已经是最新版本');
     } catch (e) {
-      updErr = `检查失败：${e}`;
+      updErr = t('检查失败：{err}', { err: String(e) });
     } finally {
       updBusy = false;
     }
@@ -75,10 +78,10 @@
           progress = 100;
         }
       });
-      updMsg = '安装完成，正在重启…';
+      updMsg = t('安装完成，正在重启…');
       await relaunch();
     } catch (e) {
-      updErr = `更新失败：${e}`;
+      updErr = t('更新失败：{err}', { err: String(e) });
       updBusy = false;
     }
   }
@@ -141,7 +144,7 @@
       const picked = await openDialog({
         directory: true,
         multiple: false,
-        title: '选择下载目录',
+        title: t('选择下载目录'),
         defaultPath: s.download_dir || undefined
       });
       if (typeof picked === 'string' && picked) {
@@ -184,6 +187,12 @@
     { v: 'dark', label: '深色' }
   ];
 
+  const languageOptions: { v: LanguageSetting; label: string }[] = [
+    { v: 'auto', label: '跟随系统' },
+    { v: 'zh', label: '简体中文' },
+    { v: 'en', label: 'English' }
+  ];
+
   const DEFAULT_QUALITIES: { v: Quality; label: string }[] = [
     { v: 'standard', label: '标准 128k' },
     { v: 'super', label: '高品质 320k' },
@@ -195,9 +204,10 @@
 
   const qualityOptions = $derived(
     caps.length
-      ? caps.map((c) => ({ v: c.value, label: c.label, disabled: !c.available }))
+      ? caps.map((c) => ({ v: c.value, label: t(c.label), disabled: !c.available }))
       : DEFAULT_QUALITIES.map((c) => ({
           ...c,
+          label: t(c.label),
           disabled: c.v === 'hires' || c.v === 'atmos' || c.v === 'master',
         }))
   );
@@ -205,57 +215,83 @@
 
 <div class="page settings-page">
   <div class="st-head">
-    <h1>设置</h1>
-    {#if savedHint}<span class="st-saved">已保存</span>{/if}
+    <h1>{t('设置')}</h1>
+    {#if savedHint}<span class="st-saved">{t('已保存')}</span>{/if}
   </div>
 
   {#if err}<ErrorNotice text={err} />{/if}
 
   <section class="st-section">
-    <div class="st-section-title">外观</div>
+    <div class="st-section-title">{t('外观')}</div>
     <div class="st-card">
       <div class="st-row">
-        <div class="st-label">主题</div>
-        <div class="st-seg" role="group" aria-label="主题">
-          {#each themeOptions as t (t.v)}
+        <div class="st-label">{t('主题')}</div>
+        <div class="st-seg" role="group" aria-label={t('主题')}>
+          {#each themeOptions as opt (opt.v)}
             <button
               type="button"
-              class:on={theme.mode === t.v}
-              aria-pressed={theme.mode === t.v}
-              onclick={() => setTheme(t.v)}
+              class:on={theme.mode === opt.v}
+              aria-pressed={theme.mode === opt.v}
+              onclick={() => setTheme(opt.v)}
             >
-              {t.label}
+              {t(opt.label)}
             </button>
           {/each}
         </div>
       </div>
 
       <div class="st-row">
+        <div class="st-label">{t('语言')}</div>
+        <select
+          class="st-select"
+          aria-label={t('语言')}
+          value={i18n.setting}
+          onchange={(e) => setLanguage(e.currentTarget.value as LanguageSetting)}
+        >
+          {#each languageOptions as opt (opt.v)}
+            <option value={opt.v}>{t(opt.label)}</option>
+          {/each}
+        </select>
+      </div>
+
+      <div class="st-row">
         <div class="st-label">
-          玻璃材质
+          {t('玻璃材质')}
           <span class="st-desc">
             {#if glass.forced}
-              当前系统的 WebView 不支持毛玻璃，已改用实色
-            {:else if glass.solid}
-              已关闭 · 卡片、播放条与歌词页改用实色
-            {:else if !oklchSupported}
-              已开启 · 当前引擎不认 oklch()，颜色用 sRGB 兜底
+              {t('当前系统的 WebView 不支持毛玻璃，已改用边框材质')}
+            {:else if glass.mode === 'flat' && glass.reason === 'system'}
+              {t('系统版本较低{ver}，已改用边框材质', {
+                ver: glass.osVersion
+                  ? i18n.lang === 'zh'
+                    ? `（macOS ${glass.osVersion}）`
+                    : ` (macOS ${glass.osVersion})`
+                  : ''
+              })}
+            {:else if glass.mode === 'flat' && glass.reason === 'reduced'}
+              {t('系统要求减少透明，已改用边框材质')}
+            {:else if glass.mode === 'flat'}
+              {t('已关闭 · 卡片与浮层改用边框材质')}
             {:else}
-              已开启 · 卡片、播放条与歌词页是一层毛玻璃
+              {t('已开启 · 卡片、播放条与歌词页是一层毛玻璃')}
             {/if}
           </span>
         </div>
-        <span class="st-value">{glass.solid ? '已关闭' : '已开启'}</span>
+        <span class="st-value">{glass.mode === 'glass' ? t('已开启') : t('已关闭')}</span>
         <label
           class="st-switch"
-          title={glass.forced ? '当前系统不支持毛玻璃' : glass.solid ? '开启毛玻璃' : '关闭毛玻璃'}
+          title={glass.forced
+            ? t('当前系统不支持毛玻璃')
+            : glass.mode === 'glass'
+              ? t('关闭毛玻璃（改用边框材质）')
+              : t('开启毛玻璃')}
         >
           <input
             type="checkbox"
-            aria-label="开启毛玻璃"
-            checked={!glass.solid}
+            aria-label={t('开启毛玻璃')}
+            checked={glass.mode === 'glass'}
             disabled={glass.forced}
-            onchange={(e) => setGlassSolid(!e.currentTarget.checked)}
+            onchange={(e) => setGlassEnabled(e.currentTarget.checked)}
           />
           <span class="st-switch-track" aria-hidden="true"></span>
         </label>
@@ -264,61 +300,68 @@
   </section>
 
   <section class="st-section">
-    <div class="st-section-title">音效</div>
+    <div class="st-section-title">{t('音效')}</div>
     <div class="st-card">
       <div class="st-row">
         <div class="st-label">
-          均衡器
+          {t('均衡器')}
           <span class="st-desc">
             {#if equalizer.enabled}
-              已开启 · 当前预设：{currentPresetName()} · 10 段图形均衡
+              {t('已开启 · 当前预设：{preset} · 10 段图形均衡', {
+                preset: t(currentPresetName())
+              })}
             {:else}
-              已关闭 · 10 段图形均衡，内置 {EQ_PRESETS.length} 种预设
+              {t('已关闭 · 10 段图形均衡，内置 {n} 种预设', { n: EQ_PRESETS.length })}
             {/if}
           </span>
         </div>
-        <span class="st-value">{equalizer.enabled ? '已开启' : '已关闭'}</span>
-        <label class="st-switch" title={equalizer.enabled ? '关闭均衡器' : '开启均衡器'}>
+        <span class="st-value">{equalizer.enabled ? t('已开启') : t('已关闭')}</span>
+        <label class="st-switch" title={equalizer.enabled ? t('关闭均衡器') : t('开启均衡器')}>
           <input
             type="checkbox"
-            aria-label="开启均衡器"
+            aria-label={t('开启均衡器')}
             checked={equalizer.enabled}
             onchange={(e) => {
               const input = e.currentTarget;
               if (!setEqualizerEnabled(input.checked) && input.checked) {
                 input.checked = false;
-                showToast('当前系统不支持均衡器，已关闭');
+                showToast(t('当前系统不支持均衡器，已关闭'));
               }
             }}
           />
           <span class="st-switch-track" aria-hidden="true"></span>
         </label>
-        <button class="st-btn" onclick={openEqualizer}>调整…</button>
+        <button class="st-btn" onclick={openEqualizer}>{t('调整…')}</button>
       </div>
     </div>
   </section>
 
   <section class="st-section">
-    <div class="st-section-title">下载</div>
+    <div class="st-section-title">{t('下载')}</div>
     <div class="st-card">
       <div class="st-row">
-        <div class="st-label">下载目录</div>
+        <div class="st-label">{t('下载目录')}</div>
         <div class="st-control st-grow">
           <input
             class="st-input"
             bind:value={s.download_dir}
-            aria-label="下载目录"
+            aria-label={t('下载目录')}
             oninput={scheduleSave}
             spellcheck="false"
             placeholder="~/Music/TinyMusic"
           />
-          <button class="st-btn" onclick={pickDir} title="选择下载目录">选择…</button>
+          <button class="st-btn" onclick={pickDir} title={t('选择下载目录')}>{t('选择…')}</button>
         </div>
       </div>
 
       <div class="st-row">
-        <div class="st-label">默认音质</div>
-        <select class="st-select" aria-label="默认音质" bind:value={s.default_quality} onchange={saveNow}>
+        <div class="st-label">{t('默认音质')}</div>
+        <select
+          class="st-select"
+          aria-label={t('默认音质')}
+          bind:value={s.default_quality}
+          onchange={saveNow}
+        >
           {#each qualityOptions as q (q.v)}
             <option value={q.v} disabled={q.disabled}>{q.label}</option>
           {/each}
@@ -326,10 +369,10 @@
       </div>
 
       <div class="st-row">
-        <div class="st-label">并发下载数</div>
+        <div class="st-label">{t('并发下载数')}</div>
         <select
           class="st-select"
-          aria-label="并发下载数"
+          aria-label={t('并发下载数')}
           value={s.concurrency}
           onchange={(e) => {
             s.concurrency = Number(e.currentTarget.value);
@@ -345,17 +388,17 @@
   </section>
 
   <section class="st-section">
-    <div class="st-section-title">窗口</div>
+    <div class="st-section-title">{t('窗口')}</div>
     <div class="st-card">
       <div class="st-row">
         <div class="st-label">
-          关闭窗口时收进托盘
-          <span class="st-desc">继续在后台播放</span>
+          {t('关闭窗口时收进托盘')}
+          <span class="st-desc">{t('继续在后台播放')}</span>
         </div>
         <label class="st-switch">
           <input
             type="checkbox"
-            aria-label="关闭窗口时收进托盘"
+            aria-label={t('关闭窗口时收进托盘')}
             bind:checked={s.close_to_tray}
             onchange={saveNow}
           />
@@ -366,41 +409,40 @@
   </section>
 
   <section class="st-section">
-    <div class="st-section-title">网易云（推荐与歌单）</div>
+    <div class="st-section-title">{t('网易云（推荐与歌单）')}</div>
     <div class="st-card">
       <div class="st-row">
         <div class="st-label">
-          播放音源
+          {t('播放音源')}
           <span class="st-desc">
-            目录（每日推荐/歌单）来自网易云；音源默认先试网易云直链，失败再按
-            「标题 + 歌手 + 时长」到酷我匹配同一首
+            {t('目录（每日推荐/歌单）来自网易云；音源默认先试网易云直链，失败再按「标题 + 歌手 + 时长」到酷我匹配同一首')}
           </span>
         </div>
         <select
           class="st-select"
-          aria-label="网易云播放音源"
+          aria-label={t('网易云播放音源')}
           bind:value={s.netease_play_mode}
           onchange={saveNow}
         >
-          <option value="netease_first">网易云优先，酷我兜底</option>
-          <option value="kuwo_only">只用酷我音源</option>
+          <option value="netease_first">{t('网易云优先，酷我兜底')}</option>
+          <option value="kuwo_only">{t('只用酷我音源')}</option>
         </select>
       </div>
     </div>
   </section>
 
   <section class="st-section">
-    <div class="st-section-title">网盘</div>
+    <div class="st-section-title">{t('网盘')}</div>
     <div class="st-card">
       <div class="st-row">
         <div class="st-label">
-          启用网盘
-          <span class="st-desc">S3 兼容存储 · 喜欢、歌单和下载备份</span>
+          {t('启用网盘')}
+          <span class="st-desc">{t('S3 兼容存储 · 喜欢、歌单和下载备份')}</span>
         </div>
         <label class="st-switch">
           <input
             type="checkbox"
-            aria-label="启用网盘"
+            aria-label={t('启用网盘')}
             bind:checked={s.s3_enabled}
             onchange={saveNow}
           />
@@ -447,11 +489,11 @@
           </div>
 
           <div class="st-row">
-            <div class="st-label">前缀目录</div>
+            <div class="st-label">{t('前缀目录')}</div>
             <input
               class="st-input"
               bind:value={s.s3_prefix}
-              aria-label="S3 前缀目录"
+              aria-label={t('S3 前缀目录')}
               oninput={scheduleSave}
               placeholder="TinyMusic"
               spellcheck="false"
@@ -483,11 +525,11 @@
           </div>
 
           <div class="st-row">
-            <div class="st-label">Path-Style 寻址</div>
+            <div class="st-label">{t('Path-Style 寻址')}</div>
             <label class="st-switch">
               <input
                 type="checkbox"
-                aria-label="Path-Style 寻址"
+                aria-label={t('Path-Style 寻址')}
                 bind:checked={s.s3_path_style}
                 onchange={saveNow}
               />
@@ -496,9 +538,9 @@
           </div>
 
           <div class="st-row">
-            <div class="st-label">连接</div>
+            <div class="st-label">{t('连接')}</div>
             <button class="st-btn" onclick={testS3} disabled={s3Busy || !s.s3_enabled}>
-              {s3Busy ? '连接中…' : '测试连接'}
+              {s3Busy ? t('连接中…') : t('测试连接')}
             </button>
           </div>
 
@@ -513,33 +555,41 @@
   </section>
 
   <section class="st-section">
-    <div class="st-section-title">关于</div>
+    <div class="st-section-title">{t('关于')}</div>
     <div class="st-card">
       <div class="st-row">
-        <div class="st-label">当前版本</div>
+        <div class="st-label">{t('当前版本')}</div>
         <span class="st-value">v{appVersion || '—'}</span>
-        {#if pending}<span class="st-value new">可更新到 v{pending.version}</span>{/if}
+        {#if pending}
+          <span class="st-value new">{t('可更新到 v{version}', { version: pending.version })}</span>
+        {/if}
       </div>
       <div class="st-row">
         <div class="st-label">
-          软件更新
+          {t('软件更新')}
           {#if pending}
-            <span class="st-desc">发现新版本 v{pending.version}，装完会自动重启</span>
+            <span class="st-desc">
+              {t('发现新版本 v{version}，装完会自动重启', { version: pending.version })}
+            </span>
           {:else if updMsg}
             <span class="st-desc">{updMsg}</span>
           {/if}
         </div>
         <div class="st-control">
           {#if pending}
-            <button class="st-btn primary" onclick={doUpdate} disabled={updBusy}>下载并安装</button>
+            <button class="st-btn primary" onclick={doUpdate} disabled={updBusy}>
+              {t('下载并安装')}
+            </button>
           {/if}
           <button class="st-btn" onclick={checkUpdate} disabled={updBusy}>
-            {updBusy && !pending ? '检查中…' : '检查更新'}
+            {updBusy && !pending ? t('检查中…') : t('检查更新')}
           </button>
         </div>
       </div>
       {#if updBusy && pending}
-        <div class="st-status"><ProgressBar value={progress / 100} label="正在下载更新…" /></div>
+        <div class="st-status">
+          <ProgressBar value={progress / 100} label={t('正在下载更新…')} />
+        </div>
       {/if}
       {#if updErr}<ErrorNotice text={updErr} compact />{/if}
     </div>

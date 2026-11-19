@@ -2,6 +2,7 @@
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import { icons } from '../lib/icons';
   import { copyText } from '../lib/toast.svelte';
+  import { t, tc } from '../lib/i18n.svelte';
 
   /**
    * 错误提示：自动换行，长报错可「展开」看全文，文字可选中；
@@ -24,7 +25,7 @@
   });
 
   async function copy() {
-    await copyText(text.trim(), '已复制错误信息');
+    await copyText(text.trim(), t('已复制错误信息'));
   }
 </script>
 
@@ -36,20 +37,20 @@
         class="errcopy"
         type="button"
         onclick={() => (expanded = !expanded)}
-        title={expanded ? '收起错误信息' : '展开完整错误信息'}
+        title={expanded ? t('收起错误信息') : t('展开完整错误信息')}
       >
-        {expanded ? '收起' : '展开'}
+        {expanded ? tc('error', '收起') : tc('error', '展开')}
       </button>
     {/if}
     <button
       class="errcopy"
       type="button"
       onclick={copy}
-      title="复制完整错误信息"
-      aria-label="复制完整错误信息"
+      title={t('复制完整错误信息')}
+      aria-label={t('复制完整错误信息')}
     >
       <HugeiconsIcon icon={icons.copy} size={12} />
-      <span>复制</span>
+      <span>{t('复制')}</span>
     </button>
   </div>
 </div>

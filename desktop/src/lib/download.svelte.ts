@@ -7,6 +7,7 @@
  */
 import { api, isBlocked, type Quality, type S3PlaylistInfo, type Track } from './api';
 import { player } from './player.svelte';
+import { t } from './i18n.svelte';
 
 export type DownloadTarget = 'local' | 's3';
 
@@ -27,7 +28,7 @@ export const downloadUi = $state({
   playlistLoading: false,
 });
 
-const keyOf = (t: Track) => `${t.provider}:${t.id}`;
+const keyOf = (track: Track) => `${track.provider}:${track.id}`;
 
 export function isPending(track: Track): boolean {
   return downloadUi.active.includes(keyOf(track));
@@ -70,7 +71,7 @@ export async function loadPlaylists() {
 
 /** 下载入口：按设置决定「直接下载」还是「弹窗选择」 */
 export async function requestDownload(tracks: Track[]) {
-  const list = tracks.filter((t) => t && !isBlocked(t.availability));
+  const list = tracks.filter((track) => track && !isBlocked(track.availability));
   if (!list.length) return;
 
   let s3Enabled = false;
@@ -109,11 +110,11 @@ export async function runLocal(list: Track[], onProgress?: (msg: string) => void
 
   try {
     if (list.length === 1) {
-      const t = list[0];
-      markActive(t, true);
-      downloadUi.progress = '正在下载…';
-      onProgress?.('正在下载…');
-      await api.downloadStart(t, q, (p) => {
+      const track = list[0];
+      markActive(track, true);
+      downloadUi.progress = t('正在下载…');
+      onProgress?.(t('正在下载…'));
+      await api.downloadStart(track, q, (p) => {
         if (p.total && p.total > 0) {
           downloadUi.progressPct = Math.min(1, p.downloaded / p.total);
           onProgress?.(`${Math.round((p.downloaded / p.total) * 100)}%`);
@@ -121,33 +122,35 @@ export async function runLocal(list: Track[], onProgress?: (msg: string) => void
       });
       downloadUi.progress = '';
       downloadUi.progressPct = null;
-      downloadUi.doneMsg = '已加入下载队列（音频 + 歌词 + 封面）';
-      onProgress?.('已加入下载');
+      downloadUi.doneMsg = t('已加入下载队列（音频 + 歌词 + 封面）');
+      onProgress?.(t('已加入下载'));
     } else {
-      downloadUi.progress = '准备中…';
-      onProgress?.('准备中…');
+      downloadUi.progress = t('准备中…');
+      onProgress?.(t('准备中…'));
       const ids = await api.downloadBatch(list, q, (p) => {
         if (
           p.total &&
           p.task_id.startsWith('batch-') &&
           !p.task_id.startsWith('batch-done')
         ) {
-          downloadUi.progress = `第 ${p.downloaded + 1} / ${p.total} 首`;
+          downloadUi.progress = t('第 {i} / {n} 首', { i: p.downloaded + 1, n: p.total });
           downloadUi.progressPct = Math.min(1, p.downloaded / p.total);
           onProgress?.(downloadUi.progress);
         }
       });
       downloadUi.progress = '';
       downloadUi.progressPct = null;
-      downloadUi.doneMsg = `已下载 ${ids.length} 首（音频 + 歌词 + 封面）`;
-      onProgress?.(`已下载 ${ids.length} 首`);
+      downloadUi.doneMsg = t('已下载 {n} 首（音频 + 歌词 + 封面）', { n: ids.length });
+      onProgress?.(t('已下载 {n} 首', { n: ids.length }));
     }
   } catch (e) {
     const msg = String(e);
-    downloadUi.err = msg.includes('unavailable') ? '部分曲目不可下载（服务端没给完整音频）' : msg;
+    downloadUi.err = msg.includes('unavailable')
+      ? t('部分曲目不可下载（服务端没给完整音频）')
+      : msg;
     downloadUi.progress = '';
     downloadUi.progressPct = null;
-    onProgress?.('下载失败');
+    onProgress?.(t('下载失败'));
   } finally {
     if (list.length === 1) markActive(list[0], false);
     downloadUi.busy = false;
@@ -170,8 +173,8 @@ export async function runS3(list: Track[], playlist: string, onProgress?: (msg: 
   try {
     if (list.length === 1) {
       markActive(list[0], true);
-      downloadUi.progress = '正在上传…';
-      onProgress?.('正在上传…');
+      downloadUi.progress = t('正在上传…');
+      onProgress?.(t('正在上传…'));
       await api.s3Download(list[0], q, pl, (p) => {
         if (p.total && p.total > 0) {
           downloadUi.progressPct = Math.min(1, p.downloaded / p.total);
@@ -180,33 +183,33 @@ export async function runS3(list: Track[], playlist: string, onProgress?: (msg: 
       });
       downloadUi.progress = '';
       downloadUi.progressPct = null;
-      downloadUi.doneMsg = '已保存到网盘（音频 + 歌词 + 封面）';
-      onProgress?.('已上传');
+      downloadUi.doneMsg = t('已保存到网盘（音频 + 歌词 + 封面）');
+      onProgress?.(t('已上传'));
     } else {
-      downloadUi.progress = '准备中…';
-      onProgress?.('准备中…');
+      downloadUi.progress = t('准备中…');
+      onProgress?.(t('准备中…'));
       const keys = await api.s3DownloadBatch(list, q, pl, (p) => {
         if (
           p.total &&
           p.task_id.startsWith('batch-') &&
           !p.task_id.startsWith('batch-done')
         ) {
-          downloadUi.progress = `第 ${p.downloaded + 1} / ${p.total} 首`;
+          downloadUi.progress = t('第 {i} / {n} 首', { i: p.downloaded + 1, n: p.total });
           downloadUi.progressPct = Math.min(1, p.downloaded / p.total);
           onProgress?.(downloadUi.progress);
         }
       });
       downloadUi.progress = '';
       downloadUi.progressPct = null;
-      downloadUi.doneMsg = `已上传 ${keys.length} 首到网盘`;
-      onProgress?.(`已上传 ${keys.length} 首`);
+      downloadUi.doneMsg = t('已上传 {n} 首到网盘', { n: keys.length });
+      onProgress?.(t('已上传 {n} 首', { n: keys.length }));
       void loadPlaylists();
     }
   } catch (e) {
     downloadUi.err = String(e);
     downloadUi.progress = '';
     downloadUi.progressPct = null;
-    onProgress?.('上传失败');
+    onProgress?.(t('上传失败'));
   } finally {
     if (list.length === 1) markActive(list[0], false);
     downloadUi.busy = false;

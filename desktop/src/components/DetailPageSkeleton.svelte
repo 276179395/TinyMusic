@@ -1,5 +1,6 @@
 <script lang="ts">
   import TrackListSkeleton from './TrackListSkeleton.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   /** 专辑 / 歌单详情页：头部（封面 + 信息）+ 批量操作 + 曲目列表 */
   let {
@@ -11,7 +12,7 @@
   } = $props();
 </script>
 
-<div class="sk-block" role="status" aria-label="加载中">
+<div class="sk-block" role="status" aria-label={t('加载中')}>
   <div class="head sk-detail-head">
     <span class="sk sk-detail-cover"></span>
     <div class="info sk-detail-info">

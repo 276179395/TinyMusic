@@ -11,6 +11,7 @@
     dismissAllFailures,
   } from '../lib/downloadFailures.svelte';
   import ErrorNotice from './ErrorNotice.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   const items = $derived(failureUi.items);
   const busy = $derived(anyBusy());
@@ -22,11 +23,12 @@
   };
 
   function partLabel(part: string): string {
-    return PART_LABEL[part] ?? part;
+    const label = PART_LABEL[part];
+    return label ? t(label) : part;
   }
 
   function targetLabel(f: FailedDownload): string {
-    return f.target === 's3' ? '网盘' : '本地';
+    return f.target === 's3' ? t('网盘') : t('本地');
   }
 
   /** 一条记录里第一个错误，够用来判断原因 */
@@ -58,15 +60,15 @@
       if (e.target === e.currentTarget) close();
     }}
   >
-    <div class="modal" role="dialog" aria-modal="true" aria-label="下载失败的歌曲">
+    <div class="modal" role="dialog" aria-modal="true" aria-label={t('下载失败的歌曲')}>
       <div class="modal-head">
         <div>
-          <h2>{items.length} 首没下完整</h2>
+          <h2>{t('{n} 首没下完整', { n: items.length })}</h2>
           <p class="hint">
-            音频 / 歌词 / 封面每项都自动重试过 5 次。可以只补失败的部分，成功后这条记录会自动消失。
+            {t('音频 / 歌词 / 封面每项都自动重试过 5 次。可以只补失败的部分，成功后这条记录会自动消失。')}
           </p>
         </div>
-        <button class="icon" onclick={close} aria-label="关闭" disabled={busy}>
+        <button class="icon" onclick={close} aria-label={t('关闭')} disabled={busy}>
           <HugeiconsIcon icon={icons.close} size={ICON_SIZE.inline} />
         </button>
       </div>
@@ -100,16 +102,16 @@
                 class="mini"
                 onclick={() => dismissFailure(f.id)}
                 disabled={busy}
-                title="不再提示，保留已经下好的部分"
+                title={t('不再提示，保留已经下好的部分')}
               >
-                忽略
+                {t('忽略')}
               </button>
               <button
                 class="mini primary"
                 onclick={() => retryFailures([f.id])}
                 disabled={busy}
               >
-                {isBusy(f) ? '重试中…' : '重试'}
+                {isBusy(f) ? t('重试中…') : t('重试')}
               </button>
             </div>
           </div>
@@ -119,18 +121,18 @@
       {#if failureUi.error}
         <div class="fail-msg"><ErrorNotice text={failureUi.error} compact /></div>
       {:else if busy}
-        <div class="ok small fail-msg">正在重试，失败的部分会在这里更新…</div>
+        <div class="ok small fail-msg">{t('正在重试，失败的部分会在这里更新…')}</div>
       {/if}
 
       <div class="modal-actions">
-        <button class="mini" onclick={dismissAllFailures} disabled={busy}>全部忽略</button>
+        <button class="mini" onclick={dismissAllFailures} disabled={busy}>{t('全部忽略')}</button>
         <button
           class="primary"
           onclick={() => retryFailures(items.map((f) => f.id))}
           disabled={busy}
         >
           <HugeiconsIcon icon={icons.refresh} size={ICON_SIZE.inline} />
-          {busy ? '重试中…' : '全部重试'}
+          {busy ? t('重试中…') : t('全部重试')}
         </button>
       </div>
     </div>

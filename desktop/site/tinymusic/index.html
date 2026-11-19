@@ -1,36 +1,286 @@
 <!doctype html>
 <html lang="zh-Hans">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>TinyMusic iOS</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>TinyMusic iOS — 只播放你自己存储里的歌</title>
+<meta name="description" content="TinyMusic iOS 是一个只播放你自己 S3 兼容存储内容的本地播放器：S3 浏览、离线缓存、收藏、10 段 EQ、iCloud 配置同步。没有曲库、没有账号、没有广告。" />
+<meta name="theme-color" content="#0e0f10" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#f6f6f7" media="(prefers-color-scheme: light)" />
+<link rel="icon" href="../assets/icon.png" type="image/png" />
+<link rel="canonical" href="https://redcarl.github.io/TinyMusic/tinymusic/" />
+
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://redcarl.github.io/TinyMusic/tinymusic/" />
+<meta property="og:title" content="TinyMusic iOS — 只播放你自己存储里的歌" />
+<meta property="og:description" content="S3 浏览、离线缓存、收藏、10 段 EQ、iCloud 配置同步。没有曲库、没有账号、没有广告。" />
+<meta property="og:image" content="https://redcarl.github.io/TinyMusic/assets/icon.png" />
+
 <style>
-:root { color-scheme: light dark; --fg:#17171a; --muted:#666; --bg:#fafafa; --card:#fff; --line:#e5e5e5; --accent:#ff3b30; }
-@media (prefers-color-scheme: dark) { :root { --fg:#f2f2f2; --muted:#a0a0a0; --bg:#111; --card:#1b1b1d; --line:#2c2c2e; --accent:#ff453a; } }
-body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.7 -apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif; }
-main { max-width:640px; margin:0 auto; padding:72px 24px; }
-h1 { font-size:34px; letter-spacing:-0.03em; margin:0 0 8px; }
-p { color:var(--muted); }
-.card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:24px; margin:24px 0; }
-a { color:var(--accent); }
-nav { display:flex; gap:16px; flex-wrap:wrap; font-size:14px; }
-nav a { color:var(--muted); text-decoration:none; }
+:root {
+  --bg: #0e0f10;
+  --fg: #f3f4f5;
+  --muted: #a4a6ab;
+  --faint: #7b7e84;
+  --line: rgba(255, 255, 255, 0.11);
+  --line-soft: rgba(255, 255, 255, 0.06);
+  --panel: rgba(255, 255, 255, 0.04);
+  --panel-hi: rgba(255, 255, 255, 0.07);
+  --brand: #6ee7b7;
+  --brand-ink: #04241a;
+  --brand-soft: rgba(110, 231, 183, 0.12);
+  --brand-line: rgba(110, 231, 183, 0.28);
+  --radius: 16px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f6f6f7;
+    --fg: #16171a;
+    --muted: #5b5d63;
+    --faint: #86888e;
+    --line: rgba(0, 0, 0, 0.12);
+    --line-soft: rgba(0, 0, 0, 0.07);
+    --panel: #ffffff;
+    --panel-hi: #fbfbfc;
+    --brand: #0d8f6b;
+    --brand-ink: #ffffff;
+    --brand-soft: rgba(13, 143, 107, 0.09);
+    --brand-line: rgba(13, 143, 107, 0.30);
+    color-scheme: light;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(1000px 620px at 12% -10%, rgba(110, 231, 183, 0.10), transparent 62%),
+    radial-gradient(820px 520px at 96% 6%, rgba(96, 165, 250, 0.06), transparent 66%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+@media (prefers-color-scheme: light) {
+  body {
+    background-image:
+      radial-gradient(1000px 620px at 12% -10%, rgba(13, 143, 107, 0.08), transparent 62%),
+      radial-gradient(820px 520px at 96% 6%, rgba(59, 130, 246, 0.06), transparent 66%);
+  }
+}
+
+a { color: var(--brand); text-decoration: none; }
+a:hover { text-decoration: underline; }
+img { max-width: 100%; height: auto; display: block; }
+
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; border-radius: 8px; }
+
+.doc { max-width: 720px; margin: 0 auto; padding: 0 24px 88px; }
+
+/* ---------- 顶栏 ---------- */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 76px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--fg); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.brand:hover { text-decoration: none; }
+.brand img { width: 26px; height: 26px; border-radius: 7px; background: #f3f4f5; box-shadow: 0 0 0 1px var(--line); }
+.nav-right { display: flex; align-items: center; gap: 14px; }
+.nav-link { font-size: 13.5px; color: var(--muted); }
+.nav-link:hover { color: var(--fg); text-decoration: none; }
+.lang { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.lang button {
+  appearance: none; border: 0; background: transparent; color: var(--muted);
+  font: inherit; font-size: 12.5px; padding: 4px 12px; cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.lang button:hover { color: var(--fg); }
+.lang button[aria-pressed="true"] { background: var(--panel); color: var(--fg); }
+
+/* ---------- 正文 ---------- */
+h1 { font-size: 32px; letter-spacing: -0.03em; line-height: 1.2; margin: 4px 0 10px; }
+h1 em { font-style: normal; color: var(--brand); }
+.updated, .lead { color: var(--faint); font-size: 14px; margin: 0 0 36px; }
+h2 { font-size: 18px; letter-spacing: -0.01em; margin: 40px 0 12px; }
+p, li { color: var(--muted); font-size: 16px; }
+strong { color: var(--fg); font-weight: 600; }
+ul, ol { padding-left: 22px; }
+li + li { margin-top: 6px; }
+code {
+  font-family: var(--mono); font-size: 13.5px; background: var(--panel);
+  border: 1px solid var(--line-soft); border-radius: 6px; padding: 1px 6px;
+  color: var(--fg); word-break: break-word;
+}
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 24px; margin: 24px 0; }
+.card > :first-child { margin-top: 0; }
+.card > :last-child { margin-bottom: 0; }
+
+/* ---------- 介绍页首屏 ---------- */
+.eyebrow {
+  display: inline-block; margin: 4px 0 16px; padding: 4px 10px;
+  border: 1px solid var(--line); border-radius: 999px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 26px 0 8px; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  height: 46px; padding: 0 22px; border-radius: 12px; border: 1px solid transparent;
+  font-size: 15px; font-weight: 600; font-family: inherit; white-space: nowrap;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+.btn:hover { text-decoration: none; }
+.btn svg { width: 17px; height: 17px; }
+.btn-primary { background: var(--brand); color: var(--brand-ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28); }
+.btn-primary:hover { transform: translateY(-1px); }
+.btn-ghost { background: var(--panel); border-color: var(--line); color: var(--fg); }
+.btn-ghost:hover { background: var(--panel-hi); transform: translateY(-1px); }
+.ticks { list-style: none; padding: 0; margin: 0; }
+.ticks li { position: relative; padding-left: 22px; }
+.ticks li + li { margin-top: 8px; }
+.ticks li::before {
+  content: ""; position: absolute; left: 2px; top: 0.72em;
+  width: 7px; height: 7px; border-radius: 999px; background: var(--brand);
+}
+
+/* ---------- 页脚 ---------- */
+footer { margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--line-soft); color: var(--faint); font-size: 13px; }
+footer .row { display: flex; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+footer a { color: var(--muted); }
+footer a:hover { color: var(--fg); text-decoration: none; }
+
+[hidden] { display: none !important; }
+
+@media (max-width: 520px) {
+  .doc { padding: 0 20px 72px; }
+  .topbar { min-height: 60px; padding: 12px 0; flex-wrap: wrap; gap: 10px; }
+  h1 { font-size: 27px; }
+  .nav-right { gap: 10px; }
+  .actions .btn { flex: 1 1 100%; }
+}
 </style>
 </head>
+
 <body>
-<main>
-<h1>TinyMusic iOS</h1>
-<p>只播放你自己 S3 兼容存储的本地播放器。没有曲库、搜索、平台下载或登录。</p>
-<div class="card">
-<p>S3 网盘浏览 · AVPlayer 流式播放 · 指定歌曲/歌单离线缓存 · 收藏 · 10 段 EQ · iCloud 配置同步 · Liquid Glass。</p>
+<div class="doc">
+  <header class="topbar">
+      <a class="brand" href="../index.html">
+        <img src="../assets/icon.png" width="26" height="26" alt="" aria-hidden="true" />
+        TinyMusic
+      </a>
+      <div class="nav-right">
+        <a class="nav-link" href="../index.html"><span data-zh>桌面版</span><span data-en hidden>Desktop app</span></a>
+        <a class="nav-link" href="https://github.com/RedCarl/TinyMusic" target="_blank" rel="noopener">GitHub ↗</a>
+        <div class="lang" role="group" aria-label="Language / 语言">
+        <button type="button" data-set-lang="zh" aria-pressed="true">中文</button>
+        <button type="button" data-set-lang="en" aria-pressed="false">EN</button>
+      </div>
+      </div>
+    </header>
+
+<main id="top">
+    <p class="eyebrow">iOS 18+ · 1.0 · SwiftUI</p>
+
+    <h1><span data-zh>只播你<em>自己的</em>歌。</span><span data-en hidden>Plays <em>your own</em> music.</span></h1>
+
+    <p class="lead">
+      <span data-zh>TinyMusic iOS 是一个只播放你自己 S3 兼容存储内容的本地播放器。没有在线曲库、搜索、平台下载或账号登录。</span>
+      <span data-en hidden>TinyMusic for iOS is a local player that plays only what lives in your own S3-compatible storage. No online catalogue, no search, no platform downloads, no sign-in.</span>
+    </p>
+
+    <div class="actions">
+      <a class="btn btn-primary" href="support.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12h15"/><path d="m13.5 6 6 6-6 6"/></svg>
+        <span data-zh>第一次使用</span><span data-en hidden>Getting started</span>
+      </a>
+      <a class="btn btn-ghost" href="privacy.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.2 5 6v6c0 4.2 2.9 7.4 7 8.8 4.1-1.4 7-4.6 7-8.8V6l-7-2.8Z"/><path d="m9.2 12.1 2 2 3.6-3.9"/></svg>
+        <span data-zh>隐私政策</span><span data-en hidden>Privacy</span>
+      </a>
+      <a class="btn btn-ghost" href="https://github.com/RedCarl/TinyMusic" target="_blank" rel="noopener">
+        <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        <span data-zh>源代码</span><span data-en hidden>Source</span>
+      </a>
+    </div>
+
+    <div class="card">
+      <ul class="ticks">
+        <li><span data-zh>S3 兼容存储浏览：AWS S3、Cloudflare R2、MinIO 等。</span><span data-en hidden>S3-compatible browsing: AWS S3, Cloudflare R2, MinIO and friends.</span></li>
+        <li><span data-zh>AVPlayer 直连预签名 URL 流式播放，支持后台音频与锁屏控制。</span><span data-en hidden>Streaming through AVPlayer against presigned URLs, with background audio and lock-screen controls.</span></li>
+        <li><span data-zh>把指定歌曲或整张歌单离线缓存，断网也能听。</span><span data-en hidden>Cache individual tracks or a whole playlist for offline listening.</span></li>
+        <li><span data-zh>收藏写回桶里的 <code>favorites.json</code>；只读密钥时退回本机。</span><span data-en hidden>Favourites are written back to <code>favorites.json</code> in your bucket, and stay on-device with a read-only key.</span></li>
+        <li><span data-zh>10 段 EQ、12 套预设与前级增益。</span><span data-en hidden>10-band EQ with 12 presets and pre-gain.</span></li>
+        <li><span data-zh>iCloud 同步 S3 配置与 EQ；密钥走 iCloud 钥匙串。</span><span data-en hidden>iCloud syncs your S3 settings and EQ; keys ride in iCloud Keychain.</span></li>
+        <li><span data-zh>Liquid Glass 界面，浅色与深色跟随系统。</span><span data-en hidden>Liquid Glass interface that follows the system light and dark appearance.</span></li>
+      </ul>
+    </div>
+
+    <div class="card">
+      <p><span data-zh><strong>它不提供曲库。</strong>TinyMusic 不提供在线曲库、搜索、推荐、平台下载或账号登录，只播放你在自己的存储里已经拥有或有权使用的内容。</span><span data-en hidden><strong>There is no catalogue.</strong> TinyMusic offers no online library, search, recommendations, platform downloads or sign-in. It plays only what you already own or are allowed to use in your own storage.</span></p>
+      <p><span data-zh>播放、缓存、收藏和 iCloud 的边界写在 <a href="privacy.html">隐私政策</a> 与 <a href="terms.html">内容声明</a> 里；连接步骤和排错在 <a href="support.html">支持</a>。</span><span data-en hidden>How playback, caching, favourites and iCloud behave is covered by the <a href="privacy.html">privacy policy</a> and <a href="terms.html">terms</a>; setup and troubleshooting live under <a href="support.html">support</a>.</span></p>
+    </div>
+  </main>
+
+  <footer>
+    <div class="row">
+      <span>© 2026 TinyMusic · MIT License</span>
+      <span><a href="../index.html"><span data-zh>桌面版</span><span data-en hidden>Desktop</span></a> ·
+      <a href="./support.html"><span data-zh>支持</span><span data-en hidden>Support</span></a> ·
+      <a href="./privacy.html"><span data-zh>隐私政策</span><span data-en hidden>Privacy</span></a> ·
+      <a href="./terms.html"><span data-zh>内容声明</span><span data-en hidden>Terms</span></a> ·
+      <a href="https://github.com/RedCarl/TinyMusic/releases" target="_blank" rel="noopener">Releases</a></span>
+    </div>
+  </footer>
 </div>
-<nav>
-<a href="../">桌面版</a>
-<a href="support.html">支持</a>
-<a href="privacy.html">隐私政策</a>
-<a href="terms.html">内容声明</a>
-<a href="https://github.com/RedCarl/TinyMusic">GitHub</a>
-</nav>
-</main>
+
+<script>
+(function () {
+  var KEY = 'tinymusic-lang';
+  var TITLES = { zh: "TinyMusic iOS — 只播放你自己存储里的歌", en: "TinyMusic for iOS — play only what you store" };
+  var DESCS = { zh: "TinyMusic iOS 是一个只播放你自己 S3 兼容存储内容的本地播放器：S3 浏览、离线缓存、收藏、10 段 EQ、iCloud 配置同步。没有曲库、没有账号、没有广告。", en: "TinyMusic for iOS is a local player for your own S3-compatible storage: browsing, offline cache, favourites, a 10-band EQ and iCloud settings sync. No catalogue, no account, no ads." };
+  var OG_TITLES = { zh: "TinyMusic iOS — 只播放你自己存储里的歌", en: "TinyMusic for iOS — play only what you store" };
+  var OG_DESCS = { zh: "TinyMusic iOS 是一个只播放你自己 S3 兼容存储内容的本地播放器：S3 浏览、离线缓存、收藏、10 段 EQ、iCloud 配置同步。没有曲库、没有账号、没有广告。", en: "TinyMusic for iOS is a local player for your own S3-compatible storage: browsing, offline cache, favourites, a 10-band EQ and iCloud settings sync. No catalogue, no account, no ads." };
+  var buttons = document.querySelectorAll('[data-set-lang]');
+  var metaDesc = document.querySelector('meta[name="description"]');
+  var ogTitle = document.querySelector('meta[property="og:title"]');
+  var ogDesc = document.querySelector('meta[property="og:description"]');
+
+  function apply(lang) {
+    var isEN = lang === 'en';
+    document.documentElement.lang = isEN ? 'en' : 'zh-Hans';
+    document.querySelectorAll('[data-zh]').forEach(function (el) { el.hidden = isEN; });
+    document.querySelectorAll('[data-en]').forEach(function (el) { el.hidden = !isEN; });
+    buttons.forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-set-lang') === lang));
+    });
+    document.title = isEN ? TITLES.en : TITLES.zh;
+    if (metaDesc) metaDesc.setAttribute('content', isEN ? DESCS.en : DESCS.zh);
+    if (ogTitle) ogTitle.setAttribute('content', isEN ? OG_TITLES.en : OG_TITLES.zh);
+    if (ogDesc) ogDesc.setAttribute('content', isEN ? OG_DESCS.en : OG_DESCS.zh);
+  }
+
+  var saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) {}
+  var initial = (saved === 'en' || saved === 'zh')
+    ? saved
+    : ((navigator.language || 'zh').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en');
+  apply(initial);
+
+  buttons.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var lang = b.getAttribute('data-set-lang');
+      apply(lang);
+      try { localStorage.setItem(KEY, lang); } catch (e) {}
+    });
+  });
+})();
+</script>
 </body>
 </html>

@@ -22,9 +22,9 @@ struct S3SetupView: View {
                 if isOnboarding {
                     Section {
                         VStack(alignment: .leading, spacing: 10) {
-                            Label("只播放你自己的音乐", systemImage: "lock.shield")
+                            Label(L("只播放你自己的音乐"), systemImage: "lock.shield")
                                 .font(.headline)
-                            Text("TinyMusic 不提供在线曲库、搜索或平台下载。你只能播放自己拥有或有权使用的 S3 兼容存储中的音乐。")
+                            Text(L("TinyMusic 不提供在线曲库、搜索或平台下载。你只能播放自己拥有或有权使用的 S3 兼容存储中的音乐。"))
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
@@ -38,15 +38,15 @@ struct S3SetupView: View {
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
                         .accessibilityIdentifier("s3.endpoint")
-                    TextField("Region（R2 可填 auto）", text: $region)
+                    TextField(L("Region（R2 可填 auto）"), text: $region)
                         .textInputAutocapitalization(.never)
                     TextField("Bucket", text: $bucket)
                         .textInputAutocapitalization(.never)
-                    TextField("前缀目录（如 TinyMusic）", text: $prefix)
+                    TextField(L("前缀目录（如 TinyMusic）"), text: $prefix)
                         .textInputAutocapitalization(.never)
-                    Toggle("Path style 寻址", isOn: $pathStyle)
+                    Toggle(L("Path style 寻址"), isOn: $pathStyle)
                 } header: {
-                    Text("S3 连接")
+                    Text(L("S3 连接"))
                 }
 
                 Section {
@@ -55,7 +55,7 @@ struct S3SetupView: View {
                         .autocorrectionDisabled()
                     SecureField("Secret Key", text: $secretKey)
                         .textInputAutocapitalization(.never)
-                    Toggle("通过 iCloud 钥匙串同步密钥", isOn: Binding(
+                    Toggle(L("通过 iCloud 钥匙串同步密钥"), isOn: Binding(
                         get: { model.settings.iCloudEnabled },
                         set: { value in
                             Task { await model.settings.setICloudEnabled(value) }
@@ -63,7 +63,7 @@ struct S3SetupView: View {
                     ))
                     .disabled(!AppConfiguration.hasICloudAccount)
                 } header: {
-                    Text("凭据")
+                    Text(L("凭据"))
                 }
 
                 if let message {
@@ -81,16 +81,16 @@ struct S3SetupView: View {
                     }
                 }
             }
-            .navigationTitle(isOnboarding ? "连接 S3 网盘" : "S3 连接")
+            .navigationTitle(isOnboarding ? L("连接 S3 网盘") : L("S3 连接"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 if !isOnboarding {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("取消") { dismiss() }
+                        Button(L("取消")) { dismiss() }
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(busy ? "保存中…" : "保存") {
+                    Button(busy ? L("保存中…") : L("保存")) {
                         Task { await save() }
                     }
                     .disabled(busy)
@@ -127,7 +127,7 @@ struct S3SetupView: View {
             secretKey: secretKey
         )
         if ok {
-            message = "已保存"
+            message = L("已保存")
             await model.reloadLibrary()
             if !isOnboarding {
                 dismiss()

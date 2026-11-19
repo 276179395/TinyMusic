@@ -7,6 +7,7 @@
  */
 import { api, type FailedDownload } from './api';
 import { showToast } from './toast.svelte';
+import { t } from './i18n.svelte';
 
 export const failureUi = $state({
   open: false,
@@ -61,10 +62,10 @@ export async function retryFailures(ids: string[]) {
     failureUi.items = await api.downloadRetryFailed(todo);
     const left = failureUi.items.filter((f) => todo.includes(f.id));
     if (!left.length) {
-      showToast('重试成功');
+      showToast(t('重试成功'));
       if (!failureUi.items.length) failureUi.open = false;
     } else {
-      showToast(`还有 ${left.length} 首没成功`);
+      showToast(t('还有 {n} 首没成功', { n: left.length }));
     }
   } catch (e) {
     failureUi.error = String(e);

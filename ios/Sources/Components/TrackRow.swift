@@ -30,12 +30,12 @@ struct TrackRow: View {
                             .font(.body.weight(.medium))
                             .lineLimit(1)
                         HStack(spacing: 6) {
-                            Text(track.artist.isEmpty ? "未知艺人" : track.artist)
+                            Text(track.artist.isEmpty ? L("未知艺人") : track.artist)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                             if track.isLossless {
-                                Text("无损")
+                                Text(L("无损"))
                                     .font(.caption2.weight(.semibold))
                                     .foregroundStyle(.secondary)
                                     .padding(.horizontal, 5)
@@ -73,7 +73,7 @@ struct TrackRow: View {
                     .frame(width: 34, height: 34)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(isCaching ? "正在缓存" : (isCached ? "删除缓存" : "缓存到本地"))
+                .accessibilityLabel(isCaching ? L("正在缓存") : (isCached ? L("删除缓存") : L("缓存到本地")))
             }
 
             if let onFavorite {
@@ -91,7 +91,7 @@ struct TrackRow: View {
                         .background(Circle().fill(Color(.tertiarySystemFill).opacity(0.55)))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(isFavorite ? "取消喜欢" : "喜欢")
+                .accessibilityLabel(isFavorite ? L("取消喜欢") : L("喜欢"))
             }
         }
         .padding(.leading, 8)
@@ -112,11 +112,11 @@ struct TrackRow: View {
                 .fill(Color(.secondarySystemGroupedBackground))
         )
         .contextMenu { contextMenu }
-        .alert("取消喜欢？", isPresented: $confirmUnfavorite) {
-            Button("取消喜欢", role: .destructive) { onFavorite?() }
-            Button("保留", role: .cancel) {}
+        .alert(L("取消喜欢？"), isPresented: $confirmUnfavorite) {
+            Button(L("取消喜欢"), role: .destructive) { onFavorite?() }
+            Button(L("保留"), role: .cancel) {}
         } message: {
-            Text("会从喜欢歌单移除这首歌，但不会删除 S3 上的文件。")
+            Text(L("会从喜欢歌单移除这首歌，但不会删除 S3 上的文件。"))
         }
     }
 
@@ -124,7 +124,7 @@ struct TrackRow: View {
     private var contextMenu: some View {
         if let onPlayNext {
             Button(action: onPlayNext) {
-                Label("下一首播放", systemImage: "text.line.first.and.arrowtriangle.forward")
+                Label(L("下一首播放"), systemImage: "text.line.first.and.arrowtriangle.forward")
             }
         }
         if let onFavorite {
@@ -135,27 +135,27 @@ struct TrackRow: View {
                     onFavorite()
                 }
             } label: {
-                Label(isFavorite ? "取消喜欢" : "喜欢", systemImage: isFavorite ? "heart.slash" : "heart")
+                Label(isFavorite ? L("取消喜欢") : L("喜欢"), systemImage: isFavorite ? "heart.slash" : "heart")
             }
         }
         if let onCache {
             Button(action: onCache) {
-                Label(isCached ? "删除缓存" : "缓存到本地", systemImage: isCached ? "trash" : "arrow.down.circle")
+                Label(isCached ? L("删除缓存") : L("缓存到本地"), systemImage: isCached ? "trash" : "arrow.down.circle")
             }
         }
         if !moveTargets.isEmpty, let onMove {
             Menu {
                 ForEach(moveTargets) { target in
-                    Button("移动到 \(target.name)") { onMove(target) }
+                    Button(L("移动到 %@", target.name)) { onMove(target) }
                 }
             } label: {
-                Label("移动到歌单", systemImage: "folder")
+                Label(L("移动到歌单"), systemImage: "folder")
             }
         }
         if let onDelete {
             Divider()
             Button(role: .destructive, action: onDelete) {
-                Label("删除歌曲", systemImage: "trash")
+                Label(L("删除歌曲"), systemImage: "trash")
             }
         }
     }

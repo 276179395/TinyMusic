@@ -14,11 +14,10 @@
 - `ios/` — 原生 iOS App（SwiftUI + Liquid Glass），S3 网盘播放 + 离线缓存 + iCloud。
   - `ios/crates/ffi` — S3-only C ABI（tm_start/tm_invoke/tm_stop/tm_free），iOS 直接 FFI。
   - Rust 依赖以路径指向 `../desktop/crates/core`（共享核心只有一份，不要在 ios/ 复制）。
-- `lynx/` — 旧 Lynx 壳归档，不参与构建。
 
 ## 铁律
 
-1. **一个 bug 只修一处**：S3 解析/签名/favorites.json 在 `desktop/crates/core::library`；桌面业务规则在 `desktop/crates/app` 或 `desktop/packages/shared`；iOS 队列规则在 `PlaybackQueue.swift`。不要在 iOS 再写一套 S3 解析。
+1. **一个 bug 只修一处**：S3 解析/签名/收藏（「喜欢」目录就是收藏本体）在 `desktop/crates/core::library`；桌面业务规则在 `desktop/crates/app` 或 `desktop/packages/shared`；iOS 队列规则在 `PlaybackQueue.swift`。不要在 iOS 再写一套 S3 解析。
    - `packages/shared` 只放框架无关代码：不要 import svelte 或 SwiftUI。
    - 平台差异用注入解决（S3 client、播放引擎、KV），不要用 `if (isMobile)` 散在主逻辑里。
 2. **桌面端行为锁定**：改 desktop 内部接线可以，UI/交互/文案不能变。改完跑 `desktop/docs/桌面回归清单.md`。
@@ -60,4 +59,3 @@
 - 单测：`cd ios && ./scripts/test.sh`
 - 本地 S3 桩：`cd desktop && cargo run -p tinymusic-server --example s3_stub -- --port 9100 --dir /tmp/tm-s3stub`，再在 `ios/` 下 `./scripts/seed-s3-stub.sh`
 - 截图：`ios/scripts/screenshot.sh /tmp/a.png`
-- 旧 Lynx 归档：`lynx/`（不参与构建，确认稳定后可删）

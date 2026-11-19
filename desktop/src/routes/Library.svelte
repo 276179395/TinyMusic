@@ -10,6 +10,7 @@
   import BatchBar from '../components/BatchBar.svelte';
   import TrackListSkeleton from '../components/TrackListSkeleton.svelte';
   import { delayedVisible } from '../lib/loading.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   let tracks = $state<Track[]>([]);
   let loading = $state(true);
@@ -53,22 +54,22 @@
       <div class="big" aria-hidden="true">
         <HugeiconsIcon icon={icons.favorite} size={ICON_SIZE.empty} />
       </div>
-      <p>喜欢存在网盘里</p>
-      <button class="primary btn-ico" onclick={() => go({ name: 'settings' })}>启用网盘</button>
+      <p>{t('喜欢存在网盘里')}</p>
+      <button class="primary btn-ico" onclick={() => go({ name: 'settings' })}>{t('启用网盘')}</button>
     </div>
   {:else if tracks.length === 0}
     <div class="empty">
       <div class="big" aria-hidden="true">
         <HugeiconsIcon icon={icons.favorite} size={ICON_SIZE.empty} />
       </div>
-      <p>还没有喜欢的歌曲</p>
-      <p class="muted small">点歌曲右边的红心，会自动收藏并下载到网盘</p>
+      <p>{t('还没有喜欢的歌曲')}</p>
+      <p class="muted small">{t('点歌曲右边的红心，会自动收藏并下载到网盘')}</p>
     </div>
   {:else}
     <BatchBar {tracks} />
     <div class="list">
-      {#each tracks as t, i (t.provider + t.id)}
-        <TrackRow track={t} index={i} queue={tracks} onFavoriteChange={onFavChange} />
+      {#each tracks as track, i (track.provider + track.id)}
+        <TrackRow track={track} index={i} queue={tracks} onFavoriteChange={onFavChange} />
       {/each}
     </div>
   {/if}

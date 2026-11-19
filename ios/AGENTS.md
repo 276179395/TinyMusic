@@ -10,7 +10,7 @@
     ├─ Resources/             Assets、PrivacyInfo.xcprivacy
     ├─ scripts/               bootstrap / build / test / run-simulator / screenshot / seed-s3-stub / seed-demo-library / archive / appstore-screenshots / install-device / testflight
     ├─ docs/                  验收记录 / TestFlight / App Store 资料
-    └─ crates/ffi             Rust FFI；共享 core 以路径依赖 ../desktop/crates/core（旧 Lynx 归档在仓库根 `lynx/`）
+    └─ crates/ffi             Rust FFI；共享 core 以路径依赖 ../desktop/crates/core
 
 ## 命令
 
@@ -31,6 +31,6 @@
 - **原生 UI**：SwiftUI + 系统组件；Liquid Glass 只在 iOS 26+ 用 glassEffect，18–25 走 regularMaterial 退路。
 - **S3-only**：iOS 只链接 `ios/crates/ffi`（core + ffi）；core 通过路径依赖 `../desktop/crates/core` 共享，不要 import `desktop/crates/app`、`desktop/crates/server`、provider 代码。
 - **缓存是内部离线播放**：不可导出、不可分享、不出现在“文件”App、不进入 iCloud 备份。
-- **业务规则不要两端重写**：S3 解析/签名/favorites.json 在 tinymusic-core；队列规则在 PlaybackQueue；改一处要同步测试。
+- **业务规则不要两端重写**：S3 解析/签名/收藏（「喜欢」目录里的副本）在 tinymusic-core；队列规则在 PlaybackQueue；改一处要同步测试。
 - **密钥**：AK/SK 只进 Keychain（可 iCloud 同步），不落 settings.json；日志不要打印完整 presigned URL。
 - **测试**：Debug 启动参数以 -uiTest 开头，Release 忽略；测试默认 iPhone 18 Pro / iOS 27.2，兼容回归 iPhone 16 Pro / iOS 18.5。

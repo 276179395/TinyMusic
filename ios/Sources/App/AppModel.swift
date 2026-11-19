@@ -4,7 +4,7 @@ import Observation
 @MainActor
 @Observable
 final class AppModel {
-    private(set) var status = "正在启动…"
+    private(set) var status = L("正在启动…")
     private(set) var ready = false
     private(set) var error: String?
     private(set) var appInfo: AppInfo?
@@ -44,7 +44,7 @@ final class AppModel {
             appInfo = info
             await settings.load()
             ready = true
-            status = "就绪"
+            status = L("就绪")
             error = nil
             if AppConfiguration.eqTest {
                 player.eq.applyPreset("rock")
@@ -56,7 +56,7 @@ final class AppModel {
                 playFirstCached()
             }
         } catch {
-            status = "启动失败"
+            status = L("启动失败")
             self.error = error.localizedDescription
         }
     }

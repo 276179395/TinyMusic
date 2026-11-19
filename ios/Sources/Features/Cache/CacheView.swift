@@ -13,7 +13,7 @@ struct CacheView: View {
     }
 
     private var groups: [CacheGroup] {
-        Dictionary(grouping: doneEntries, by: { $0.playlist.isEmpty ? "未分类" : $0.playlist })
+        Dictionary(grouping: doneEntries, by: { $0.playlist.isEmpty ? L("未分类") : $0.playlist })
             .map { name, entries in
                 CacheGroup(
                     name: name,
@@ -37,12 +37,12 @@ struct CacheView: View {
             List {
                 Section {
                     HStack {
-                        Label("已占用", systemImage: "internaldrive")
+                        Label(L("已占用"), systemImage: "internaldrive")
                         Spacer()
                         Text(byteText(cache.totalBytes))
                             .foregroundStyle(.secondary)
                     }
-                    Picker("缓存上限", selection: Binding(
+                    Picker(L("缓存上限"), selection: Binding(
                         get: { cache.limitMB },
                         set: { cache.limitMB = $0 }
                     )) {
@@ -51,9 +51,9 @@ struct CacheView: View {
                         Text("2 GB").tag(2048)
                         Text("5 GB").tag(5120)
                         Text("10 GB").tag(10240)
-                        Text("不限").tag(0)
+                        Text(L("不限")).tag(0)
                     }
-                    Toggle("仅 Wi-Fi 缓存", isOn: Binding(
+                    Toggle(L("仅 Wi-Fi 缓存"), isOn: Binding(
                         get: { cache.wifiOnly },
                         set: { cache.wifiOnly = $0 }
                     ))
@@ -77,7 +77,7 @@ struct CacheView: View {
 
                 if doneEntries.isEmpty && activeEntries.isEmpty && failedEntries.isEmpty {
                     Section {
-                        ContentUnavailableView("还没有缓存", systemImage: "arrow.down.circle")
+                        ContentUnavailableView(L("还没有缓存"), systemImage: "arrow.down.circle")
                     }
                 } else if !groups.isEmpty {
                     Section {
@@ -94,7 +94,7 @@ struct CacheView: View {
 
                 if !cache.entries.isEmpty {
                     Section {
-                        Button("清除全部缓存", role: .destructive) {
+                        Button(L("清除全部缓存"), role: .destructive) {
                             showClearConfirm = true
                         }
                     }
@@ -108,25 +108,25 @@ struct CacheView: View {
                 }
             }
             .contentMargins(.bottom, 88, for: .scrollContent)
-            .navigationTitle("缓存")
-            .confirmationDialog("清除全部缓存？", isPresented: $showClearConfirm, titleVisibility: .visible) {
-                Button("清除全部", role: .destructive) { cache.clear() }
-                Button("取消", role: .cancel) {}
+            .navigationTitle(L("缓存"))
+            .confirmationDialog(L("清除全部缓存？"), isPresented: $showClearConfirm, titleVisibility: .visible) {
+                Button(L("清除全部"), role: .destructive) { cache.clear() }
+                Button(L("取消"), role: .cancel) {}
             }
             .confirmationDialog(
-                "清除「\(pendingPlaylistClear ?? "")」的缓存？",
+                L("清除「%@」的缓存？", pendingPlaylistClear ?? ""),
                 isPresented: Binding(
                     get: { pendingPlaylistClear != nil },
                     set: { if !$0 { pendingPlaylistClear = nil } }
                 ),
                 titleVisibility: .visible
             ) {
-                Button("清除这个歌单", role: .destructive) {
+                Button(L("清除这个歌单"), role: .destructive) {
                     guard let name = pendingPlaylistClear else { return }
                     clearPlaylist(name)
                     pendingPlaylistClear = nil
                 }
-                Button("取消", role: .cancel) { pendingPlaylistClear = nil }
+                Button(L("取消"), role: .cancel) { pendingPlaylistClear = nil }
             }
         }
     }
@@ -150,7 +150,7 @@ struct CacheView: View {
                         .frame(width: 14)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(group.name).font(.body.weight(.medium))
-                        Text("\(group.entries.count) 首 · \(byteText(group.bytes))")
+                        Text(L("%@ 首 · %@", "\(group.entries.count)", byteText(group.bytes)))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -170,7 +170,7 @@ struct CacheView: View {
                     .background(Circle().fill(Color(.tertiarySystemFill).opacity(0.6)))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("清除这个歌单的缓存")
+            .accessibilityLabel(L("清除这个歌单的缓存"))
         }
     }
 
@@ -205,20 +205,20 @@ struct CacheView: View {
                     .frame(width: 30, height: 30)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("删除缓存")
+            .accessibilityLabel(L("删除缓存"))
         }
         .swipeActions {
             Button(role: .destructive) {
                 cache.remove(entry.key)
             } label: {
-                Label("删除缓存", systemImage: "trash")
+                Label(L("删除缓存"), systemImage: "trash")
             }
         }
     }
 
     private func clearPlaylist(_ name: String) {
         let keys = cache.entries.values
-            .filter { ($0.playlist.isEmpty ? "未分类" : $0.playlist) == name }
+            .filter { ($0.playlist.isEmpty ? L("未分类") : $0.playlist) == name }
             .map(\.key)
         for key in keys {
             cache.remove(key)
@@ -268,13 +268,13 @@ private struct FailedCacheRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(entry.title).font(.body).lineLimit(1)
-                Text(entry.error ?? "缓存失败")
+                Text(entry.error ?? L("缓存失败"))
                     .font(.caption)
                     .foregroundStyle(.red)
                     .lineLimit(2)
             }
             Spacer()
-            Button("重试") {
+            Button(L("重试")) {
                 Task { _ = try? await CacheManager.shared.enqueue(track: entry.track, playlist: entry.playlist) }
             }
             .buttonStyle(.bordered)

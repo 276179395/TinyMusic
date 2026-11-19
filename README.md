@@ -30,7 +30,6 @@ TinyMusic 是一个 Windows / macOS 上的音乐客户端。它把「找歌 → 
     desktop/docs             项目文档
     ios/                     原生 iOS App（SwiftUI + Liquid Glass；S3 网盘播放 + 离线缓存）
     ios/crates/ffi           S3-only C ABI（tm_start/tm_invoke/tm_stop/tm_free），iOS 直接 FFI
-    lynx/                    旧 Lynx 壳归档（不参与构建）
 
 一个 bug 只修一处：业务规则在 desktop/crates/app 或 desktop/packages/shared，两端口只做薄适配。
 
@@ -102,6 +101,8 @@ TinyMusic 是一个 Windows / macOS 上的音乐客户端。它把「找歌 → 
 | Windows | Windows 10 / 11，64 位 |
 | macOS | macOS 11 及以上，Apple 芯片或 Intel |
 
+- macOS 13 以下（11 / 12）会自动改用**边框材质**：去掉毛玻璃、卡片换成实色 + 1px 边框，
+  界面结构与新版完全一致。也可以在「设置 → 外观 → 玻璃材质」手动切换
 - 安装包约 3–4 MB，新版本可以在「设置 → 版本」里检查更新
 - macOS 首次打开若提示「已损坏」，在 Finder 里右键选择「打开」即可（安装包没有做 Apple 公证）
 - Windows 安装包暂未做代码签名，SmartScreen 若提示「未知发布者」，选择「仍要运行」

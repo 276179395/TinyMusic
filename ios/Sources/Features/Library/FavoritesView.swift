@@ -3,15 +3,18 @@ import SwiftUI
 struct FavoritesView: View {
     let model: AppModel
 
+    /// 收藏歌单在播放上下文与缓存索引里的名字。这是数据（缓存条目按它分组），不随界面语言变化。
+    private static let contextName = "喜欢"
+
     private var tracks: [Track] { model.library.favorites.map(\.asTrack) }
 
     var body: some View {
         NavigationStack {
             Group {
                 if model.library.loadingFavorites && model.library.favorites.isEmpty {
-                    ProgressView("读取收藏…")
+                    ProgressView(L("读取收藏…"))
                 } else if model.library.favorites.isEmpty {
-                    ContentUnavailableView("还没有喜欢的歌", systemImage: "heart")
+                    ContentUnavailableView(L("还没有喜欢的歌"), systemImage: "heart")
                 } else {
                     ScrollView {
                         LazyVStack(spacing: 8) {
@@ -24,7 +27,7 @@ struct FavoritesView: View {
                                     isCaching: model.cache.active.contains(favorite.id),
                                     cacheProgress: model.cache.progress[favorite.id],
                                     onPlay: {
-                                        model.player.play(track: favorite.asTrack, in: tracks, context: "喜欢")
+                                        model.player.play(track: favorite.asTrack, in: tracks, context: Self.contextName)
                                         model.player.showNowPlaying = true
                                     },
                                     onFavorite: {
@@ -47,7 +50,7 @@ struct FavoritesView: View {
                     }
                 }
             }
-            .navigationTitle("喜欢")
+            .navigationTitle(L("喜欢"))
             .task {
                 if model.settings.isConfigured {
                     await model.library.pullFavorites()
@@ -71,7 +74,7 @@ struct FavoritesView: View {
         if model.cache.isCached(track.key) {
             model.cache.remove(track.key)
         } else {
-            Task { _ = try? await CacheManager.shared.enqueue(track: track, playlist: "喜欢") }
+            Task { _ = try? await CacheManager.shared.enqueue(track: track, playlist: Self.contextName) }
         }
     }
 }

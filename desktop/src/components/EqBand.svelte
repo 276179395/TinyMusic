@@ -1,5 +1,6 @@
 <script lang="ts">
   import { EQ_MAX_DB, EQ_MIN_DB, formatDb } from '../lib/equalizer.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   interface Props {
     label: string;
@@ -85,13 +86,13 @@
     bind:this={trackEl}
     role="slider"
     tabindex="0"
-    aria-label={`${label} 赫兹`}
+    aria-label={t('{label} 赫兹', { label })}
     aria-orientation="vertical"
     aria-valuemin={EQ_MIN_DB}
     aria-valuemax={EQ_MAX_DB}
     aria-valuenow={value}
     aria-valuetext={`${formatDb(value)} dB`}
-    title={`${label} Hz：${formatDb(value)} dB（双击归零）`}
+    title={t('{label} Hz：{db} dB（双击归零）', { label, db: formatDb(value) })}
     onpointerdown={onPointerDown}
     onpointermove={onPointerMove}
     onpointerup={onPointerUp}

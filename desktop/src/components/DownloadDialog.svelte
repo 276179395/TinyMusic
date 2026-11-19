@@ -12,6 +12,7 @@
   } from '../lib/download.svelte';
   import ProgressBar from './ProgressBar.svelte';
   import ErrorNotice from './ErrorNotice.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   const count = $derived(downloadUi.targets.length);
   const preview = $derived(downloadUi.targets.slice(0, 4));
@@ -59,15 +60,15 @@
       if (e.target === e.currentTarget) close();
     }}
   >
-    <div class="modal" role="dialog" aria-modal="true" aria-label="下载歌曲">
+    <div class="modal" role="dialog" aria-modal="true" aria-label={t('下载歌曲')}>
       <div class="modal-head">
         <div>
-          <h2>下载 {count} 首歌曲</h2>
+          <h2>{t('下载 {n} 首歌曲', { n: count })}</h2>
           <p class="hint">
-            音频内嵌封面标签，歌词保存为同名 .lrc 文件；音频 / 歌词 / 封面失败会自动重试 5 次
+            {t('音频内嵌封面标签，歌词保存为同名 .lrc 文件；音频 / 歌词 / 封面失败会自动重试 5 次')}
           </p>
         </div>
-        <button class="icon" onclick={close} aria-label="关闭" disabled={downloadUi.busy}>
+        <button class="icon" onclick={close} aria-label={t('关闭')} disabled={downloadUi.busy}>
           <HugeiconsIcon icon={icons.close} size={ICON_SIZE.inline} />
         </button>
       </div>
@@ -77,33 +78,33 @@
           <input type="radio" bind:group={downloadUi.mode} value="local" />
           <span class="tico"><HugeiconsIcon icon={icons.downloadDir} size={ICON_SIZE.inline} /></span>
           <span>
-            <strong>下载到本地</strong>
-            <em>保存到设置里的下载目录</em>
+            <strong>{t('下载到本地')}</strong>
+            <em>{t('保存到设置里的下载目录')}</em>
           </span>
         </label>
         <label class="target" class:on={downloadUi.mode === 's3'}>
           <input type="radio" bind:group={downloadUi.mode} value="s3" />
           <span class="tico"><HugeiconsIcon icon={icons.cloud} size={ICON_SIZE.inline} /></span>
           <span>
-            <strong>下载到网盘</strong>
-            <em>S3 兼容存储，可归入歌单</em>
+            <strong>{t('下载到网盘')}</strong>
+            <em>{t('S3 兼容存储，可归入歌单')}</em>
           </span>
         </label>
       </div>
 
       {#if downloadUi.mode === 's3'}
         <div class="field">
-          <div class="lbl">网盘歌单</div>
+          <div class="lbl">{t('网盘歌单')}</div>
           <select class="select" bind:value={downloadUi.playlist} disabled={downloadUi.busy}>
-            <option value="">（未分类，放在根目录）</option>
+            <option value="">{t('（未分类，放在根目录）')}</option>
             {#each downloadUi.playlists as p (p.name)}
-              <option value={p.name}>{p.name}（{p.count} 首）</option>
+              <option value={p.name}>{t('{name}（{n} 首）', { name: p.name, n: p.count })}</option>
             {/each}
           </select>
           <div class="newpl">
             <input
               bind:value={downloadUi.newPlaylist}
-              placeholder="新建歌单名称（可选）"
+              placeholder={t('新建歌单名称（可选）')}
               disabled={downloadUi.busy}
             />
             <button
@@ -112,42 +113,46 @@
               onclick={() => createPlaylistAndSelect(downloadUi.newPlaylist)}
             >
               <HugeiconsIcon icon={icons.plus} size={ICON_SIZE.inline} />
-              新建歌单
+              {t('新建歌单')}
             </button>
           </div>
         </div>
       {/if}
 
       <div class="dl-preview">
-        {#each preview as t (t.provider + t.id)}
+        {#each preview as track (track.provider + track.id)}
           <div class="dl-prow">
-            <span class="dp-t">{t.title}</span>
-            <span class="dp-a">{t.artist}</span>
-            <span class="dp-d">{fmtDuration(t.duration_sec)}</span>
+            <span class="dp-t">{track.title}</span>
+            <span class="dp-a">{track.artist}</span>
+            <span class="dp-d">{fmtDuration(track.duration_sec)}</span>
           </div>
         {/each}
         {#if more > 0}
-          <div class="dl-prow muted">… 还有 {more} 首</div>
+          <div class="dl-prow muted">{t('… 还有 {n} 首', { n: more })}</div>
         {/if}
       </div>
 
       {#if downloadUi.busy || downloadUi.progress}
         <ProgressBar
           value={downloadUi.progressPct}
-          label={downloadUi.progress || '处理中…'}
+          label={downloadUi.progress || t('处理中…')}
         />
       {/if}
       {#if downloadUi.doneMsg}<div class="ok small">{downloadUi.doneMsg}</div>{/if}
       {#if downloadUi.err}<ErrorNotice text={downloadUi.err} compact />{/if}
 
       <div class="modal-actions">
-        <button class="mini" onclick={close} disabled={downloadUi.busy}>取消</button>
+        <button class="mini" onclick={close} disabled={downloadUi.busy}>{t('取消')}</button>
         <button class="primary" onclick={start} disabled={downloadUi.busy || count === 0}>
           <MorphIcon
             icon={downloadUi.mode === 's3' ? icons.cloud : icons.download}
             size={ICON_SIZE.inline}
           />
-          {downloadUi.busy ? '任务进行中…' : downloadUi.mode === 's3' ? '下载到网盘' : '下载到本地'}
+          {downloadUi.busy
+            ? t('任务进行中…')
+            : downloadUi.mode === 's3'
+              ? t('下载到网盘')
+              : t('下载到本地')}
         </button>
       </div>
     </div>

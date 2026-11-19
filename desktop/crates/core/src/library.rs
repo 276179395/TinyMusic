@@ -1,9 +1,9 @@
-//! 网盘库（S3）的纯业务逻辑：歌单推导、曲目行、封面/歌词兄弟文件、favorites.json。
+//! 网盘库（S3）的纯业务逻辑：歌单推导、曲目行、封面/歌词兄弟文件、收藏（「喜欢」目录）。
 //!
 //! 桌面（crates/app）与 iOS（crates/ffi）共用这一份；平台壳只负责把
 //! S3 配置、Storage 和当前页面串起来。这里不依赖任何 UI / Tauri / Lynx。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::Serialize;
 
@@ -521,7 +521,6 @@ pub async fn delete_s3_track(client: &S3, storage: &Storage, key: &str) -> Resul
         let _ = client.delete_object(&format!("{stem}.{ext}")).await;
     }
     let _ = storage.remove_favorite("s3", key);
-    let _ = push_favorites(client, storage).await;
     Ok(())
 }
 
@@ -574,18 +573,18 @@ pub async fn move_s3_track(
             .move_object(&from, &format!("{new_folder}{sibling}"))
             .await;
     }
-    // 收藏里的 key 也跟着换，否则刷新后会变成一条失效收藏。
+    // 收藏就是「喜欢」目录里的副本：移出目录等于取消喜欢，移回来等于重新喜欢。
     let old_key = key.to_string();
     let new_key = format!("{new_folder}{filename}");
-    if let Ok(list) = storage.list_favorites() {
-        if let Some(mut liked) = list
-            .into_iter()
-            .find(|t| t.provider == "s3" && t.id == old_key)
-        {
-            let _ = storage.remove_favorite("s3", &old_key);
+    let liked = storage
+        .list_favorites()
+        .ok()
+        .and_then(|list| list.into_iter().find(|t| t.provider == "s3" && t.id == old_key));
+    if let Some(mut liked) = liked {
+        let _ = storage.remove_favorite("s3", &old_key);
+        if is_favorite_key(&new_key, &prefix) {
             liked.id = new_key;
             let _ = storage.add_favorite(&liked);
-            let _ = push_favorites(client, storage).await;
         }
     }
     Ok(())
@@ -651,7 +650,18 @@ pub fn parse_lrc(text: &str) -> Vec<LyricLine> {
     out
 }
 
-pub fn favorites_object_key(prefix: &str) -> String {
+/// 「喜欢」目录的完整前缀（带上网盘前缀）
+pub fn favorites_folder(prefix: &str) -> String {
+    playlist_prefix(prefix, FAVORITES_PLAYLIST)
+}
+
+/// key 是不是「喜欢」目录里的对象
+pub fn is_favorite_key(key: &str, prefix: &str) -> bool {
+    key.starts_with(&favorites_folder(prefix))
+}
+
+/// 老版本把收藏写在网盘上的 favorites.json；现在只认「喜欢」目录，这里只用于迁移清理
+fn legacy_favorites_object_key(prefix: &str) -> String {
     let p = prefix.trim().trim_matches('/');
     if p.is_empty() {
         "favorites.json".into()
@@ -660,29 +670,138 @@ pub fn favorites_object_key(prefix: &str) -> String {
     }
 }
 
-/// 把本地喜欢列表写成网盘上的 favorites.json。
-pub async fn push_favorites(client: &S3, storage: &Storage) -> Result<(), String> {
-    // iOS 是 S3-only；桌面旧数据库里可能残留网易云/酷我收藏，不能写进 S3。
-    let mut list: Vec<Track> = storage
-        .list_favorites()
-        .map_err(|e| e.to_string())?
-        .into_iter()
-        .filter(|t| t.provider == "s3")
-        .collect();
-    // s3 曲目的封面是临时签名直链，写进 JSON 只会变成别的设备/几小时后的裂图；
-    // 拉取时按对象名重签，所以这里一律不落盘。
-    for t in list.iter_mut() {
-        t.cover = None;
+/// 收藏 = 在「喜欢」目录里放一份副本：目录本身是唯一真相，跨设备才看得见。
+///
+/// 把 key 指向的音频连同同名歌词/封面复制进「喜欢」目录，返回副本的 key；
+/// 已经在「喜欢」里就直接返回原 key。源对象不存在时返回 None。
+pub async fn copy_into_favorites_opt(client: &S3, key: &str) -> Result<Option<String>, String> {
+    let key = key.trim();
+    if key.is_empty() {
+        return Err("曲目 key 为空".into());
     }
-    let key = favorites_object_key(&client.config().prefix);
-    let body = serde_json::to_vec(&list).map_err(|e| e.to_string())?;
-    client
-        .put_object(&key, body, "application/json; charset=utf-8")
+    let prefix = client.normalized_prefix();
+    if is_favorite_key(key, &prefix) {
+        return Ok(Some(key.to_string()));
+    }
+    let filename = key.rsplit('/').next().unwrap_or(key);
+    let target = format!("{}{}", favorites_folder(&prefix), filename);
+
+    // 同目录的同名兄弟文件一次列出来，别按扩展名一个个试
+    let src_folder = match key.rsplit_once('/') {
+        Some((folder, _)) => format!("{folder}/"),
+        None => String::new(),
+    };
+    let entries: Vec<(String, String)> = client
+        .list_keys(&src_folder)
         .await
-        .map_err(|e| e.to_string())
+        .unwrap_or_default()
+        .iter()
+        .map(|k| (k.to_lowercase(), k.clone()))
+        .collect();
+    let stem = key.rsplit_once('.').map(|(a, _)| a).unwrap_or(key);
+    let mut extras = Vec::new();
+    for ext in ["lrc", "jpg", "jpeg", "png", "webp"] {
+        if let Some(k) = find_sibling(&entries, stem, &[ext]) {
+            extras.push(k);
+        }
+    }
+
+    if !client
+        .copy_object(key, &target)
+        .await
+        .map_err(|e| e.to_string())?
+    {
+        return Ok(None);
+    }
+    // 歌词/封面是锦上添花，失败不影响收藏本身
+    let target_stem = target.rsplit_once('.').map(|(a, _)| a).unwrap_or(&target);
+    for extra in extras {
+        let Some(ext) = extra.rsplit('.').next() else {
+            continue;
+        };
+        let _ = client
+            .copy_object(&extra, &format!("{target_stem}.{ext}"))
+            .await;
+    }
+    Ok(Some(target))
 }
 
-pub fn favorite_dedupe_key(t: &Track) -> String {
+pub async fn copy_into_favorites(client: &S3, key: &str) -> Result<String, String> {
+    match copy_into_favorites_opt(client, key).await? {
+        Some(key) => Ok(key),
+        None => Err("原文件已经不在了".into()),
+    }
+}
+
+/// 取消喜欢：只删「喜欢」目录里那份副本，歌单里的原文件一根毫毛都不动。
+pub async fn remove_from_favorites(client: &S3, key: &str) -> Result<(), String> {
+    let key = key.trim();
+    let prefix = client.normalized_prefix();
+    if !is_favorite_key(key, &prefix) {
+        return Ok(());
+    }
+    client.delete_object(key).await.map_err(|e| e.to_string())?;
+    let stem = key.rsplit_once('.').map(|(a, _)| a).unwrap_or(key);
+    for ext in ["lrc", "jpg", "jpeg", "png", "webp"] {
+        let _ = client.delete_object(&format!("{stem}.{ext}")).await;
+    }
+    Ok(())
+}
+
+/// 「喜欢」目录里的全部歌曲：收藏只认这一份实物。
+pub async fn favorites_from_folder(client: &S3) -> Result<Vec<Track>, String> {
+    let rows = list_s3_track_rows(client, FAVORITES_PLAYLIST).await?;
+    Ok(rows.into_iter().map(|r| r.track).collect())
+}
+
+/// 本地收藏缓存跟「喜欢」目录对齐：目录里有的补进来，目录里没了的 s3 条目删掉。
+fn sync_favorites_cache(storage: &Storage, folder: &[Track]) {
+    let ids: HashSet<&str> = folder.iter().map(|t| t.id.as_str()).collect();
+    if let Ok(local) = storage.list_favorites() {
+        for t in local.iter().filter(|t| t.provider == "s3") {
+            if !ids.contains(t.id.as_str()) {
+                let _ = storage.remove_favorite("s3", &t.id);
+            }
+        }
+    }
+    for t in folder {
+        let _ = storage.upsert_track(t);
+        let _ = storage.add_favorite(t);
+    }
+}
+
+/// 一次性迁移标记：迁完就不再从旧的 favorites.json / 本地收藏往回补
+const FAVORITES_MIGRATED: &str = "s3_favorites_migrated_v1";
+
+/// 一次性迁移：把旧的收藏搬进「喜欢」目录。
+///
+/// 以前收藏只写 favorites.json，歌单里删掉的歌 JSON 没同步，喜欢里就会留着一首点不开的歌。
+/// 这里把文件还在的复制进目录，已经删掉的直接丢掉；迁完把 favorites.json 删掉，之后只认目录。
+async fn migrate_legacy_favorites(client: &S3, storage: &Storage) -> Result<(), String> {
+    let prefix = client.normalized_prefix();
+    let existing: HashSet<String> = client
+        .list_keys_all(&favorites_folder(&prefix))
+        .await
+        .map_err(|e| e.to_string())?
+        .into_iter()
+        .collect();
+    let local = storage.list_favorites().unwrap_or_default();
+    for track in local.iter().filter(|t| t.provider == "s3") {
+        if is_favorite_key(&track.id, &prefix) || existing.contains(&track.id) {
+            continue;
+        }
+        // 文件没了就丢掉这条收藏；网络/权限出错则整轮不算迁移完成，下次再试
+        copy_into_favorites_opt(client, &track.id).await?;
+    }
+    let _ = client
+        .delete_object(&legacy_favorites_object_key(&prefix))
+        .await;
+    let _ = storage.meta_set(FAVORITES_MIGRATED, "1");
+    Ok(())
+}
+
+/// 同一首歌的判定键：歌名 + 歌手，去掉大小写和标点
+pub fn favorite_key(title: &str, artist: &str) -> String {
     fn normalize(value: &str) -> String {
         value
             .chars()
@@ -690,114 +809,36 @@ pub fn favorite_dedupe_key(t: &Track) -> String {
             .filter(|c| c.is_alphanumeric())
             .collect()
     }
-    format!("{}|{}", normalize(&t.title), normalize(&t.artist))
+    format!("{}|{}", normalize(title), normalize(artist))
 }
 
-/// 把 favorites.json 里的旧 key 对齐到「喜欢」目录里实际存在的音频。
+pub fn favorite_dedupe_key(t: &Track) -> String {
+    favorite_key(&t.title, &t.artist)
+}
+
+/// 从网盘拉取「喜欢」：只认「喜欢」目录里的实际音频，不再读也不写 favorites.json。
 ///
-/// favorites.json 可能残留重命名/移动前的 key；如果只按歌名+歌手去重，
-/// 旧 key 会遮住实际文件，iOS 会显示“未缓存”，点击播放也会去请求不存在的对象。
-fn reconcile_favorite_tracks(favorites: &mut Vec<Track>, rows: &[S3TrackRow]) -> bool {
-    let mut actual: HashMap<String, Track> = HashMap::new();
-    for row in rows {
-        actual
-            .entry(favorite_dedupe_key(&row.track))
-            .or_insert_with(|| row.track.clone());
-    }
-
-    let mut changed = false;
-    for favorite in favorites.iter_mut() {
-        let Some(track) = actual.get(&favorite_dedupe_key(favorite)) else {
-            continue;
-        };
-        if favorite.id != track.id
-            || favorite.provider != track.provider
-            || favorite.title != track.title
-            || favorite.artist != track.artist
-        {
-            favorite.provider = track.provider.clone();
-            favorite.id = track.id.clone();
-            favorite.title = track.title.clone();
-            favorite.artist = track.artist.clone();
-            changed = true;
-        }
-    }
-
-    let mut seen: std::collections::HashSet<String> =
-        favorites.iter().map(favorite_dedupe_key).collect();
-    for row in rows {
-        if seen.insert(favorite_dedupe_key(&row.track)) {
-            favorites.push(row.track.clone());
-            changed = true;
-        }
-    }
-
-    let before = favorites.len();
-    let mut deduped = std::collections::HashSet::new();
-    favorites.retain(|t| deduped.insert(favorite_dedupe_key(t)));
-    changed || favorites.len() != before
-}
-
-/// 从网盘拉取「喜欢」：favorites.json + 「喜欢」目录里的实际音频，合并去重。
+/// 目录里有歌才算喜欢——歌单里删掉的歌不会因为 JSON 没同步而继续挂在喜欢里。
 pub async fn pull_favorites(client: &S3, storage: &Storage) -> Result<Vec<Track>, String> {
-    let key = favorites_object_key(&client.config().prefix);
-    let remote = match client.get_object(&key).await.map_err(|e| e.to_string())? {
-        Some(bytes) => serde_json::from_slice::<Vec<Track>>(&bytes).unwrap_or_default(),
-        None => Vec::new(),
-    };
-    let json_len = remote.len();
-    // iOS 是 S3-only；旧 favorites.json 里可能混入桌面端 provider 的收藏。
-    let mut merged: Vec<Track> = remote.into_iter().filter(|t| t.provider == "s3").collect();
-    let mut changed = merged.len() != json_len;
-
-    if let Ok(rows) = list_s3_track_rows(client, FAVORITES_PLAYLIST).await {
-        changed |= reconcile_favorite_tracks(&mut merged, &rows);
+    // 老版本的收藏只在 favorites.json / 本地库里，第一次拉取时搬进目录
+    if storage.meta_get(FAVORITES_MIGRATED).is_none() {
+        let _ = migrate_legacy_favorites(client, storage).await;
     }
 
-    // 保留离线时新加、尚未写进 favorites.json 的本地收藏；下一次联网再补写。
+    let folder = favorites_from_folder(client).await?;
+    sync_favorites_cache(storage, &folder);
+
+    // 桌面端的网易云/酷我收藏还没落到网盘时仍留在本地；上传成功后会被目录里的副本取代
+    let mut seen: HashSet<String> = folder.iter().map(favorite_dedupe_key).collect();
+    let mut list = folder;
     if let Ok(local) = storage.list_favorites() {
-        let mut seen: std::collections::HashSet<String> =
-            merged.iter().map(favorite_dedupe_key).collect();
-        for track in local.into_iter().filter(|t| t.provider == "s3") {
-            if seen.insert(favorite_dedupe_key(&track)) {
-                merged.push(track);
-                changed = true;
+        for t in local.into_iter().filter(|t| t.provider != "s3") {
+            if seen.insert(favorite_dedupe_key(&t)) {
+                list.push(t);
             }
         }
     }
 
-    // favorites.json 可能残留同一个歌名/歌手的多个 key；先按歌名+歌手去重。
-    let before = merged.len();
-    let mut seen = std::collections::HashSet::new();
-    merged.retain(|t| seen.insert(favorite_dedupe_key(t)));
-    changed |= merged.len() != before;
-
-    // 把本地 favorites 里同名的旧 key 清掉，避免 Swift 端按歌名去重时又选中旧记录。
-    if let Ok(existing) = storage.list_favorites() {
-        for old in existing.iter().filter(|t| t.provider == "s3") {
-            let Some(current) = merged
-                .iter()
-                .find(|t| favorite_dedupe_key(t) == favorite_dedupe_key(old))
-            else {
-                continue;
-            };
-            if old.id != current.id {
-                let _ = storage.remove_favorite("s3", &old.id);
-                changed = true;
-            }
-        }
-    }
-
-    for t in &merged {
-        let _ = storage.upsert_track(t);
-        let _ = storage.add_favorite(t);
-    }
-
-    if changed || merged.len() != json_len {
-        let _ = push_favorites(client, storage).await;
-    }
-
-    let mut list = merged;
     refresh_s3_covers(client, &mut list).await;
     Ok(list)
 }
@@ -896,71 +937,65 @@ mod tests {
     }
 
     #[test]
-    fn favorites_key_is_under_prefix() {
+    fn favorites_live_under_liked_folder() {
+        assert_eq!(favorites_folder("TinyMusic"), "TinyMusic/喜欢/");
+        assert_eq!(favorites_folder(""), "喜欢/");
+        assert!(is_favorite_key("TinyMusic/喜欢/a.mp3", "TinyMusic"));
+        assert!(!is_favorite_key("TinyMusic/A/a.mp3", "TinyMusic"));
+        // 旧的 JSON 只用来迁移清理，不再是收藏本体
         assert_eq!(
-            favorites_object_key("TinyMusic"),
+            legacy_favorites_object_key("TinyMusic"),
             "TinyMusic/favorites.json"
         );
-        assert_eq!(favorites_object_key(""), "favorites.json");
+        assert_eq!(legacy_favorites_object_key(""), "favorites.json");
     }
 
     #[test]
-    fn favorites_reconcile_replaces_stale_keys_with_actual_track() {
-        let mut favorites = vec![Track {
+    fn favorite_key_ignores_case_and_punctuation() {
+        assert_eq!(favorite_key("5:20AM", "Soldout"), favorite_key("5 20am", "SOLDOUT"));
+        assert_ne!(favorite_key("A", "X"), favorite_key("B", "X"));
+    }
+
+    #[test]
+    fn favorites_cache_follows_folder_and_keeps_other_providers() {
+        let s = Storage::open_in_memory().unwrap();
+        let gone = Track {
             provider: "s3".into(),
-            id: "TinyMusic/喜欢/old name.mp3".into(),
-            title: "5:20AM".into(),
-            artist: "Soldout".into(),
+            id: "TinyMusic/喜欢/gone.mp3".into(),
+            title: "Gone".into(),
+            artist: "X".into(),
             ..Track::default()
-        }];
-        let rows = vec![S3TrackRow {
-            key: "TinyMusic/喜欢/new name.mp3".into(),
-            missing: vec![],
-            track: Track {
-                provider: "s3".into(),
-                id: "TinyMusic/喜欢/new name.mp3".into(),
-                title: "5:20AM".into(),
-                artist: "Soldout".into(),
-                ..Track::default()
-            },
-        }];
+        };
+        let keep = Track {
+            provider: "s3".into(),
+            id: "TinyMusic/喜欢/keep.mp3".into(),
+            title: "Keep".into(),
+            artist: "X".into(),
+            ..Track::default()
+        };
+        let netease = Track {
+            provider: "netease".into(),
+            id: "42".into(),
+            title: "Remote".into(),
+            artist: "Y".into(),
+            ..Track::default()
+        };
+        s.add_favorite(&gone).unwrap();
+        s.add_favorite(&netease).unwrap();
 
-        assert!(reconcile_favorite_tracks(&mut favorites, &rows));
-        assert_eq!(favorites.len(), 1);
-        assert_eq!(favorites[0].id, "TinyMusic/喜欢/new name.mp3");
-    }
+        // 目录里已经没有 gone.mp3：目录是唯一真相，这条收藏必须清掉
+        sync_favorites_cache(&s, std::slice::from_ref(&keep));
 
-    #[test]
-    fn favorites_reconcile_adds_missing_liked_folder_track_once() {
-        let mut favorites = Vec::new();
-        let rows = vec![
-            S3TrackRow {
-                key: "TinyMusic/喜欢/a.mp3".into(),
-                missing: vec![],
-                track: Track {
-                    provider: "s3".into(),
-                    id: "TinyMusic/喜欢/a.mp3".into(),
-                    title: "A".into(),
-                    artist: "X".into(),
-                    ..Track::default()
-                },
-            },
-            S3TrackRow {
-                key: "TinyMusic/喜欢/a-copy.mp3".into(),
-                missing: vec![],
-                track: Track {
-                    provider: "s3".into(),
-                    id: "TinyMusic/喜欢/a-copy.mp3".into(),
-                    title: "A".into(),
-                    artist: "X".into(),
-                    ..Track::default()
-                },
-            },
-        ];
-
-        assert!(reconcile_favorite_tracks(&mut favorites, &rows));
-        assert_eq!(favorites.len(), 1);
-        assert_eq!(favorites[0].id, "TinyMusic/喜欢/a.mp3");
+        let ids: Vec<String> = s
+            .list_favorites()
+            .unwrap()
+            .into_iter()
+            .map(|t| format!("{}:{}", t.provider, t.id))
+            .collect();
+        assert!(ids.iter().any(|k| k == "s3:TinyMusic/喜欢/keep.mp3"));
+        assert!(!ids.iter().any(|k| k == "s3:TinyMusic/喜欢/gone.mp3"));
+        // 桌面端平台收藏不在「喜欢」目录里，不能被顺手删掉
+        assert!(ids.iter().any(|k| k == "netease:42"));
     }
 
     #[test]

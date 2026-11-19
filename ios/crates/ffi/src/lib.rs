@@ -412,18 +412,27 @@ async fn dispatch(state: &IosState, cmd: &str, args: Value) -> Result<Value, Str
                 availability: Availability::Available,
                 ..Track::default()
             };
-            state
-                .storage
-                .add_favorite(&track)
-                .map_err(|e| e.to_string())?;
-            let (synced, error) = match state.client() {
-                Ok(client) => match library::push_favorites(&client, &state.storage).await {
-                    Ok(()) => (true, Value::Null),
+            // 收藏 = 在网盘「喜欢」目录里放一份副本。复制不成功就不算收藏（否则刷新后又会没了）。
+            let client = state.client()?;
+            let mut key = Value::Null;
+            let (synced, error) =
+                match library::copy_into_favorites(&client, &track.id).await {
+                    Ok(target) => {
+                        let mut copy = track.clone();
+                        copy.id = target.clone();
+                        copy.cover = None;
+                        state
+                            .storage
+                            .add_favorite(&copy)
+                            .map_err(|e| e.to_string())?;
+                        let _ = state.storage.save_s3_playlist(library::FAVORITES_PLAYLIST);
+                        // 副本的 key 跟歌单里的原始 key 不同，前端要拿它当收藏 id
+                        key = json!(target);
+                        (true, Value::Null)
+                    }
                     Err(e) => (false, json!(e)),
-                },
-                Err(e) => (false, json!(e)),
-            };
-            Ok(json!({ "synced": synced, "error": error }))
+                };
+            Ok(json!({ "synced": synced, "error": error, "key": key }))
         }
 
         "favorites_remove" => {
@@ -432,8 +441,9 @@ async fn dispatch(state: &IosState, cmd: &str, args: Value) -> Result<Value, Str
                 .storage
                 .remove_favorite("s3", &a.key)
                 .map_err(|e| e.to_string())?;
+            // 只删「喜欢」目录里那份副本，歌单里的原文件不动。
             let (synced, error) = match state.client() {
-                Ok(client) => match library::push_favorites(&client, &state.storage).await {
+                Ok(client) => match library::remove_from_favorites(&client, &a.key).await {
                     Ok(()) => (true, Value::Null),
                     Err(e) => (false, json!(e)),
                 },

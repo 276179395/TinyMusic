@@ -1,10 +1,11 @@
 # TestFlight / 内部测试
 
-> 状态时间：2026-11-17。App 记录：TinyMusic，Apple ID `6835780946`，Bundle ID `cn.carljoy.tinymusic`。
+> 状态时间：2026-11-19。App 记录：TinyMusic，Apple ID `6835780946`，Bundle ID `cn.carljoy.tinymusic`。
 
 ## 当前状态：已上传并可内部测试
 
-- **Build 26** 已上传 TestFlight，版本 `1.0.0 (26)`，包含 **iCloud entitlement**、缓存/喜欢修复、歌单播放、播放列表面板、首启 S3 提醒和离线缓存歌单、封面加载修复、歌单播放状态。
+- **Build 30** 已上传 TestFlight，版本 `1.0.0 (30)`，处理状态 **VALID**，内部测试状态 **IN_BETA_TESTING**（自动通知已开启）。
+- 包含 **iCloud entitlement**、缓存/喜欢修复、歌单播放、播放列表面板、首启 S3 提醒和离线缓存歌单、封面加载修复、歌单播放状态、歌词页滑动返回、播放页排版、中英双语与独立语言选择页。
 - 内部测试群组 **「内部测试」** 已创建，自动分发已开启。
 - 已邀请测试员 `carl030101@icloud.com`（孙磊，账户持有人）。
 - 构建 21 的 entitlements 已核对：
@@ -16,7 +17,7 @@
 
 1. iPhone 安装 **TestFlight**（App Store 免费）。
 2. 用 `carl030101@icloud.com` 的 Apple ID 登录 TestFlight。
-3. 接受 TinyMusic 的内部测试邀请，安装 **1.0.0 (26)**。
+3. 接受 TinyMusic 的内部测试邀请，安装 **1.0.0 (30)**。
 4. 如果没收到邀请邮件：App Store Connect → TestFlight → 内部测试 →「内部测试」→ 测试员，确认状态为「已邀请」，可重新发送邀请。
 
 内部测试不需要 Beta App Review；外部测试才需要。
@@ -56,4 +57,19 @@
 
 - TestFlight 内部测试员必须是 App Store Connect 用户；外部测试员不需要，但要 Beta App Review。
 - 新增测试员：App Store Connect → 用户和访问 添加用户，再到 TestFlight 群组里勾选。
-- 构建 17–25 是旧包，仍在群组里；测试请选 **26**。
+- 构建 17–29 是旧包，仍在群组里；测试请选 **30**。
+
+## 构建 29（2026-11-18 17:34）
+
+- 版本：**1.0.0 (29)**，已上传 App Store Connect，处理状态 **VALID**（17:35 上传完成）；分包后可在 TestFlight 里装 29。
+- 语言：设置 → 语言改成独立选择页，点一行立刻生效并**留在本页**（勾选与标题当场更新），不再被弹回设置页。
+- 同步修正：去掉 `MainTabView` 按语言 `.id(...)` 重建整棵 tab 树（那正是弹回的原因），标签栏文案改为跟随 `Localization` 刷新；根视图补了 `environment(\.locale)`，导航栏/日期格式等系统部件跟界面语言一起切换。
+- 测试：`TinyMusicTests` 全过；`TinyMusicUITests` 7 项全过（含 `testLanguageSwitchesImmediatelyWithoutRestart` 更新后的断言：停在语言页 + 标签栏变英文）。
+
+## 构建 30（2026-11-19 00:07）
+
+- 版本：**1.0.0 (30)**，已上传 App Store Connect；处理状态 **VALID**，内部测试 **IN_BETA_TESTING**，自动通知已开启。
+- 语言：设置 → 语言为独立选择页，切换立即生效并停留在本页；标签栏、导航栏和日期格式跟随界面语言。
+- S3：`S3 网盘` 行最右侧新增「断开」按钮，只有连接正常（绿点：地址/桶/密钥齐全且最近保存或测试无报错）时才显示；断开后按钮自动消失，底部独立断开区块已移除。
+- 构建：`./scripts/build.sh` 成功，`TinyMusicTests` 29 项全过。
+

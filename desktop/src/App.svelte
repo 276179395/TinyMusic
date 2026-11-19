@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { t } from './lib/i18n.svelte';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import { listen } from '@tauri-apps/api/event';
   import { icons, ICON_SIZE } from './lib/icons';
@@ -116,7 +117,7 @@
   async function handlePlayError(err: unknown) {
     const name = (err as DOMException)?.name;
     if (name === 'NotSupportedError' && (await fallbackFromLossless())) {
-      showToast('当前系统不支持 FLAC，已切到 320k');
+      showToast(t('当前系统不支持 FLAC，已切到 320k'));
       player.error = '';
       return;
     }
@@ -125,7 +126,7 @@
       player.error = '';
       return;
     }
-    player.error = '播放失败：' + String(err);
+    player.error = t('播放失败：{err}', { err: String(err) });
     player.status = 'error';
     player.playing = false;
   }
@@ -174,7 +175,7 @@
           // 均衡器已开启时必须先建链 / 把 AudioContext 拉回 running；
           // 建链要发生在用户手势里，所以播放动作是最后一道保险。
           if (prepareEqualizerForPlay(eqGesture) === 'failed') {
-            showToast('均衡器在当前系统不可用，已关闭');
+            showToast(t('均衡器在当前系统不可用，已关闭'));
           }
           el.play().catch((e) => void handlePlayError(e));
           break;
@@ -201,7 +202,7 @@
       eqUnlocked = true;
       eqGesture = true;
       if (prepareEqualizerForPlay() === 'failed') {
-        showToast('均衡器在当前系统不可用，已关闭');
+        showToast(t('均衡器在当前系统不可用，已关闭'));
       }
       document.removeEventListener('pointerdown', unlockEq, true);
       document.removeEventListener('keydown', unlockEq, true);
@@ -283,18 +284,18 @@
   const navTop = $derived(
     hasNetease()
       ? [
-          { name: 'recommend', label: '推荐', icon: icons.hot },
-          { name: 'search', label: '搜索', icon: icons.search }
+          { name: 'recommend', label: t('推荐'), icon: icons.hot },
+          { name: 'search', label: t('搜索'), icon: icons.search }
         ]
-      : [{ name: 'search', label: '搜索', icon: icons.search }]
+      : [{ name: 'search', label: t('搜索'), icon: icons.search }]
   );
   // 「喜欢」存到网盘，只有网盘启用时才出现
   const navLibrary = $derived([
-    ...(appCfg.s3Enabled ? [{ name: 'library', label: '喜欢', icon: icons.favorite }] : []),
-    { name: 'downloads', label: '下载', icon: icons.downloadDir },
-    { name: 'cloud', label: '网盘', icon: icons.cloud },
+    ...(appCfg.s3Enabled ? [{ name: 'library', label: t('喜欢'), icon: icons.favorite }] : []),
+    { name: 'downloads', label: t('下载'), icon: icons.downloadDir },
+    { name: 'cloud', label: t('网盘'), icon: icons.cloud },
   ]);
-  const navOther = [{ name: 'settings', label: '设置', icon: icons.settings }];
+  const navOther = $derived([{ name: 'settings', label: t('设置'), icon: icons.settings }]);
 
   const activeNav = $derived(
     ['track', 'artist', 'album', 'lyrics'].includes(router.route.name)
@@ -346,7 +347,10 @@
           <span class="ico"><HugeiconsIcon icon={n.icon} size={ICON_SIZE.control} /></span>{n.label}
           <!-- 静默检查到新版才出现的一颗小红点，不写版本号、不闪 -->
           {#if n.name === 'settings' && updateState.version}
-            <span class="nav-dot" title={`有新版本 ${updateState.version}，点进来更新`}></span>
+            <span
+              class="nav-dot"
+              title={t('有新版本 {version}，点进来更新', { version: updateState.version })}
+            ></span>
           {/if}
         </button>
       {/each}
@@ -367,13 +371,13 @@
           {/if}
         </span>
         <span class="foot-meta">
-          <span class="foot-name">账号</span>
+          <span class="foot-name">{t('账号')}</span>
           <span class="foot-sub"
             >{account.uid
-              ? '已登录'
+              ? t('已登录')
               : hasNetease()
-                ? account.netease.nickname || '网易云已登录'
-                : '未登录'}</span
+                ? account.netease.nickname || t('网易云已登录')
+                : t('未登录')}</span
           >
         </span>
       </button>
@@ -467,8 +471,11 @@
       // 只有重试过了还失败才把错误摆到播放条上。
       void recoverSource().then((retried) => {
         if (retried) return;
-        const what = player.current?.provider === 's3' ? '网盘文件可能已被删除或直链过期' : '直链可能已过期';
-        if (player.src) player.error = `音频加载失败（${what}）`;
+        const what =
+          player.current?.provider === 's3'
+            ? t('网盘文件可能已被删除或直链过期')
+            : t('直链可能已过期');
+        if (player.src) player.error = t('音频加载失败（{what}）', { what });
         player.status = 'error';
         player.playing = false;
       });

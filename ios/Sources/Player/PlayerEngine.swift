@@ -232,7 +232,7 @@ final class PlayerEngine {
     private func startItem(url string: String, track: Track) {
         ensureAudioSession()
         guard let url = URL(string: string) else {
-            error = "音频地址无效"
+            error = L("音频地址无效")
             buffering = false
             return
         }
@@ -251,7 +251,7 @@ final class PlayerEngine {
             queue: .main
         ) { [weak self] note in
             let message = (note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? Error)?.localizedDescription
-            Task { @MainActor in self?.error = message ?? "播放失败" }
+            Task { @MainActor in self?.error = message ?? L("播放失败") }
         }
     }
 
@@ -298,7 +298,7 @@ final class PlayerEngine {
             try session.setCategory(.playback, mode: .default, options: [])
             try session.setActive(true)
         } catch {
-            self.error = "音频会话初始化失败：\(error.localizedDescription)"
+            self.error = L("音频会话初始化失败：%@", error.localizedDescription)
         }
         interruptionObserver = NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification,

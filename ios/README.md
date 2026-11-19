@@ -5,7 +5,7 @@
 - 只播放用户自己的 S3 兼容存储；没有平台曲库、搜索、推荐、登录。
 - 浏览 S3 歌单/曲目、AVPlayer 流式播放、后台音频、锁屏/线控。
 - 指定歌曲/歌单离线缓存（URLSession background），缓存优先播放。
-- 收藏元数据写 favorites.json；只读 key 时降级为仅本机收藏。
+- 收藏 = 网盘「喜欢」目录里的一份副本（跨设备只认目录，不再用 favorites.json）；只读 key 时收藏会失败并提示。
 - iCloud：Keychain 同步 S3 密钥，KVS 同步非敏感配置；缓存不同步/不备份。
 - Liquid Glass：iOS 26+ 原生 glassEffect，iOS 18–25 系统材质退路。
 

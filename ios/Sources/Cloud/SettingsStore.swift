@@ -63,7 +63,7 @@ final class SettingsStore {
             status = nil
             error = nil
         } catch {
-            status = "读取设置失败"
+            status = L("读取设置失败")
             self.error = error.localizedDescription
         }
     }
@@ -82,12 +82,12 @@ final class SettingsStore {
         do {
             let normalizedEndpoint = try validateEndpoint(endpoint)
             let normalizedBucket = bucket.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !normalizedBucket.isEmpty else { throw SettingsError.message("Bucket 不能为空") }
+            guard !normalizedBucket.isEmpty else { throw SettingsError.message(L("Bucket 不能为空")) }
             let normalizedPrefix = prefix.trimmingCharacters(in: .whitespacesAndNewlines)
             let normalizedAccess = accessKey.trimmingCharacters(in: .whitespacesAndNewlines)
             let normalizedSecret = secretKey.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !normalizedAccess.isEmpty, !normalizedSecret.isEmpty else {
-                throw SettingsError.message("Access Key / Secret Key 不能为空")
+                throw SettingsError.message(L("Access Key / Secret Key 不能为空"))
             }
 
             let credentials = S3Credentials(accessKey: normalizedAccess, secretKey: normalizedSecret)
@@ -112,11 +112,11 @@ final class SettingsStore {
             hasCredentials = true
             localUpdatedAt = Date().timeIntervalSince1970
             if iCloudEnabled { cloud.push(next, eq: eqProvider?()) }
-            status = "已保存"
+            status = L("已保存")
             error = nil
             return true
         } catch {
-            status = "保存失败"
+            status = L("保存失败")
             self.error = error.localizedDescription
             return false
         }
@@ -131,7 +131,7 @@ final class SettingsStore {
             error = nil
             return message
         } catch {
-            status = "连接失败"
+            status = L("连接失败")
             self.error = error.localizedDescription
             return nil
         }
@@ -148,7 +148,7 @@ final class SettingsStore {
         ]) {}
         localUpdatedAt = Date().timeIntervalSince1970
         if iCloudEnabled { cloud.push(settings, eq: eqProvider?()) }
-        status = "已断开"
+        status = L("已断开")
     }
 
     func setICloudEnabled(_ enabled: Bool) async {
@@ -242,16 +242,16 @@ final class SettingsStore {
 
     private func validateEndpoint(_ raw: String) throws -> String {
         let value = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else { throw SettingsError.message("Endpoint 不能为空") }
+        guard !value.isEmpty else { throw SettingsError.message(L("Endpoint 不能为空")) }
         let normalized = value.contains("://") ? value : "https://\(value)"
         guard let url = URL(string: normalized), let scheme = url.scheme?.lowercased(), let host = url.host else {
-            throw SettingsError.message("Endpoint 不是合法 URL")
+            throw SettingsError.message(L("Endpoint 不是合法 URL"))
         }
         guard scheme == "https" || scheme == "http" else {
-            throw SettingsError.message("Endpoint 只支持 http/https")
+            throw SettingsError.message(L("Endpoint 只支持 http/https"))
         }
         if scheme == "http" && !isLocalHost(host) {
-            throw SettingsError.message("公网 Endpoint 必须使用 HTTPS；本机/局域网地址才允许 HTTP")
+            throw SettingsError.message(L("公网 Endpoint 必须使用 HTTPS；本机/局域网地址才允许 HTTP"))
         }
         return normalized.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
     }

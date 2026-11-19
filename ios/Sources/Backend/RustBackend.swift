@@ -22,7 +22,7 @@ actor RustBackend {
         let config: [String: String] = ["config_dir": configDir.path]
         let data = try JSONSerialization.data(withJSONObject: config)
         guard let text = String(data: data, encoding: .utf8) else {
-            throw BackendError.start("配置序列化失败")
+            throw BackendError.start(L("配置序列化失败"))
         }
         let response = try await Task.detached(priority: .userInitiated) {
             try Self.invokeStart(text)
@@ -54,7 +54,7 @@ actor RustBackend {
         do {
             let envelope = try Self.decoder.decode(Envelope<T>.self, from: Data(response.utf8))
             guard envelope.ok, let data = envelope.data else {
-                throw BackendError.call(envelope.error ?? "未知错误")
+                throw BackendError.call(envelope.error ?? L("未知错误"))
             }
             return data
         } catch let error as BackendError {
@@ -80,7 +80,7 @@ actor RustBackend {
 
     private nonisolated static func invokeStart(_ config: String) throws -> String {
         let raw = config.withCString { tm_start($0) }
-        guard let raw else { throw BackendError.start("tm_start 返回空") }
+        guard let raw else { throw BackendError.start(L("tm_start 返回空")) }
         defer { tm_free(raw) }
         let text = String(cString: raw)
         let envelope = try JSONSerialization.jsonObject(with: Data(text.utf8)) as? [String: Any]
@@ -96,7 +96,7 @@ actor RustBackend {
                 tm_invoke(cmdPtr, argsPtr)
             }
         }
-        guard let raw else { throw BackendError.call("tm_invoke 返回空") }
+        guard let raw else { throw BackendError.call(L("tm_invoke 返回空")) }
         defer { tm_free(raw) }
         return String(cString: raw)
     }

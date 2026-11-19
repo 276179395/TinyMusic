@@ -1,5 +1,7 @@
 /** 极简 toast：复制成功、已加入播放列表这类轻反馈 */
 
+import { t } from './i18n.svelte';
+
 export const toast = $state({
   msg: '',
   visible: false,
@@ -18,9 +20,9 @@ export function showToast(msg: string, ms = 1800) {
 }
 
 /** 复制文本，成功/失败都给一句反馈 */
-export async function copyText(text: string, label = '已复制') {
+export async function copyText(text: string, label?: string) {
   const ok = await writeClipboard(text);
-  showToast(ok ? label : '复制失败');
+  showToast(ok ? (label ?? t('已复制')) : t('复制失败'));
   return ok;
 }
 

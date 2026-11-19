@@ -23,6 +23,8 @@ struct NowPlayingView: View {
                             .padding(.horizontal, 10)
                             .transition(.opacity.combined(with: .scale(scale: 0.98)))
                     } else {
+                        Spacer(minLength: 8)
+
                         CoverImage(url: currentCoverURL, cornerRadius: 22)
                             .aspectRatio(1, contentMode: .fit)
                             .frame(maxWidth: 330)
@@ -35,7 +37,7 @@ struct NowPlayingView: View {
                                 }
                             }
                             .accessibilityElement()
-                            .accessibilityLabel("歌词")
+                            .accessibilityLabel(L("歌词"))
                             .accessibilityAddTraits(.isButton)
 
                         titleBlock
@@ -57,7 +59,7 @@ struct NowPlayingView: View {
                                     .shadow(color: .black.opacity(0.16), radius: 6, y: 3)
                             }
                             .buttonStyle(.plain)
-                            .accessibilityLabel("返回封面")
+                            .accessibilityLabel(L("返回封面"))
                         }
 
                         VStack(spacing: 8) {
@@ -88,13 +90,13 @@ struct NowPlayingView: View {
                                 .foregroundStyle(player.shuffle ? Color.accentColor : Color.secondary)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("随机播放")
+                        .accessibilityLabel(L("随机播放"))
 
                         Button { player.previous() } label: {
                             Image(systemName: "backward.fill").font(.system(size: 26))
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("上一首")
+                        .accessibilityLabel(L("上一首"))
 
                         Button {
                             player.toggle()
@@ -106,13 +108,13 @@ struct NowPlayingView: View {
                         }
                         .buttonStyle(.plain)
                         .tmGlassCircle()
-                        .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
+                        .accessibilityLabel(player.isPlaying ? L("暂停") : L("播放"))
 
                         Button { player.next() } label: {
                             Image(systemName: "forward.fill").font(.system(size: 26))
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("下一首")
+                        .accessibilityLabel(L("下一首"))
 
                         Button {
                             cycleRepeat()
@@ -122,7 +124,7 @@ struct NowPlayingView: View {
                                 .foregroundStyle(player.repeatMode == .off ? Color.secondary : Color.accentColor)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("循环模式")
+                        .accessibilityLabel(L("循环模式"))
                     }
                     .padding(.bottom, 8)
 
@@ -141,16 +143,21 @@ struct NowPlayingView: View {
                 .animation(.easeInOut(duration: 0.3), value: showLyrics)
             }
             .ignoresSafeArea(.container, edges: .bottom)
+            .background {
+                WindowSwipeBack(action: goBack)
+                    .frame(width: 0, height: 0)
+            }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button {
-                        close()
+                        goBack()
                     } label: {
-                        Image(systemName: "chevron.down")
+                        Image(systemName: showLyrics ? "chevron.left" : "chevron.down")
                     }
+                    .accessibilityLabel(showLyrics ? L("返回封面") : L("关闭播放器"))
                 }
             }
-            .navigationTitle(showLyrics ? (player.current?.title ?? "歌词") : "")
+            .navigationTitle(showLyrics ? (player.current?.title ?? L("歌词")) : "")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.hidden, for: .navigationBar)
             .sheet(isPresented: $showEQ) {
@@ -176,7 +183,7 @@ struct NowPlayingView: View {
 
     private var titleBlock: some View {
         VStack(spacing: 4) {
-            Text(player.current?.title ?? "未在播放")
+            Text(player.current?.title ?? L("未在播放"))
                 .font(.title2.weight(.bold))
                 .lineLimit(2)
                 .multilineTextAlignment(.center)
@@ -224,6 +231,16 @@ struct NowPlayingView: View {
             )
         }
         .ignoresSafeArea()
+    }
+
+    private func goBack() {
+        if showLyrics {
+            withAnimation(.easeInOut(duration: 0.3)) {
+                showLyrics = false
+            }
+        } else {
+            close()
+        }
     }
 
     private func close() {

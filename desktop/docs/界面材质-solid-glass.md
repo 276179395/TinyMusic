@@ -93,22 +93,49 @@
 两套用**同一批名字**，所以组件里没有一处 `data-theme` 分支；浅色块里只剩几处
 「不能靠颜色表达」的修正（遮罩浓度、封面占位色、自动填充底色）。
 
+## 两种材质：玻璃 / 边框
+
+玻璃是默认形态；**边框材质**是它的退路，用于老系统、旧引擎、系统要求减少透明和用户手动关闭。
+两者结构完全一样（间距、圆角、尺寸、层级一个都不改），只换材质：
+
+| | 玻璃（`data-glass="on"`） | 边框（`data-glass="flat"`） |
+| --- | --- | --- |
+| 底色 | 半透明，压在页面上 | 实色（`--solid-*`，等于玻璃的合成色） |
+| 模糊 | `backdrop-filter` | 没有 |
+| 边缘 | 顶边高光 + 发丝线 + 投影 | 1px 边框（`--pane-shadow: 0 0 0 1px var(--line-strong)`） |
+| 浮层 | 高光 + 两层投影 | 1px 边框 + 一层淡投影 |
+| 播放条 | 液态玻璃（模糊 + 增饱和 + 顶面两道光） | 实色胶囊 + 1px 边框 |
+
+开关在**设置 → 外观 → 玻璃材质**；也可以直接给 `<html>` 写 `data-glass="flat"`。
+判定顺序见 `src/lib/glass.svelte.ts`：
+
+1. 引擎不认 `backdrop-filter` 或 `oklch()` → 强制边框（开关不可用）；
+2. 用户在设置里关过 → 边框；
+3. 系统要求减少透明 → 边框；
+4. **macOS 12 及更早** → 边框（WKWebView 跟着系统走，模糊又贵又不稳）；
+5. 其余 → 玻璃。
+
+系统版本由桌面壳的 `system_info` 命令给出（macOS 读 `sw_vers -productVersion`），
+拿不到就只按能力判断。`data-glass="opaque"` 仍然可以单独标一块区域。
+
 ## 无障碍
 
-- **玻璃材质开关**（设置 → 外观，或直接给 `<html>` 写 `data-glass="off"`）：
-  去掉模糊、玻璃换成实色，高光与阴影保留。启动时会检测引擎能力，
-  不支持 `backdrop-filter` 的机器自动打开（见 `src/lib/glass.svelte.ts`）。
-  也可以用 `data-glass="opaque"` 单独标一块区域。
-- `prefers-reduced-transparency: reduce`：同一套实色退路，但**不要指望它在 macOS 上触发** ——
+- **边框材质就是全局的「减少透明」**：设置 → 外观 → 玻璃材质，或给 `<html>` 写
+  `data-glass="flat"`。老系统会自动选中，也可以手动切回去。
+- `prefers-reduced-transparency: reduce`：**不要指望它在 macOS 上触发** ——
   WebKit 至今（Safari 27）都没有实现这个媒体查询，Tauri 在 macOS 上用的就是系统 WKWebView。
-  这个分支留给 WebView2 / Chromium；macOS 上只能靠上面那个开关。
+  应用自己读这个媒体查询（`src/lib/glass.svelte.ts`）来切材质，所以 WebView2 / Chromium 上有值；
+  macOS 上只能靠上面那个开关。
 - `prefers-reduced-motion: reduce`：所有动画与过渡关闭。动只表示「正在发生」
   （骨架、跳动的小竖线、进度扫光），结束或停下时不靠动画装饰。
 
 ## 老引擎（macOS 11 / 12）
 
 macOS 上的 WKWebView 跟着系统走：系统停在 12，Safari 就停在能装上的最后一版，
-用户没法单独升级。这类机器上出问题的方式不是「模糊变弱」，而是**整页颜色失效**：
+用户没法单独升级。**macOS 12 及更早直接走边框材质**（见上一节），不打赌模糊能不能用；
+万一系统版本读不到、或引擎比预期更旧，下面三段兜底再兜一层。
+
+这类机器上出问题的方式不是「模糊变弱」，而是**整页颜色失效**：
 
 - 令牌全部由 `oklch()`（Safari 15.4+）和 `color-mix()`（Safari 16.2+）写成。
   引擎不认这两种写法时，`background-color: var(--bg)` 这类声明会在计算值阶段整条失效，
@@ -124,6 +151,7 @@ macOS 上的 WKWebView 跟着系统走：系统停在 12，Safari 就停在能�
 | 颜色 | `@supports not (color: oklch(0 0 0))` | 令牌换成等价的 sRGB 字面量 |
 | 颜色 | `@supports not (background-color: color-mix(...))` | `color-mix` 令牌换成等价 `rgba()` |
 | 材质 | `@supports not ((-webkit-backdrop-filter: ...) or (backdrop-filter: ...))` | `--bg2` / `--panel` / `--popover` / `--player-bg` 换 `--solid-*` |
+| 材质 | `html[data-glass='flat']`（由能力 + 系统版本判定写入） | 第 20.3 节：去模糊、实色 + 1px 边框 |
 
 sRGB 那一段是算出来的，不要手改：改了第 1 节的令牌之后跑
 `python3 tools/srgb-fallback.py`（CI 里用 `--check` 挡住过期）。

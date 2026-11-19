@@ -4,6 +4,7 @@
   import { icons, ICON_SIZE } from '../lib/icons';
   import { playTrack } from '../lib/player.svelte';
   import { requestDownload, downloadUi } from '../lib/download.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   let { tracks, label = '' }: { tracks: Track[]; label?: string } = $props();
 
@@ -26,7 +27,7 @@
     onclick={() => tracks[0] && playTrack(tracks[0], tracks)}
   >
     <HugeiconsIcon icon={icons.play} size={ICON_SIZE.inline} />
-    播放全部
+    {t('播放全部')}
   </button>
   <button disabled={busy || localTracks.length === 0} onclick={downloadAll}>
     {#if busy}
@@ -34,7 +35,7 @@
     {:else}
       <HugeiconsIcon icon={icons.download} size={ICON_SIZE.inline} />
     {/if}
-    {busy ? '下载中…' : `下载全部${label ? ' · ' + label : ''}`}
+    {busy ? t('下载中…') : label ? t('下载全部 · {label}', { label }) : t('下载全部')}
   </button>
   {#if msg}<span class="muted small">{msg}</span>{/if}
 </div>

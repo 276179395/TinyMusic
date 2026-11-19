@@ -5,6 +5,7 @@
   import { icons, ICON_SIZE } from '../lib/icons';
   import { closeQueue, closeVolume } from '../lib/player.svelte';
   import { showToast } from '../lib/toast.svelte';
+  import { t } from '../lib/i18n.svelte';
   import {
     EQ_BANDS,
     EQ_MAX_DB,
@@ -35,7 +36,7 @@
     if (!setEqualizerEnabled(checked) && checked) {
       // 失败时把 DOM 勾选状态退回去，否则开关会停在「已开」但实际没生效
       input.checked = false;
-      showToast('当前系统不支持均衡器，已关闭');
+      showToast(t('当前系统不支持均衡器，已关闭'));
     }
   }
 
@@ -60,7 +61,7 @@
   <div
     class="eq-panel"
     role="dialog"
-    aria-label="均衡器"
+    aria-label={t('均衡器')}
     transition:fly={{ y: 10, duration: 180, opacity: 0 }}
   >
     <div class="eq-head">
@@ -69,20 +70,20 @@
       </span>
       <div class="eq-heading">
         <div class="eq-title">
-          均衡器
-          <span class="eq-badge">10 段</span>
+          {t('均衡器')}
+          <span class="eq-badge">{t('10 段')}</span>
         </div>
-        <div class="eq-sub">32 Hz – 16 kHz · 实时作用于播放</div>
+        <div class="eq-sub">{t('32 Hz – 16 kHz · 实时作用于播放')}</div>
       </div>
 
       <label
         class="eq-switch"
         class:disabled={equalizer.unsupported}
-        title={equalizer.unsupported ? '当前系统不支持音效处理' : equalizer.enabled ? '关闭均衡器' : '开启均衡器'}
+        title={equalizer.unsupported ? t('当前系统不支持音效处理') : equalizer.enabled ? t('关闭均衡器') : t('开启均衡器')}
       >
         <input
           type="checkbox"
-          aria-label="开启均衡器"
+          aria-label={t('开启均衡器')}
           checked={equalizer.enabled}
           disabled={equalizer.unsupported}
           onchange={(e) => toggleEnabled(e.currentTarget)}
@@ -90,26 +91,26 @@
         <span class="eq-switch-track" aria-hidden="true"></span>
       </label>
 
-      <button class="eq-close" title="收起" aria-label="收起均衡器" onclick={closeEqualizer}>
+      <button class="eq-close" title={t('收起')} aria-label={t('收起均衡器')} onclick={closeEqualizer}>
         <HugeiconsIcon icon={icons.close} size={ICON_SIZE.inline} />
       </button>
     </div>
 
     <div class="eq-body">
       <div class="eq-preset-head">
-        <span>预设</span>
-        <span class="eq-current">{currentPresetName()}</span>
+        <span>{t('预设')}</span>
+        <span class="eq-current">{t(currentPresetName())}</span>
       </div>
-      <div class="eq-presets" role="group" aria-label="均衡器预设">
+      <div class="eq-presets" role="group" aria-label={t('均衡器预设')}>
         {#each EQ_PRESETS as p (p.id)}
           <button
             class="eq-preset"
             class:on={equalizer.preset === p.id}
-            title={p.desc}
+            title={t(p.desc)}
             aria-pressed={equalizer.preset === p.id}
             onclick={() => setPreset(p.id)}
           >
-            {p.name}
+            {t(p.name)}
           </button>
         {/each}
       </div>
@@ -122,7 +123,7 @@
         </div>
 
         <div class="eq-preamp">
-          <span class="eq-preamp-label">前级</span>
+          <span class="eq-preamp-label">{t('前级')}</span>
           <input
             type="range"
             min={EQ_MIN_DB}
@@ -130,7 +131,7 @@
             step="0.5"
             value={equalizer.preamp}
             style="--p:{preampPct}%"
-            aria-label="前级增益"
+            aria-label={t('前级增益')}
             aria-valuetext={`${formatDb(equalizer.preamp)} dB`}
             oninput={(e) => setPreamp(Number(e.currentTarget.value))}
           />
@@ -142,14 +143,14 @@
     <div class="eq-foot">
       <span class="eq-hint">
         {#if equalizer.unsupported}
-          当前系统不支持音效处理，均衡器不可用
+          {t('当前系统不支持音效处理，均衡器不可用')}
         {:else if equalizer.enabled}
-          已开启 · 双击滑块可归零
+          {t('已开启 · 双击滑块可归零')}
         {:else}
-          打开开关后生效
+          {t('打开开关后生效')}
         {/if}
       </span>
-      <button class="eq-reset" onclick={resetEqualizer} title="恢复平直曲线">重置</button>
+      <button class="eq-reset" onclick={resetEqualizer} title={t('恢复平直曲线')}>{t('重置')}</button>
     </div>
   </div>
 {/if}

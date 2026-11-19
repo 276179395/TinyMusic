@@ -164,7 +164,7 @@ impl S3 {
         Ok(())
     }
 
-    /// 读取对象内容；对象不存在时返回 `Ok(None)`（比如还没同步过 favorites.json）
+    /// 读取对象内容；对象不存在时返回 `Ok(None)`（比如库里的歌已经被删掉）
     pub async fn get_object(&self, key: &str) -> Result<Option<Vec<u8>>> {
         let (url, path) = self.object_path(key)?;
         let empty_hash = sha256_hex(&[]);
@@ -414,6 +414,18 @@ impl S3 {
         self.put_object(to_key, data, content_type_for_key(to_key))
             .await?;
         self.delete_object(from_key).await
+    }
+
+    /// 复制对象：读源 → 写目标（同样不走服务端 CopyObject）。
+    ///
+    /// 源对象不存在时返回 Ok(false)，调用方据此区分「文件已经没了」和网络错误。
+    pub async fn copy_object(&self, from_key: &str, to_key: &str) -> Result<bool> {
+        let Some(data) = self.get_object(from_key).await? else {
+            return Ok(false);
+        };
+        self.put_object(to_key, data, content_type_for_key(to_key))
+            .await?;
+        Ok(true)
     }
 
     /// 生成带签名的 GET 直链（给 <audio>/<img> 直接用，默认 6 小时）

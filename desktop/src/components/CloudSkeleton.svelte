@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { t } from '../lib/i18n.svelte';
+
   /** 网盘页两种骨架：歌单列表 / 歌单详情曲目 */
   let {
     mode = 'list',
@@ -9,7 +11,7 @@
   } = $props();
 </script>
 
-<div class="sk-block" role="status" aria-label="加载中">
+<div class="sk-block" role="status" aria-label={t('加载中')}>
   {#if mode === 'list'}
     <div class="plrows">
       {#each Array(4) as _, i (i)}

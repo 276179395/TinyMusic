@@ -63,10 +63,10 @@ struct PlaylistView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     HStack(spacing: 10) {
                         Menu {
-                            Button("缓存全部 \(playableTracks.count) 首") {
+                            Button(L("缓存全部 %@ 首", "\(playableTracks.count)")) {
                                 Task { await cacheTracks(playableTracks) }
                             }
-                            Button("选择歌曲缓存…") { showPicker = true }
+                            Button(L("选择歌曲缓存…")) { showPicker = true }
                         } label: {
                             if caching {
                                 ProgressView().controlSize(.small)
@@ -75,20 +75,20 @@ struct PlaylistView: View {
                             }
                         }
                         .disabled(tracks.isEmpty || caching)
-                        .accessibilityLabel("缓存到本地")
+                        .accessibilityLabel(L("缓存到本地"))
 
                         Menu {
-                            Button("重命名歌单") {
+                            Button(L("重命名歌单")) {
                                 showRename = true
                             }
-                            Button("删除歌单", role: .destructive) {
+                            Button(L("删除歌单"), role: .destructive) {
                                 confirm = .deletePlaylist
                             }
                         } label: {
                             Image(systemName: "ellipsis.circle")
                         }
                         .disabled(playlist.root)
-                        .accessibilityLabel("歌单操作")
+                        .accessibilityLabel(L("歌单操作"))
                     }
                 }
             }
@@ -108,16 +108,16 @@ struct PlaylistView: View {
                 Task { await cacheTracks(selected) }
             }
         }
-        .alert("缓存", isPresented: Binding(
+        .alert(L("缓存"), isPresented: Binding(
             get: { cacheMessage != nil },
             set: { if !$0 { cacheMessage = nil } }
         )) {
-            Button("好") { cacheMessage = nil }
+            Button(L("好")) { cacheMessage = nil }
         } message: {
             Text(cacheMessage ?? "")
         }
         .sheet(isPresented: $showRename) {
-            PlaylistNameSheet(title: "重命名歌单", initialName: playlist.name) { name in
+            PlaylistNameSheet(title: L("重命名歌单"), initialName: playlist.name) { name in
                 let ok = await model.library.renamePlaylist(playlist, to: name)
                 if ok { dismiss() }
                 return ok
@@ -129,14 +129,14 @@ struct PlaylistView: View {
         ), titleVisibility: .visible) {
             switch confirm {
             case .deletePlaylist:
-                Button("删除歌单和云端歌曲", role: .destructive) {
+                Button(L("删除歌单和云端歌曲"), role: .destructive) {
                     Task {
                         if await model.library.deletePlaylist(playlist) { dismiss() }
                         confirm = nil
                     }
                 }
             case .deleteTrack(let track):
-                Button("删除歌曲", role: .destructive) {
+                Button(L("删除歌曲"), role: .destructive) {
                     Task {
                         if !(await model.library.deleteTrack(track)) {
                             cacheMessage = model.library.error
@@ -147,7 +147,7 @@ struct PlaylistView: View {
             case nil:
                 EmptyView()
             }
-            Button("取消", role: .cancel) { confirm = nil }
+            Button(L("取消"), role: .cancel) { confirm = nil }
         } message: {
             Text(confirmMessage)
         }
@@ -155,16 +155,16 @@ struct PlaylistView: View {
 
     private var confirmTitle: String {
         switch confirm {
-        case .deletePlaylist: return "删除「\(playlist.name)」？"
-        case .deleteTrack(let track): return "删除「\(track.title)」？"
+        case .deletePlaylist: return L("删除「%@」？", playlist.name)
+        case .deleteTrack(let track): return L("删除「%@」？", track.title)
         case nil: return ""
         }
     }
 
     private var confirmMessage: String {
         switch confirm {
-        case .deletePlaylist: return "会删除 S3 上的歌单目录和里面的歌曲，无法撤销。"
-        case .deleteTrack: return "会删除 S3 上的音频、歌词和封面。"
+        case .deletePlaylist: return L("会删除 S3 上的歌单目录和里面的歌曲，无法撤销。")
+        case .deleteTrack: return L("会删除 S3 上的音频、歌词和封面。")
         case nil: return ""
         }
     }
@@ -178,7 +178,9 @@ struct PlaylistView: View {
                     Text(playlist.name)
                         .font(.title2.weight(.bold))
                         .lineLimit(2)
-                    Text(isOffline ? "离线缓存 · \(tracks.count) 首" : "\(tracks.count) 首")
+                    Text(isOffline
+                        ? L("离线缓存 · %@ 首", "\(tracks.count)")
+                        : L("%@ 首", "\(tracks.count)"))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
@@ -189,7 +191,7 @@ struct PlaylistView: View {
                 Button {
                     playAll()
                 } label: {
-                    Label("播放全部", systemImage: "play.fill")
+                    Label(L("播放全部"), systemImage: "play.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
@@ -197,12 +199,12 @@ struct PlaylistView: View {
 
                 if !isOffline {
                     Menu {
-                        Button("缓存全部 \(playableTracks.count) 首") {
+                        Button(L("缓存全部 %@ 首", "\(playableTracks.count)")) {
                             Task { await cacheTracks(playableTracks) }
                         }
-                        Button("选择歌曲缓存…") { showPicker = true }
+                        Button(L("选择歌曲缓存…")) { showPicker = true }
                     } label: {
-                        Label("缓存", systemImage: "arrow.down.circle")
+                        Label(L("缓存"), systemImage: "arrow.down.circle")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.bordered)
@@ -213,7 +215,7 @@ struct PlaylistView: View {
             if activeCacheCount > 0 {
                 VStack(spacing: 5) {
                     HStack {
-                        Text("正在缓存 \(activeCacheCount) 首")
+                        Text(L("正在缓存 %@ 首", "\(activeCacheCount)"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
@@ -236,12 +238,12 @@ struct PlaylistView: View {
     @ViewBuilder
     private var trackList: some View {
         if !isOffline && model.library.loadingTracks && tracks.isEmpty {
-            ProgressView("读取曲目…")
+            ProgressView(L("读取曲目…"))
                 .frame(maxWidth: .infinity)
                 .padding(.top, 40)
         } else if tracks.isEmpty {
             ContentUnavailableView(
-                isOffline ? "这个歌单没有缓存歌曲" : "这个歌单是空的",
+                isOffline ? L("这个歌单没有缓存歌曲") : L("这个歌单是空的"),
                 systemImage: "music.note"
             )
             .padding(.top, 40)
@@ -281,7 +283,7 @@ struct PlaylistView: View {
                         onMove: { target in
                             Task {
                                 if await model.library.moveTrack(track, to: target) {
-                                    cacheMessage = "已移动到「\(target.name)」"
+                                    cacheMessage = L("已移动到「%@」", target.name)
                                 } else {
                                     cacheMessage = model.library.error
                                 }
@@ -308,10 +310,10 @@ struct PlaylistView: View {
             do {
                 let queued = try await CacheManager.shared.enqueue(track: track, playlist: playlist.name)
                 if queued {
-                    cacheMessage = "已加入缓存队列：\(track.title)"
+                    cacheMessage = L("已加入缓存队列：%@", track.title)
                 }
             } catch {
-                cacheMessage = "缓存失败：\(error.localizedDescription)"
+                cacheMessage = L("缓存失败：%@", error.localizedDescription)
             }
         }
     }
@@ -319,7 +321,7 @@ struct PlaylistView: View {
     private func cacheTracks(_ selected: [Track]) async {
         let targets = selected.filter(\.playable)
         guard !targets.isEmpty else {
-            cacheMessage = "没有可缓存的歌曲"
+            cacheMessage = L("没有可缓存的歌曲")
             return
         }
         caching = true
@@ -331,7 +333,7 @@ struct PlaylistView: View {
             }
         }
         cacheMessage = queued > 0
-            ? "已加入缓存队列：\(queued) 首"
-            : "所选歌曲都已在本地"
+            ? L("已加入缓存队列：%@ 首", "\(queued)")
+            : L("所选歌曲都已在本地")
     }
 }

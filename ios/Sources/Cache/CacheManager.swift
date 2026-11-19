@@ -83,7 +83,7 @@ final class CacheManager: NSObject, URLSessionDownloadDelegate, @unchecked Senda
            !(200..<300).contains(http.statusCode) {
             try? FileManager.default.removeItem(at: location)
             Task { @MainActor in
-                CacheStore.shared.fail(info.key, error: "缓存失败：HTTP \(http.statusCode)")
+                CacheStore.shared.fail(info.key, error: L("缓存失败：HTTP %@", "\(http.statusCode)"))
             }
             return
         }
@@ -91,7 +91,7 @@ final class CacheManager: NSObject, URLSessionDownloadDelegate, @unchecked Senda
             let size = (try? location.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
             try? FileManager.default.removeItem(at: location)
             Task { @MainActor in
-                CacheStore.shared.fail(info.key, error: "缓存失败：服务器返回的不是有效音频（\(size) 字节）")
+                CacheStore.shared.fail(info.key, error: L("缓存失败：服务器返回的不是有效音频（%@ 字节）", "\(size)"))
             }
             return
         }
@@ -102,7 +102,7 @@ final class CacheManager: NSObject, URLSessionDownloadDelegate, @unchecked Senda
         do {
             try fm.moveItem(at: location, to: destination)
         } catch {
-            Task { @MainActor in CacheStore.shared.fail(info.key, error: "写入缓存失败：\(error.localizedDescription)") }
+            Task { @MainActor in CacheStore.shared.fail(info.key, error: L("写入缓存失败：%@", error.localizedDescription)) }
             return
         }
         let bytes = (try? destination.resourceValues(forKeys: [.fileSizeKey]))?.fileSize.map(Int64.init) ?? 0

@@ -4,6 +4,9 @@ options:
   deploymentTarget:
     iOS: "18.0"
   developmentLanguage: zh-Hans
+  knownRegions:
+    - zh-Hans
+    - en
   createIntermediateGroups: true
   generateEmptyDirectories: true
 

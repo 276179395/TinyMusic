@@ -36,18 +36,18 @@ struct CacheSelectionSheet: View {
                     }
                 } footer: {
                     if !tracks.isEmpty {
-                        Text("已选 \(selected.count) / \(tracks.count) 首")
+                        Text(L("已选 %@ / %@ 首", "\(selected.count)", "\(tracks.count)"))
                     }
                 }
             }
-            .navigationTitle("选择要缓存的歌曲")
+            .navigationTitle(L("选择要缓存的歌曲"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(L("取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("缓存") {
+                    Button(L("缓存")) {
                         let chosen = tracks.filter { selected.contains($0.key) }
                         onConfirm(chosen)
                         dismiss()
@@ -55,7 +55,7 @@ struct CacheSelectionSheet: View {
                     .disabled(selected.isEmpty)
                 }
                 ToolbarItem(placement: .topBarLeading) {
-                    Button(selected.count == tracks.count ? "取消全选" : "全选") {
+                    Button(selected.count == tracks.count ? L("取消全选") : L("全选")) {
                         if selected.count == tracks.count {
                             selected.removeAll()
                         } else {

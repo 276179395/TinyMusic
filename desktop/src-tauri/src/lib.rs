@@ -775,6 +775,49 @@ fn set_window_theme(window: tauri::WebviewWindow, theme: Option<String>) -> Resu
 }
 
 
+/// 系统版本：玻璃材质要按系统降级（macOS 11/12 的 WKWebView 太旧，
+/// 模糊与 oklch 都靠不住，整页会用「边框材质」）。
+///
+/// 只在桌面壳里实现：前端拿不到这条命令时，只有能力检测兜底。
+#[derive(serde::Serialize)]
+struct SystemInfo {
+    os: String,
+    /// macOS 是 "12.7.6" 这种；Windows/Linux 留空（WebView2 是常青的，不用按系统降级）
+    #[serde(rename = "osVersion")]
+    os_version: String,
+}
+
+#[tauri::command]
+fn system_info() -> SystemInfo {
+    SystemInfo {
+        os: std::env::consts::OS.to_string(),
+        os_version: os_version(),
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn os_version() -> String {
+    use std::sync::OnceLock;
+    // 启动后只问一次系统；sw_vers 是一次几十毫秒的子进程，别每帧都问
+    static CACHE: OnceLock<String> = OnceLock::new();
+    CACHE
+        .get_or_init(|| {
+            std::process::Command::new("sw_vers")
+                .arg("-productVersion")
+                .output()
+                .ok()
+                .and_then(|out| String::from_utf8(out.stdout).ok())
+                .map(|s| s.trim().to_string())
+                .unwrap_or_default()
+        })
+        .clone()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn os_version() -> String {
+    String::new()
+}
+
 #[tauri::command]
 fn login_close(app: tauri::AppHandle) -> Result<(), String> {
     close_login_popups(&app);
@@ -908,19 +951,35 @@ fn show_main(app: &tauri::AppHandle) {
 }
 
 
-fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
-    let show = MenuItem::with_id(app, "show", "显示主界面", true, None::<&str>)?;
-    let toggle = MenuItem::with_id(app, "toggle", "播放 / 暂停", true, None::<&str>)?;
-    let prev_i = MenuItem::with_id(app, "prev", "上一首", true, None::<&str>)?;
-    let next_i = MenuItem::with_id(app, "next", "下一首", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "退出 TinyMusic", true, None::<&str>)?;
+/// 托盘菜单文案：跟随界面语言（前端启动和切换语言时都会调 set_ui_language）
+fn tray_menu_for(app: &tauri::AppHandle, lang: &str) -> tauri::Result<Menu<tauri::Wry>> {
+    let (show_t, toggle_t, prev_t, next_t, quit_t) = if lang == "en" {
+        (
+            "Show TinyMusic",
+            "Play / Pause",
+            "Previous",
+            "Next",
+            "Quit TinyMusic",
+        )
+    } else {
+        ("显示主界面", "播放 / 暂停", "上一首", "下一首", "退出 TinyMusic")
+    };
+    let show = MenuItem::with_id(app, "show", show_t, true, None::<&str>)?;
+    let toggle = MenuItem::with_id(app, "toggle", toggle_t, true, None::<&str>)?;
+    let prev_i = MenuItem::with_id(app, "prev", prev_t, true, None::<&str>)?;
+    let next_i = MenuItem::with_id(app, "next", next_t, true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", quit_t, true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
 
-    let menu = Menu::with_items(
+    Menu::with_items(
         app,
         &[&show, &sep1, &toggle, &prev_i, &next_i, &sep2, &quit],
-    )?;
+    )
+}
+
+fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
+    let menu = tray_menu_for(app.handle(), "zh")?;
 
     let mut builder = TrayIconBuilder::with_id("main")
         .menu(&menu)
@@ -950,6 +1009,17 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
     }
     builder.build(app)?;
     Ok(())
+}
+
+
+/// 界面语言变化时重画托盘菜单（前端 initI18n / setLanguage 会调用）
+#[tauri::command]
+fn set_ui_language(app: tauri::AppHandle, lang: String) -> Result<(), String> {
+    let Some(tray) = app.tray_by_id("main") else {
+        return Ok(());
+    };
+    let menu = tray_menu_for(&app, &lang).map_err(|e| e.to_string())?;
+    tray.set_menu(Some(menu)).map_err(|e| e.to_string())
 }
 
 
@@ -1029,6 +1099,8 @@ pub fn run() {
             netease_login_open,
             open_download_dir,
             set_window_theme,
+            set_ui_language,
+            system_info,
             hide_to_tray,
         ])
         .build(tauri::generate_context!())

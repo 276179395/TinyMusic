@@ -8,11 +8,11 @@ struct EqualizerView: View {
         NavigationStack {
             Form {
                 Section {
-                    Toggle("启用均衡器", isOn: Binding(
+                    Toggle(L("启用均衡器"), isOn: Binding(
                         get: { eq.enabled },
                         set: { eq.setEnabled($0) }
                     ))
-                    Picker("预设", selection: Binding(
+                    Picker(L("预设"), selection: Binding(
                         get: { eq.presetID },
                         set: { eq.applyPreset($0) }
                     )) {
@@ -20,7 +20,7 @@ struct EqualizerView: View {
                             Text(preset.name).tag(preset.id)
                         }
                         if eq.presetID == "custom" {
-                            Text("自定义").tag("custom")
+                            Text(L("自定义")).tag("custom")
                         }
                     }
                     if let preset = EQLibrary.preset(id: eq.presetID) {
@@ -29,12 +29,12 @@ struct EqualizerView: View {
                             .foregroundStyle(.secondary)
                     }
                 } header: {
-                    Text("均衡器")
+                    Text(L("均衡器"))
                 } footer: {
-                    Text("10 段峰值 EQ 通过 MTAudioProcessingTap 作用于 AVPlayer；流式与离线缓存都生效。")
+                    Text(L("10 段峰值 EQ 通过 MTAudioProcessingTap 作用于 AVPlayer；流式与离线缓存都生效。"))
                 }
 
-                Section("频段") {
+                Section(header: Text(L("频段"))) {
                     ForEach(Array(EQLibrary.bands.enumerated()), id: \.offset) { index, hz in
                         VStack(alignment: .leading, spacing: 2) {
                             HStack {
@@ -58,7 +58,7 @@ struct EqualizerView: View {
                     }
                 }
 
-                Section("前级") {
+                Section(header: Text(L("前级"))) {
                     HStack {
                         Text("Preamp")
                         Spacer()
@@ -77,7 +77,7 @@ struct EqualizerView: View {
                 }
 
                 Section {
-                    Button("恢复平直", role: .destructive) {
+                    Button(L("恢复平直"), role: .destructive) {
                         eq.reset()
                     }
                 }
@@ -89,11 +89,11 @@ struct EqualizerView: View {
                         .listRowInsets(EdgeInsets())
                 }
             }
-            .navigationTitle("均衡器")
+            .navigationTitle(L("均衡器"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") { dismiss() }
+                    Button(L("完成")) { dismiss() }
                 }
             }
         }

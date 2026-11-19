@@ -28,7 +28,7 @@ struct MiniPlayer: View {
                         .contentShape(Circle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(player.isPlaying ? "暂停" : "播放")
+                .accessibilityLabel(player.isPlaying ? L("暂停") : L("播放"))
 
                 Button {
                     showQueue = true
@@ -39,7 +39,7 @@ struct MiniPlayer: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("播放列表")
+                .accessibilityLabel(L("播放列表"))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 7)

@@ -7,6 +7,7 @@
  */
 import { api, type S3IntegrityIssue } from './api';
 import { showToast } from './toast.svelte';
+import { t } from './i18n.svelte';
 
 export type FixStatus = 'waiting' | 'running' | 'done' | 'failed';
 
@@ -118,7 +119,7 @@ export async function fixIntegrity(ids: string[]) {
         if (p.status === 'failed') {
           integrityUi.errors = {
             ...integrityUi.errors,
-            [p.id]: p.error || '补齐失败',
+            [p.id]: p.error || t('补齐失败'),
           };
         }
         if (p.status === 'done' && !integrityUi.fixed.some((f) => f.id === p.id)) {
@@ -140,7 +141,7 @@ export async function fixIntegrity(ids: string[]) {
       if (nextStatus[issue.id] === 'done') {
         // 说补好了、重扫却还在：按失败展示，别让用户以为已经好了
         nextStatus[issue.id] = 'failed';
-        nextErrors[issue.id] = nextErrors[issue.id] || '补齐后重新检查仍然缺失';
+        nextErrors[issue.id] = nextErrors[issue.id] || t('补齐后重新检查仍然缺失');
       }
     }
     // 已经不在结果里的条目（补好了 / 列表变了）清掉状态
@@ -159,9 +160,9 @@ export async function fixIntegrity(ids: string[]) {
 
     const leftSelected = report.issues.filter((i) => todo.includes(i.id));
     if (!leftSelected.length) {
-      showToast('已全部补齐');
+      showToast(t('已全部补齐'));
     } else {
-      showToast(`还有 ${leftSelected.length} 首没补齐`);
+      showToast(t('还有 {n} 首没补齐', { n: leftSelected.length }));
     }
   } catch (e) {
     // 任务整体失败时，没轮到的条目回到「可重试」，别一直挂在等待中

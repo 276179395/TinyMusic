@@ -82,19 +82,19 @@ final class CacheStore {
     /// 断网/断开 S3 时，资料库用它显示离线歌单。
     var cachedPlaylists: [Playlist] {
         let groups = Dictionary(grouping: entries.values.filter { $0.status == .done }) { entry in
-            entry.playlist.isEmpty ? "未分类" : entry.playlist
+            entry.playlist.isEmpty ? L("未分类") : entry.playlist
         }
         return groups.map { name, list in
             let sorted = list.sorted { $0.cachedAt < $1.cachedAt }
             let cover = sorted.first.flatMap { coverURL(for: $0.key)?.absoluteString }
-            return Playlist(name: name, count: sorted.count, cover: cover, root: name == "未分类")
+            return Playlist(name: name, count: sorted.count, cover: cover, root: name == L("未分类"))
         }
         .sorted { $0.name.localizedCompare($1.name) == .orderedAscending }
     }
 
     func cachedTracks(in playlist: String) -> [Track] {
         entries.values
-            .filter { $0.status == .done && (($0.playlist.isEmpty ? "未分类" : $0.playlist) == playlist) }
+            .filter { $0.status == .done && (($0.playlist.isEmpty ? L("未分类") : $0.playlist) == playlist) }
             .sorted { $0.cachedAt < $1.cachedAt }
             .map(\.track)
     }
@@ -278,7 +278,7 @@ final class CacheStore {
             } else if entry.status == .downloading {
                 var updated = entry
                 updated.status = .failed
-                updated.error = "缓存中断，可重试"
+                updated.error = L("缓存中断，可重试")
                 entries[key] = updated
             }
         }

@@ -123,12 +123,30 @@ img { max-width: 100%; height: auto; display: block; }
   box-shadow: 0 0 0 1px var(--line);
 }
 
+.nav-right { display: flex; align-items: center; gap: 16px; }
+
 .nav-link {
   font-size: 14px;
   color: var(--muted);
   transition: color 0.18s ease;
 }
 .nav-link:hover { color: var(--fg); }
+
+.lang {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.lang button {
+  appearance: none; border: 0; background: transparent; color: var(--muted);
+  font: inherit; font-size: 12.5px; padding: 4px 12px; cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.lang button:hover { color: var(--fg); }
+.lang button[aria-pressed="true"] { background: var(--panel); color: var(--fg); }
+
+[hidden] { display: none !important; }
 
 /* ---------- 首屏：左文字 / 右预览 ---------- */
 
@@ -377,6 +395,12 @@ footer .row {
 footer a { color: var(--muted); }
 footer a:hover { color: var(--fg); }
 
+.disclaim {
+  margin: 14px 0 0;
+  font-size: 12px;
+  color: var(--faint);
+}
+
 /* ---------- 响应式 ---------- */
 
 @media (max-width: 940px) {
@@ -392,6 +416,7 @@ footer a:hover { color: var(--fg); }
 @media (max-width: 520px) {
   .wrap { padding: 0 20px; }
   .nav { height: 64px; }
+  .nav-right { gap: 10px; }
   .actions .btn { flex: 1 1 100%; }
 }
 </style>
@@ -402,10 +427,17 @@ footer a:hover { color: var(--fg); }
 
   <header class="nav">
     <a class="brand" href="#top">
-      <img src="assets/icon.png" width="28" height="28" alt="" />
+      <img src="assets/icon.png" width="28" height="28" alt="" aria-hidden="true" />
       TinyMusic
     </a>
-    <a class="nav-link" href="https://github.com/RedCarl/TinyMusic" target="_blank" rel="noopener">GitHub ↗</a>
+    <div class="nav-right">
+      <a class="nav-link" href="tinymusic/"><span data-zh>iOS 版</span><span data-en hidden>iOS app</span></a>
+      <a class="nav-link" href="https://github.com/RedCarl/TinyMusic" target="_blank" rel="noopener">GitHub ↗</a>
+      <div class="lang" role="group" aria-label="Language / 语言">
+        <button type="button" data-set-lang="zh" aria-pressed="true">中文</button>
+        <button type="button" data-set-lang="en" aria-pressed="false">EN</button>
+      </div>
+    </div>
   </header>
 
   <main id="top">
@@ -413,11 +445,11 @@ footer a:hover { color: var(--fg); }
       <div class="copy">
         <p class="eyebrow">Tauri 2 · Svelte 5 · Rust</p>
 
-        <h1>听歌，<br />也把歌<em>留下</em>。</h1>
+        <h1><span data-zh>听歌，</span><span data-en hidden>Music on,</span><br /><span data-zh>也把歌<em>留下</em>。</span><span data-en hidden>and <em>kept</em>.</span></h1>
 
         <p class="lede">
-          一个 4.5 MB 的桌面音乐客户端。搜索、试听、下载、歌词、网盘都在一个窗口里；
-          拿不到的歌会直接置灰，而不是让你盯着「正在搜索」。
+          <span data-zh>一个 4.5 MB 的桌面音乐客户端。搜索、试听、下载、歌词、网盘都在一个窗口里；拿不到的歌会直接置灰，而不是让你盯着「正在搜索」。</span>
+          <span data-en hidden>A 4.5 MB desktop music client. Search, preview, download, lyrics and cloud storage all live in one window; tracks that can't be fetched are greyed out instead of leaving you staring at "Searching…".</span>
         </p>
 
         <div class="actions">
@@ -427,7 +459,7 @@ footer a:hover { color: var(--fg); }
           </a>
           <a class="btn btn-ghost" href="https://github.com/RedCarl/TinyMusic" target="_blank" rel="noopener">
             <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-            源代码
+            <span data-zh>源代码</span><span data-en hidden>Source</span>
           </a>
         </div>
 
@@ -435,18 +467,18 @@ footer a:hover { color: var(--fg); }
       </div>
 
       <figure class="shot">
-        <img src="assets/screenshot.jpg" width="1915" height="1123"
+        <img src="assets/screenshot.jpg" width="1915" height="1123" id="shot"
              alt="TinyMusic 主界面：左侧导航、每日推荐、歌单与底部播放器" />
       </figure>
     </section>
 
     <section class="download" id="download">
-      <h2>下载</h2>
+      <h2><span data-zh>下载</span><span data-en hidden>Download</span></h2>
       <p class="sub" id="sub">安装包约 3–4 MB，新版本可在应用内直接升级。</p>
 
       <div class="platforms">
         <a class="plat" data-os="windows" data-asset="exe" href="https://github.com/RedCarl/TinyMusic/releases/latest" rel="noopener">
-          <span class="tag" data-rec hidden>推荐</span>
+          <span class="tag" data-rec hidden><span data-zh>推荐</span><span data-en hidden>Best</span></span>
           <span class="os">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 5.6 10.4 4.6v6.8H3V5.6Zm0 7.4h7.4v6.8L3 18.8V13Zm9-8.7L21 3v8.4h-9V4.3Zm0 8.7h9V21l-9-1.3V13Z"/></svg>
             Windows
@@ -456,17 +488,17 @@ footer a:hover { color: var(--fg); }
         </a>
 
         <a class="plat" data-os="mac" data-asset="dmg-arm" href="https://github.com/RedCarl/TinyMusic/releases/latest" rel="noopener">
-          <span class="tag" data-rec hidden>推荐</span>
+          <span class="tag" data-rec hidden><span data-zh>推荐</span><span data-en hidden>Best</span></span>
           <span class="os">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.7.8-3.4.8-.7 0-1.8-.8-3-.8-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-1.1 2.8-2.2.9-1.3 1.3-2.5 1.3-2.6-.1 0-2.6-1-2.6-3.8ZM14.2 5.7c.6-.8 1.1-1.9 1-3-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-1 2.9 1 .1 2-.5 2.7-1.3Z"/></svg>
-            macOS · Apple 芯片
+            <span data-zh>macOS · Apple 芯片</span><span data-en hidden>macOS · Apple silicon</span>
           </span>
           <span class="file" data-file="dmg-arm">macOS 11+ · arm64</span>
           <span class="size" data-size="dmg-arm"></span>
         </a>
 
         <a class="plat" data-os="mac-intel" data-asset="dmg-x64" href="https://github.com/RedCarl/TinyMusic/releases/latest" rel="noopener">
-          <span class="tag" data-rec hidden>推荐</span>
+          <span class="tag" data-rec hidden><span data-zh>推荐</span><span data-en hidden>Best</span></span>
           <span class="os">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.7c0-2.3 1.9-3.4 2-3.5-1.1-1.6-2.8-1.8-3.4-1.8-1.4-.1-2.7.8-3.4.8-.7 0-1.8-.8-3-.8-1.5 0-3 .9-3.8 2.3-1.6 2.8-.4 7 1.2 9.3.8 1.1 1.7 2.4 2.9 2.3 1.2 0 1.6-.7 3-.7s1.8.7 3 .7c1.2 0 2-1.1 2.8-2.2.9-1.3 1.3-2.5 1.3-2.6-.1 0-2.6-1-2.6-3.8ZM14.2 5.7c.6-.8 1.1-1.9 1-3-.9 0-2 .6-2.7 1.4-.6.7-1.1 1.8-1 2.9 1 .1 2-.5 2.7-1.3Z"/></svg>
             macOS · Intel
@@ -482,8 +514,8 @@ footer a:hover { color: var(--fg); }
       </p>
 
       <p class="hint">
-        macOS 首次打开若提示「已损坏」，在 Finder 里右键 → 打开。
-        全部历史版本见 <a href="https://github.com/RedCarl/TinyMusic/releases" target="_blank" rel="noopener">GitHub Releases</a>。
+        <span data-zh>macOS 首次打开若提示「已损坏」，在 Finder 里右键 → 打开。全部历史版本见</span><span data-en hidden>If macOS claims the app is "damaged" on first launch, right-click it in Finder and choose Open. Every past version is on</span>
+        <a href="https://github.com/RedCarl/TinyMusic/releases" target="_blank" rel="noopener">GitHub Releases</a>.
       </p>
     </section>
   </main>
@@ -491,22 +523,104 @@ footer a:hover { color: var(--fg); }
   <footer>
     <div class="row">
       <span>© 2026 TinyMusic · MIT License</span>
-      <span>仅实现公开 HTTP 接口，不包含、不分发任何音频资源。</span>
+      <span>
+        <a href="tinymusic/"><span data-zh>iOS 版</span><span data-en hidden>iOS app</span></a> ·
+        <a href="tinymusic/support.html"><span data-zh>支持</span><span data-en hidden>Support</span></a> ·
+        <a href="tinymusic/privacy.html"><span data-zh>隐私政策</span><span data-en hidden>Privacy</span></a> ·
+        <a href="tinymusic/terms.html"><span data-zh>内容声明</span><span data-en hidden>Terms</span></a> ·
+        <a href="https://github.com/RedCarl/TinyMusic/releases" target="_blank" rel="noopener">Releases</a>
+      </span>
     </div>
+    <p class="disclaim"><span data-zh>仅实现公开 HTTP 接口，不包含、不分发任何音频资源。</span><span data-en hidden>Implements public HTTP endpoints only; no audio content is bundled or distributed.</span></p>
   </footer>
 
 </div>
 
 <script>
 (function () {
-  var REPO = "RedCarl/TinyMusic";
-  var LATEST = "https://github.com/" + REPO + "/releases/latest";
+  var KEY = 'tinymusic-lang';
+  var REPO = 'RedCarl/TinyMusic';
+  var LATEST = 'https://github.com/' + REPO + '/releases/latest';
 
   /* 下载加速：只给 /releases/download/ 的附件直链加前缀，
      releases 页面之类的 HTML 链接保持原样。 */
-  var MIRROR = "https://gh-proxy.com/";
-  var mode = "mirror";
+  var MIRROR = 'https://gh-proxy.com/';
+
+  /* 所有由脚本写入的文案都在这里。切换语言时 apply() 关掉旧语言，
+     render() 再按当前语言把动态文本重写一遍。 */
+  var COPY = {
+    zh: {
+      title: 'TinyMusic — 4.5 MB 的桌面音乐客户端',
+      desc: 'TinyMusic 是一个 4.5 MB 的桌面音乐客户端：搜索、试听、下载、歌词、网盘。基于 Tauri 2 + Svelte 5 + Rust，开源 MIT。',
+      ogTitle: 'TinyMusic — 4.5 MB 的桌面音乐客户端',
+      ogDesc: '搜索、试听、下载、歌词、网盘，都在一个窗口里。',
+      shotAlt: 'TinyMusic 主界面：左侧导航、每日推荐、歌单与底部播放器',
+      hero: '下载最新版本',
+      heroWin: '下载 Windows 版',
+      heroMac: '下载 macOS 版',
+      meta: function (tag) {
+        return (tag ? tag + ' · ' : '') + 'Windows 10/11 · macOS 11+ · 自动更新';
+      },
+      sub: function (tag) {
+        return tag
+          ? tag + ' · 安装包 3–4 MB，新版本可在应用内直接升级。'
+          : '安装包约 3–4 MB，新版本可在应用内直接升级。';
+      },
+      subFail: function () {
+        return '安装包约 3–4 MB。版本信息获取失败，可直接前往 Releases 下载。';
+      },
+      route: function (mirror) {
+        return mirror ? '下载经由 gh-proxy.com 镜像加速' : '下载直连 GitHub';
+      },
+      mode: function (mirror) {
+        return mirror ? '改用 GitHub 直连' : '改用镜像加速';
+      }
+    },
+    en: {
+      title: 'TinyMusic — a 4.5 MB desktop music client',
+      desc: 'TinyMusic is a 4.5 MB desktop music client: search, preview, download, lyrics and cloud storage. Built with Tauri 2 + Svelte 5 + Rust, open source under MIT.',
+      ogTitle: 'TinyMusic — a 4.5 MB desktop music client',
+      ogDesc: 'Search, preview, download, lyrics and cloud storage — all in one window.',
+      shotAlt: 'TinyMusic main window: sidebar, daily picks, playlists and the player at the bottom',
+      hero: 'Download latest',
+      heroWin: 'Download for Windows',
+      heroMac: 'Download for macOS',
+      meta: function (tag) {
+        return (tag ? tag + ' · ' : '') + 'Windows 10/11 · macOS 11+ · auto-update';
+      },
+      sub: function (tag) {
+        return tag
+          ? tag + ' · installer 3–4 MB, new versions update in place from inside the app.'
+          : 'The installer is about 3–4 MB; new versions update in place from inside the app.';
+      },
+      subFail: function () {
+        return 'The installer is about 3–4 MB. Could not load version info — grab it straight from Releases.';
+      },
+      route: function (mirror) {
+        return mirror ? 'Downloads are accelerated through the gh-proxy.com mirror' : 'Downloads go straight to GitHub';
+      },
+      mode: function (mirror) {
+        return mirror ? 'Use direct GitHub links' : 'Use the mirror';
+      }
+    }
+  };
+
+  var state = {
+    lang: 'zh',
+    mode: 'mirror',
+    guess: '',
+    tag: '',
+    failed: false,
+    heroKind: 'default'
+  };
   var links = [];
+
+  function copy() { return COPY[state.lang] || COPY.zh; }
+  function byId(id) { return document.getElementById(id); }
+  function setText(id, text) {
+    var el = byId(id);
+    if (el) el.textContent = text;
+  }
 
   function accel(url) {
     return /\/releases\/download\//.test(url) ? MIRROR + url : url;
@@ -517,35 +631,84 @@ footer a:hover { color: var(--fg); }
     for (var i = 0; i < links.length; i++) {
       if (links[i].el === el) {
         links[i].direct = url;
-        el.href = mode === "mirror" ? accel(url) : url;
+        el.href = state.mode === 'mirror' ? accel(url) : url;
         return;
       }
     }
     links.push({ el: el, direct: url });
-    el.href = mode === "mirror" ? accel(url) : url;
+    el.href = state.mode === 'mirror' ? accel(url) : url;
+  }
+
+  /* 只负责动态文本，样式/隐藏交给 apply() 与 mark()。 */
+  function render() {
+    var t = copy();
+    setText('hero-dl-label',
+      state.heroKind === 'windows' ? t.heroWin :
+      state.heroKind === 'mac' ? t.heroMac : t.hero);
+    setText('meta', t.meta(state.tag));
+    setText('sub', state.failed ? t.subFail() : t.sub(state.tag));
+    setText('dl-route', t.route(state.mode === 'mirror'));
+    setText('mode', t.mode(state.mode === 'mirror'));
+    var shot = byId('shot');
+    if (shot) shot.alt = t.shotAlt;
   }
 
   function applyMode() {
     links.forEach(function (l) {
-      l.el.href = mode === "mirror" ? accel(l.direct) : l.direct;
+      l.el.href = state.mode === 'mirror' ? accel(l.direct) : l.direct;
     });
-    var btn = document.getElementById("mode");
-    if (btn) btn.textContent = mode === "mirror" ? "改用 GitHub 直连" : "改用镜像加速";
-    var route = document.getElementById("dl-route");
-    if (route) route.textContent = mode === "mirror" ? "下载经由 gh-proxy.com 镜像加速" : "下载直连 GitHub";
+    render();
   }
 
-  var modeBtn = document.getElementById("mode");
+  function apply(lang) {
+    state.lang = lang === 'en' ? 'en' : 'zh';
+    var isEN = state.lang === 'en';
+    document.documentElement.lang = isEN ? 'en' : 'zh-CN';
+    document.querySelectorAll('[data-zh]').forEach(function (el) { el.hidden = isEN; });
+    document.querySelectorAll('[data-en]').forEach(function (el) { el.hidden = !isEN; });
+    document.querySelectorAll('[data-set-lang]').forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-set-lang') === state.lang));
+    });
+
+    var t = copy();
+    document.title = t.title;
+    var md = document.querySelector('meta[name="description"]');
+    if (md) md.setAttribute('content', t.desc);
+    var ot = document.querySelector('meta[property="og:title"]');
+    if (ot) ot.setAttribute('content', t.ogTitle);
+    var od = document.querySelector('meta[property="og:description"]');
+    if (od) od.setAttribute('content', t.ogDesc);
+
+    render();
+    mark(state.guess);
+  }
+
+  var saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) {}
+  var initial = (saved === 'en' || saved === 'zh')
+    ? saved
+    : ((navigator.language || 'zh').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en');
+  apply(initial);
+
+  document.querySelectorAll('[data-set-lang]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var lang = b.getAttribute('data-set-lang');
+      apply(lang);
+      try { localStorage.setItem(KEY, lang); } catch (e) {}
+    });
+  });
+
+  var modeBtn = byId('mode');
   if (modeBtn) {
-    modeBtn.addEventListener("click", function () {
-      mode = mode === "mirror" ? "direct" : "mirror";
+    modeBtn.addEventListener('click', function () {
+      state.mode = state.mode === 'mirror' ? 'direct' : 'mirror';
       applyMode();
     });
   }
 
   function size(bytes) {
-    if (!bytes) return "";
-    return (bytes / 1048576).toFixed(2) + " MB";
+    if (!bytes) return '';
+    return (bytes / 1048576).toFixed(2) + ' MB';
   }
 
   function pick(assets, re) {
@@ -554,36 +717,36 @@ footer a:hover { color: var(--fg); }
   }
 
   function ua() {
-    var s = navigator.userAgent || "";
-    if (/Windows NT/i.test(s)) return "windows";
-    if (/Mac OS X|Macintosh/i.test(s) && !/iPhone|iPad/i.test(s)) return "mac";
-    return "";
+    var s = navigator.userAgent || '';
+    if (/Windows NT/i.test(s)) return 'windows';
+    if (/Mac OS X|Macintosh/i.test(s) && !/iPhone|iPad/i.test(s)) return 'mac';
+    return '';
   }
 
-  var guess = ua();
-
-  // 先把「推荐」标到可能的系统上；拿到架构信息后再细调一次。
+  /* 先把「推荐」标到可能的系统上；拿到架构信息后再细调一次。 */
   function mark(os) {
-    document.querySelectorAll(".plat").forEach(function (el) {
+    document.querySelectorAll('.plat').forEach(function (el) {
       var hit = el.dataset.os === os;
-      el.classList.toggle("rec", hit);
-      var tag = el.querySelector("[data-rec]");
+      el.classList.toggle('rec', hit);
+      var tag = el.querySelector('[data-rec]');
       if (tag) tag.hidden = !hit;
     });
   }
-  mark(guess);
 
-  if (guess === "mac" && navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
-    navigator.userAgentData.getHighEntropyValues(["architecture"]).then(function (v) {
-      mark(v.architecture === "x86" ? "mac-intel" : "mac");
+  state.guess = ua();
+  mark(state.guess);
+
+  if (state.guess === 'mac' && navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+    navigator.userAgentData.getHighEntropyValues(['architecture']).then(function (v) {
+      state.guess = v.architecture === 'x86' ? 'mac-intel' : 'mac';
+      mark(state.guess);
     }).catch(function () {});
   }
 
   function fill(key, asset) {
     if (!asset) return;
-    var url = asset.browser_download_url;
     document.querySelectorAll('[data-asset="' + key + '"]').forEach(function (a) {
-      bind(a, url);
+      bind(a, asset.browser_download_url);
     });
     var name = document.querySelector('[data-file="' + key + '"]');
     if (name) name.textContent = asset.name;
@@ -591,8 +754,8 @@ footer a:hover { color: var(--fg); }
     if (s) s.textContent = size(asset.size);
   }
 
-  fetch("https://api.github.com/repos/" + REPO + "/releases/latest", {
-    headers: { Accept: "application/vnd.github+json" }
+  fetch('https://api.github.com/repos/' + REPO + '/releases/latest', {
+    headers: { Accept: 'application/vnd.github+json' }
   })
     .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(function (rel) {
@@ -601,32 +764,28 @@ footer a:hover { color: var(--fg); }
       var arm = pick(a, /aarch64\.dmg$/i);
       var intel = pick(a, /x64\.dmg$/i);
 
-      fill("exe", exe);
-      fill("dmg-arm", arm);
-      fill("dmg-x64", intel);
+      fill('exe', exe);
+      fill('dmg-arm', arm);
+      fill('dmg-x64', intel);
 
-      if (rel.tag_name) {
-        document.getElementById("meta").textContent =
-          rel.tag_name + " · Windows 10/11 · macOS 11+ · 自动更新";
-        document.getElementById("sub").textContent =
-          rel.tag_name + " · 安装包 3–4 MB，新版本可在应用内直接升级。";
+      if (rel.tag_name) state.tag = rel.tag_name;
 
-        var hero = document.getElementById("hero-dl");
-        var label = document.getElementById("hero-dl-label");
-        if (guess === "windows" && exe) {
-          bind(hero, exe.browser_download_url);
-          label.textContent = "下载 Windows 版";
-        } else if (guess === "mac" && (arm || intel)) {
-          bind(hero, (arm || intel).browser_download_url);
-          label.textContent = "下载 macOS 版";
-        } else {
-          bind(hero, rel.html_url || LATEST);
-        }
+      var hero = byId('hero-dl');
+      if (state.guess === 'windows' && exe) {
+        bind(hero, exe.browser_download_url);
+        state.heroKind = 'windows';
+      } else if (state.guess === 'mac' && (arm || intel)) {
+        bind(hero, (arm || intel).browser_download_url);
+        state.heroKind = 'mac';
+      } else if (rel.tag_name) {
+        bind(hero, rel.html_url || LATEST);
+        state.heroKind = 'default';
       }
+      render();
     })
     .catch(function () {
-      document.getElementById("sub").textContent =
-        "安装包约 3–4 MB。版本信息获取失败，可直接前往 Releases 下载。";
+      state.failed = true;
+      render();
     });
 })();
 </script>

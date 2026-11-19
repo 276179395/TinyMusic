@@ -1,60 +1,331 @@
 <!doctype html>
 <html lang="zh-Hans">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>隐私政策 · TinyMusic</title>
-<style>:root { color-scheme: light dark; --fg:#17171a; --muted:#666; --bg:#fafafa; --card:#fff; --line:#e5e5e5; --accent:#ff3b30; }
-@media (prefers-color-scheme: dark) { :root { --fg:#f2f2f2; --muted:#a0a0a0; --bg:#111; --card:#1b1b1d; --line:#2c2c2e; --accent:#ff453a; } }
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>隐私政策 · TinyMusic iOS</title>
+<meta name="description" content="TinyMusic iOS 隐私政策：密钥只进 Keychain，缓存不进 iCloud 备份、不可导出，没有账号、没有广告、没有第三方 SDK。" />
+<meta name="theme-color" content="#0e0f10" media="(prefers-color-scheme: dark)" />
+<meta name="theme-color" content="#f6f6f7" media="(prefers-color-scheme: light)" />
+<link rel="icon" href="../assets/icon.png" type="image/png" />
+<link rel="canonical" href="https://redcarl.github.io/TinyMusic/tinymusic/privacy.html" />
+
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://redcarl.github.io/TinyMusic/tinymusic/privacy.html" />
+<meta property="og:title" content="隐私政策 · TinyMusic iOS" />
+<meta property="og:description" content="密钥只进 Keychain，缓存不进 iCloud 备份、不可导出，没有账号与第三方 SDK。" />
+<meta property="og:image" content="https://redcarl.github.io/TinyMusic/assets/icon.png" />
+
+<style>
+:root {
+  --bg: #0e0f10;
+  --fg: #f3f4f5;
+  --muted: #a4a6ab;
+  --faint: #7b7e84;
+  --line: rgba(255, 255, 255, 0.11);
+  --line-soft: rgba(255, 255, 255, 0.06);
+  --panel: rgba(255, 255, 255, 0.04);
+  --panel-hi: rgba(255, 255, 255, 0.07);
+  --brand: #6ee7b7;
+  --brand-ink: #04241a;
+  --brand-soft: rgba(110, 231, 183, 0.12);
+  --brand-line: rgba(110, 231, 183, 0.28);
+  --radius: 16px;
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f6f6f7;
+    --fg: #16171a;
+    --muted: #5b5d63;
+    --faint: #86888e;
+    --line: rgba(0, 0, 0, 0.12);
+    --line-soft: rgba(0, 0, 0, 0.07);
+    --panel: #ffffff;
+    --panel-hi: #fbfbfc;
+    --brand: #0d8f6b;
+    --brand-ink: #ffffff;
+    --brand-soft: rgba(13, 143, 107, 0.09);
+    --brand-line: rgba(13, 143, 107, 0.30);
+    color-scheme: light;
+  }
+}
+
 * { box-sizing: border-box; }
-body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.75 -apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif; }
-main { max-width:720px; margin:0 auto; padding:56px 24px 80px; }
-a { color:var(--accent); }
-h1 { font-size:32px; letter-spacing:-0.03em; margin:0 0 8px; }
-h2 { font-size:19px; margin:36px 0 10px; }
-p, li { color:var(--muted); }
-.card { background:var(--card); border:1px solid var(--line); border-radius:18px; padding:24px; margin-top:24px; }
-nav { display:flex; gap:16px; flex-wrap:wrap; margin-bottom:28px; font-size:14px; }
-nav a { color:var(--muted); text-decoration:none; }
-nav a:hover { color:var(--fg); }
-.small { font-size:13px; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+  background-image:
+    radial-gradient(1000px 620px at 12% -10%, rgba(110, 231, 183, 0.10), transparent 62%),
+    radial-gradient(820px 520px at 96% 6%, rgba(96, 165, 250, 0.06), transparent 66%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
+@media (prefers-color-scheme: light) {
+  body {
+    background-image:
+      radial-gradient(1000px 620px at 12% -10%, rgba(13, 143, 107, 0.08), transparent 62%),
+      radial-gradient(820px 520px at 96% 6%, rgba(59, 130, 246, 0.06), transparent 66%);
+  }
+}
+
+a { color: var(--brand); text-decoration: none; }
+a:hover { text-decoration: underline; }
+img { max-width: 100%; height: auto; display: block; }
+
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; border-radius: 8px; }
+
+.doc { max-width: 720px; margin: 0 auto; padding: 0 24px 88px; }
+
+/* ---------- 顶栏 ---------- */
+.topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 76px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; color: var(--fg); font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+.brand:hover { text-decoration: none; }
+.brand img { width: 26px; height: 26px; border-radius: 7px; background: #f3f4f5; box-shadow: 0 0 0 1px var(--line); }
+.nav-right { display: flex; align-items: center; gap: 14px; }
+.nav-link { font-size: 13.5px; color: var(--muted); }
+.nav-link:hover { color: var(--fg); text-decoration: none; }
+.lang { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; overflow: hidden; }
+.lang button {
+  appearance: none; border: 0; background: transparent; color: var(--muted);
+  font: inherit; font-size: 12.5px; padding: 4px 12px; cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.lang button:hover { color: var(--fg); }
+.lang button[aria-pressed="true"] { background: var(--panel); color: var(--fg); }
+
+/* ---------- 正文 ---------- */
+h1 { font-size: 32px; letter-spacing: -0.03em; line-height: 1.2; margin: 4px 0 10px; }
+h1 em { font-style: normal; color: var(--brand); }
+.updated, .lead { color: var(--faint); font-size: 14px; margin: 0 0 36px; }
+h2 { font-size: 18px; letter-spacing: -0.01em; margin: 40px 0 12px; }
+p, li { color: var(--muted); font-size: 16px; }
+strong { color: var(--fg); font-weight: 600; }
+ul, ol { padding-left: 22px; }
+li + li { margin-top: 6px; }
+code {
+  font-family: var(--mono); font-size: 13.5px; background: var(--panel);
+  border: 1px solid var(--line-soft); border-radius: 6px; padding: 1px 6px;
+  color: var(--fg); word-break: break-word;
+}
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px 24px; margin: 24px 0; }
+.card > :first-child { margin-top: 0; }
+.card > :last-child { margin-bottom: 0; }
+
+/* ---------- 介绍页首屏 ---------- */
+.eyebrow {
+  display: inline-block; margin: 4px 0 16px; padding: 4px 10px;
+  border: 1px solid var(--line); border-radius: 999px;
+  font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em;
+  color: var(--muted);
+}
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 26px 0 8px; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 9px;
+  height: 46px; padding: 0 22px; border-radius: 12px; border: 1px solid transparent;
+  font-size: 15px; font-weight: 600; font-family: inherit; white-space: nowrap;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
+}
+.btn:hover { text-decoration: none; }
+.btn svg { width: 17px; height: 17px; }
+.btn-primary { background: var(--brand); color: var(--brand-ink); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28); }
+.btn-primary:hover { transform: translateY(-1px); }
+.btn-ghost { background: var(--panel); border-color: var(--line); color: var(--fg); }
+.btn-ghost:hover { background: var(--panel-hi); transform: translateY(-1px); }
+.ticks { list-style: none; padding: 0; margin: 0; }
+.ticks li { position: relative; padding-left: 22px; }
+.ticks li + li { margin-top: 8px; }
+.ticks li::before {
+  content: ""; position: absolute; left: 2px; top: 0.72em;
+  width: 7px; height: 7px; border-radius: 999px; background: var(--brand);
+}
+
+/* ---------- 页脚 ---------- */
+footer { margin-top: 56px; padding-top: 22px; border-top: 1px solid var(--line-soft); color: var(--faint); font-size: 13px; }
+footer .row { display: flex; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+footer a { color: var(--muted); }
+footer a:hover { color: var(--fg); text-decoration: none; }
+
+[hidden] { display: none !important; }
+
+@media (max-width: 520px) {
+  .doc { padding: 0 20px 72px; }
+  .topbar { min-height: 60px; padding: 12px 0; flex-wrap: wrap; gap: 10px; }
+  h1 { font-size: 27px; }
+  .nav-right { gap: 10px; }
+  .actions .btn { flex: 1 1 100%; }
+}
 </style>
 </head>
+
 <body>
-<main>
-<nav><a href="./index.html">TinyMusic</a><a href="./support.html">支持</a><a href="./terms.html">内容声明</a></nav>
-<h1>隐私政策</h1>
-<p class="small">最后更新：2026 年 11 月 17 日</p>
-<div class="card">
-<p>TinyMusic iOS 是一个播放你自己 S3 兼容存储内容的本地播放器。我们没有账号系统、没有在线曲库、没有广告，也不做用户画像。</p>
+<div class="doc">
+  <header class="topbar">
+      <a class="brand" href="../index.html">
+        <img src="../assets/icon.png" width="26" height="26" alt="" aria-hidden="true" />
+        TinyMusic
+      </a>
+      <div class="nav-right">
+        <a class="nav-link" href="./index.html"><span data-zh>← 返回 TinyMusic iOS</span><span data-en hidden>← Back to TinyMusic iOS</span></a>
+        <a class="nav-link" href="https://github.com/RedCarl/TinyMusic" target="_blank" rel="noopener">GitHub ↗</a>
+        <div class="lang" role="group" aria-label="Language / 语言">
+        <button type="button" data-set-lang="zh" aria-pressed="true">中文</button>
+        <button type="button" data-set-lang="en" aria-pressed="false">EN</button>
+      </div>
+      </div>
+    </header>
+
+  <!-- ========== 中文 ========== -->
+  <section data-zh>
+    <h1>隐私政策</h1>
+    <p class="updated">最后更新：2026 年 11 月 18 日</p>
+
+    <div class="card">
+      <p><strong>一句话：TinyMusic iOS 不收集你的任何数据。</strong>没有账号、没有曲库、没有广告，也没有第三方 SDK；App 只跟你自己的 S3 存储和 Apple 的 iCloud 服务通信。</p>
+    </div>
+
+    <h2>我们不收集什么</h2>
+    <ul>
+      <li>不收集姓名、邮箱、手机号、位置、通讯录、相册或广告标识符。</li>
+      <li>不接入第三方统计、崩溃上报或广告 SDK，不做用户画像。</li>
+      <li>不上传你的播放记录、收藏、歌单或缓存文件。</li>
+      <li>没有账号系统，也没有在线曲库、搜索或推荐。</li>
+    </ul>
+
+    <h2>保存在你设备上的数据</h2>
+    <ul>
+      <li><strong>S3 凭据</strong>：Access Key / Secret Key 只写入 iOS Keychain，不写进本机的设置文件；开启 iCloud 钥匙串时，可能通过 Apple 的端到端加密同步到你自己的其他设备。</li>
+      <li><strong>播放器设置</strong>：S3 endpoint、region、bucket、prefix、缓存上限、仅 Wi-Fi、EQ 等非敏感设置保存在本机，可能通过 iCloud Key-Value Storage 在你自己的设备间同步。</li>
+      <li><strong>离线缓存</strong>：音频、歌词、封面只存在 App 沙盒里，已排除 iCloud 备份，不能导出或分享，也不会出现在「文件」App 中。</li>
+      <li><strong>收藏</strong>：默认写到你 S3 桶里的 <code>favorites.json</code>；密钥只读时退回本机，不写桶。</li>
+    </ul>
+
+    <h2>网络请求</h2>
+    <p>App 只连接你在设置里填写的 S3 endpoint，以及 Apple 提供的 iCloud / Keychain 服务。音频、歌词、封面和收藏直接与你的存储服务交换，不经过 TinyMusic 的中转服务器。App 内没有统计、广告或崩溃上报请求。</p>
+
+    <h2>第三方服务</h2>
+    <p>没有集成任何第三方 SDK。AWS S3、Cloudflare R2、MinIO 等存储服务由各自的提供方运营，受其条款与隐私政策约束；TinyMusic 与这些服务没有隶属关系。</p>
+
+    <h2>你的控制</h2>
+    <p>你可以在设置里断开 S3、清除缓存，或在系统里删除 App 以移除本机数据。桶里的 <code>favorites.json</code> 需要你在自己的存储服务中删除。</p>
+
+    <h2>儿童隐私</h2>
+    <p>App 不收集任何人的数据，包括儿童，也不收集年龄信息。</p>
+
+    <h2>政策变更</h2>
+    <p>如果隐私实践有变化，本页会更新并修改上方日期；重大变化会在 App 更新说明中提示。</p>
+
+    <h2>联系我们</h2>
+    <p>任何隐私相关问题，请通过 <a href="https://github.com/RedCarl/TinyMusic/issues" target="_blank" rel="noopener">GitHub Issues</a> 联系。</p>
+  </section>
+
+  <!-- ========== English ========== -->
+  <section data-en hidden>
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated: November 18, 2026</p>
+
+    <div class="card">
+      <p><strong>In one sentence: TinyMusic for iOS collects no data about you.</strong> No accounts, no catalogue, no ads, no third-party SDKs. The app talks only to your own S3 storage and Apple's iCloud services.</p>
+    </div>
+
+    <h2>What we don't collect</h2>
+    <ul>
+      <li>No name, email, phone number, location, contacts, photo library or advertising identifier.</li>
+      <li>No third-party analytics, crash reporting or ad SDKs, and no user profiling.</li>
+      <li>No uploading of your play history, favourites, playlists or cached files.</li>
+      <li>No account system, and no online catalogue, search or recommendations.</li>
+    </ul>
+
+    <h2>Data stored on your device</h2>
+    <ul>
+      <li><strong>S3 credentials:</strong> Access Key / Secret Key are written only to the iOS Keychain, never to a settings file on disk. With iCloud Keychain on, they may sync to your other devices through Apple's end-to-end encrypted keychain.</li>
+      <li><strong>Player settings:</strong> non-sensitive settings — S3 endpoint, region, bucket, prefix, cache cap, Wi-Fi only, EQ — are stored on this device and may sync between your own devices via iCloud Key-Value Storage.</li>
+      <li><strong>Offline cache:</strong> audio, lyrics and covers live inside the app sandbox, are excluded from iCloud backup, cannot be exported or shared, and never appear in the Files app.</li>
+      <li><strong>Favourites:</strong> by default written to <code>favorites.json</code> in your S3 bucket; with a read-only key they stay on this device and the bucket is left untouched.</li>
+    </ul>
+
+    <h2>Network requests</h2>
+    <p>The app connects only to the S3 endpoint you enter in Settings and to Apple's iCloud / Keychain services. Audio, lyrics, covers and favourites are exchanged directly with your storage provider and never pass through a TinyMusic relay. There are no analytics, advertising or crash-reporting requests.</p>
+
+    <h2>Third-party services</h2>
+    <p>No third-party SDKs are integrated. AWS S3, Cloudflare R2, MinIO and similar services are run by their own providers under their own terms and privacy policies; TinyMusic is not affiliated with them.</p>
+
+    <h2>Your controls</h2>
+    <p>You can disconnect S3 and clear the cache in Settings, or delete the app to remove on-device data. <code>favorites.json</code> in your bucket has to be deleted through your own storage service.</p>
+
+    <h2>Children's privacy</h2>
+    <p>The app collects no data from anyone, children included, and collects no age information.</p>
+
+    <h2>Changes to this policy</h2>
+    <p>If our privacy practices change, this page will be updated along with the date above; significant changes will be called out in the app's release notes.</p>
+
+    <h2>Contact</h2>
+    <p>For any privacy question, reach us through <a href="https://github.com/RedCarl/TinyMusic/issues" target="_blank" rel="noopener">GitHub Issues</a>.</p>
+  </section>
+
+  <footer>
+    <div class="row">
+      <span>© 2026 TinyMusic · MIT License</span>
+      <span><a href="../index.html"><span data-zh>桌面版</span><span data-en hidden>Desktop</span></a> ·
+      <a href="./index.html"><span data-zh>iOS 版</span><span data-en hidden>iOS app</span></a> ·
+      <a href="./support.html"><span data-zh>支持</span><span data-en hidden>Support</span></a> ·
+      <a href="./terms.html"><span data-zh>内容声明</span><span data-en hidden>Terms</span></a> ·
+      <a href="https://github.com/RedCarl/TinyMusic/releases" target="_blank" rel="noopener">Releases</a></span>
+    </div>
+  </footer>
 </div>
 
-<h2>我们不收集什么</h2>
-<ul>
-<li>不收集姓名、邮箱、手机号、位置、通讯录、相册或广告标识符。</li>
-<li>不接入第三方统计、崩溃上报或广告 SDK。</li>
-<li>不上传你的播放记录、收藏、歌单或缓存文件。</li>
-</ul>
+<script>
+(function () {
+  var KEY = 'tinymusic-lang';
+  var TITLES = { zh: "隐私政策 · TinyMusic iOS", en: "Privacy Policy · TinyMusic for iOS" };
+  var DESCS = { zh: "TinyMusic iOS 隐私政策：密钥只进 Keychain，缓存不进 iCloud 备份、不可导出，没有账号、没有广告、没有第三方 SDK。", en: "Privacy policy for TinyMusic for iOS: keys live only in the Keychain, the cache never enters iCloud backup and cannot be exported, and there are no accounts, ads or third-party SDKs." };
+  var OG_TITLES = { zh: "隐私政策 · TinyMusic iOS", en: "Privacy Policy · TinyMusic for iOS" };
+  var OG_DESCS = { zh: "TinyMusic iOS 隐私政策：密钥只进 Keychain，缓存不进 iCloud 备份、不可导出，没有账号、没有广告、没有第三方 SDK。", en: "Privacy policy for TinyMusic for iOS: keys live only in the Keychain, the cache never enters iCloud backup and cannot be exported, and there are no accounts, ads or third-party SDKs." };
+  var buttons = document.querySelectorAll('[data-set-lang]');
+  var metaDesc = document.querySelector('meta[name="description"]');
+  var ogTitle = document.querySelector('meta[property="og:title"]');
+  var ogDesc = document.querySelector('meta[property="og:description"]');
 
-<h2>保存在你设备上的数据</h2>
-<ul>
-<li><strong>S3 凭据</strong>：Access Key / Secret Key 只写入 iOS Keychain；开启 iCloud 钥匙串时可能通过 Apple 的端到端加密同步到你自己的设备。</li>
-<li><strong>播放器设置</strong>：S3 endpoint、bucket、prefix、缓存上限、仅 Wi-Fi、EQ 等非敏感设置保存在本机，可能通过 iCloud Key-Value Storage 在你自己的设备间同步。</li>
-<li><strong>离线缓存</strong>：音频、歌词、封面只存在 App 沙盒，排除 iCloud 备份，不能导出或分享。</li>
-<li><strong>收藏</strong>：默认写到你 S3 桶里的 favorites.json；只读密钥时只保存在本机。</li>
-</ul>
+  function apply(lang) {
+    var isEN = lang === 'en';
+    document.documentElement.lang = isEN ? 'en' : 'zh-Hans';
+    document.querySelectorAll('[data-zh]').forEach(function (el) { el.hidden = isEN; });
+    document.querySelectorAll('[data-en]').forEach(function (el) { el.hidden = !isEN; });
+    buttons.forEach(function (b) {
+      b.setAttribute('aria-pressed', String(b.getAttribute('data-set-lang') === lang));
+    });
+    document.title = isEN ? TITLES.en : TITLES.zh;
+    if (metaDesc) metaDesc.setAttribute('content', isEN ? DESCS.en : DESCS.zh);
+    if (ogTitle) ogTitle.setAttribute('content', isEN ? OG_TITLES.en : OG_TITLES.zh);
+    if (ogDesc) ogDesc.setAttribute('content', isEN ? OG_DESCS.en : OG_DESCS.zh);
+  }
 
-<h2>网络请求</h2>
-<p>App 只连接你在设置中填写的 S3 endpoint，以及 Apple 提供的 iCloud/Keychain 服务。音频、歌词、封面和收藏都直接与你的存储服务交换，不经过 TinyMusic 的中转服务器。</p>
+  var saved = null;
+  try { saved = localStorage.getItem(KEY); } catch (e) {}
+  var initial = (saved === 'en' || saved === 'zh')
+    ? saved
+    : ((navigator.language || 'zh').toLowerCase().indexOf('zh') === 0 ? 'zh' : 'en');
+  apply(initial);
 
-<h2>你的控制</h2>
-<p>你可以在设置里断开 S3、清除缓存，或在系统设置中删除 App 以移除本机数据。S3 桶里的 favorites.json 需要你在自己的存储服务中删除。</p>
-
-<h2>儿童</h2>
-<p>App 不面向 13 岁以下儿童，也不收集任何年龄信息。</p>
-
-<h2>变更与联系</h2>
-<p>政策变更会更新本页日期。问题请通过 <a href="https://github.com/RedCarl/TinyMusic/issues">GitHub Issues</a> 联系。</p>
-</main>
+  buttons.forEach(function (b) {
+    b.addEventListener('click', function () {
+      var lang = b.getAttribute('data-set-lang');
+      apply(lang);
+      try { localStorage.setItem(KEY, lang); } catch (e) {}
+    });
+  });
+})();
+</script>
 </body>
 </html>

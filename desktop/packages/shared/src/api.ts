@@ -61,12 +61,28 @@ export const api = {
   downloadFailuresClear: () => invoke<void>('download_failures_clear'),
 
   favoriteAdd: (track: Track) => invoke<void>('favorite_add', { track }),
-  favoriteRemove: (provider: string, id: string) =>
-    invoke<void>('favorite_remove', { provider, id }),
+  favoriteRemove: (track: Track) =>
+    invoke<void>('favorite_remove', {
+      provider: track.provider,
+      id: track.id,
+      title: track.title,
+      artist: track.artist,
+    }),
   favoriteList: () => invoke<Track[]>('favorite_list'),
   favoritesPull: () => invoke<Track[]>('favorites_pull'),
-  favoriteCheck: (provider: string, id: string) =>
-    invoke<boolean>('favorite_check', { provider, id }),
+  /**
+   * 是否已收藏。
+   *
+   * 收藏存在网盘「喜欢」目录里，id 是那边的副本 key，跟歌单里的原始 key 不同，
+   * 所以要把标题/歌手一起带上，后端用它认「同一首歌」。
+   */
+  favoriteCheck: (track: Track) =>
+    invoke<boolean>('favorite_check', {
+      provider: track.provider,
+      id: track.id,
+      title: track.title,
+      artist: track.artist,
+    }),
 
   searchPlaylists: (provider: string, kw: string, page = 0, limit = 30) =>
     invoke<PlaylistPage>('search_playlists', { provider, kw, page, limit }),

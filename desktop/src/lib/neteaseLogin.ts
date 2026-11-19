@@ -12,6 +12,7 @@
  */
 import { api, type Session } from './api';
 import { setNetease } from './account.svelte';
+import { t } from './i18n.svelte';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -30,7 +31,7 @@ export async function loginNetease(timeoutMs = 300_000): Promise<Session> {
       return s;
     }
   }
-  throw new Error('登录超时：窗口已关闭或未完成登录');
+  throw new Error(t('登录超时：窗口已关闭或未完成登录'));
 }
 
 /** 从后端兑现当前会话，用于刷新页面后校正本地展示缓存 */

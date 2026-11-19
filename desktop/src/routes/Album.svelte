@@ -10,6 +10,7 @@
   import BackLink from '../components/BackLink.svelte';
   import DetailPageSkeleton from '../components/DetailPageSkeleton.svelte';
   import { delayedVisible } from '../lib/loading.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   let route = $derived(router.route.name === 'album' ? router.route : null);
   let data = $state<AlbumPage | null>(null);
@@ -49,15 +50,15 @@
       {/if}
       <div class="info">
         <h1>{data.name}</h1>
-        <div class="muted">{data.artist} · {data.tracks.length} 首</div>
+        <div class="muted">{data.artist} · {t('{n} 首', { n: data.tracks.length })}</div>
       </div>
     </div>
 
-    <BatchBar tracks={data.tracks} label={`${data.tracks.length} 首`} />
+    <BatchBar tracks={data.tracks} label={t('{n} 首', { n: data.tracks.length })} />
 
     <div class="list">
-      {#each data.tracks as t, i (t.provider + t.id)}
-        <TrackRow track={t} index={i} queue={data.tracks} />
+      {#each data.tracks as track, i (track.provider + track.id)}
+        <TrackRow {track} index={i} queue={data.tracks} />
       {/each}
     </div>
   {:else if err}

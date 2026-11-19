@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { t } from '../lib/i18n.svelte';
   /** 账号歌单页：横向歌单行（名称 + 首数 [+ 导入按钮]） */
   let {
     rows = 6,
@@ -9,7 +10,7 @@
   } = $props();
 </script>
 
-<div class="sk-block" role="status" aria-label="加载中">
+<div class="sk-block" role="status" aria-label={t('加载中')}>
   <div class="pllist wide">
     {#each Array(rows) as _, i (i)}
       <div class="plrow sk-plrow">

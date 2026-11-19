@@ -11,6 +11,7 @@ import { requestDownload } from './download.svelte';
 import { go } from './router.svelte';
 import { appCfg } from './config.svelte';
 import { showToast } from './toast.svelte';
+import { t } from './i18n.svelte';
 
 export interface TrackMenuOptions {
   /** 从哪个列表点出来的，播放时把整个列表作为队列 */
@@ -35,14 +36,14 @@ export async function openTrackMenu(
   let fav = false;
   // 本地 SQLite 查一下收藏状态，决定菜单写「喜欢」还是「取消喜欢」
   try {
-    fav = await api.favoriteCheck(track.provider, track.id);
+    fav = await api.favoriteCheck(track);
   } catch {
     /* 查不到就按未收藏处理 */
   }
 
   const items: MenuEntry[] = [
     {
-      label: '播放',
+      label: t('播放'),
       icon: icons.play,
       disabled: blocked,
       run: () => {
@@ -50,24 +51,24 @@ export async function openTrackMenu(
       },
     },
     {
-      label: '下一首播放',
+      label: t('下一首播放'),
       icon: icons.next,
       run: () => {
         playNext(track);
-        showToast('已设为下一首');
+        showToast(t('已设为下一首'));
       },
     },
     {
-      label: inQueue(track) ? '已在播放列表' : '添加到播放列表',
+      label: inQueue(track) ? t('已在播放列表') : t('添加到播放列表'),
       icon: icons.queue,
       disabled: inQueue(track),
       run: () => {
-        if (addToQueue(track)) showToast('已加入播放列表');
+        if (addToQueue(track)) showToast(t('已加入播放列表'));
       },
     },
     { sep: true },
     {
-      label: '下载（含歌词与封面）',
+      label: t('下载（含歌词与封面）'),
       icon: icons.download,
       disabled: blocked || track.provider === 's3',
       run: () => {
@@ -77,17 +78,17 @@ export async function openTrackMenu(
     ...(appCfg.s3Enabled
       ? [
           {
-            label: fav ? '取消喜欢' : '喜欢（收藏到网盘）',
+            label: fav ? t('取消喜欢') : t('喜欢（收藏到网盘）'),
             icon: icons.favorite,
             run: async () => {
               if (fav) {
-                await api.favoriteRemove(track.provider, track.id);
+                await api.favoriteRemove(track);
                 opts.onFavorite?.(false);
-                showToast('已取消喜欢');
+                showToast(t('已取消喜欢'));
               } else {
                 await api.favoriteAdd(track);
                 opts.onFavorite?.(true);
-                showToast('已收藏到网盘');
+                showToast(t('已收藏到网盘'));
               }
             },
           },
@@ -95,14 +96,14 @@ export async function openTrackMenu(
       : []),
     { sep: true },
     {
-      label: '查看歌曲详情',
+      label: t('查看歌曲详情'),
       icon: icons.music,
       run: () => go({ name: 'track', track }),
     },
     ...(track.artist_id
       ? [
           {
-            label: '打开歌手',
+            label: t('打开歌手'),
             icon: icons.account,
             run: () =>
               go({
@@ -117,7 +118,7 @@ export async function openTrackMenu(
     ...(track.album_id
       ? [
           {
-            label: '打开专辑',
+            label: t('打开专辑'),
             icon: icons.disc,
             run: () =>
               go({
@@ -146,13 +147,13 @@ export function openAlbumMenu(e: MouseEvent, album: AlbumRef, provider = 'kuwo')
 
   openMenuAt(x, y, [
     {
-      label: '打开专辑',
+      label: t('打开专辑'),
       icon: icons.disc,
       run: () =>
         go({ name: 'album', provider, albumId: album.id, title: album.name }),
     },
     {
-      label: '播放全部',
+      label: t('播放全部'),
       icon: icons.play,
       run: async () => {
         const tracks = await fetchTracks();
@@ -160,7 +161,7 @@ export function openAlbumMenu(e: MouseEvent, album: AlbumRef, provider = 'kuwo')
       },
     },
     {
-      label: '下载全部',
+      label: t('下载全部'),
       icon: icons.download,
       run: async () => {
         const tracks = await fetchTracks();
@@ -176,7 +177,7 @@ export function openTracksMenu(e: MouseEvent, tracks: Track[]) {
   e.stopPropagation();
   openMenuAt(e.clientX, e.clientY, [
     {
-      label: '播放全部',
+      label: t('播放全部'),
       icon: icons.play,
       disabled: tracks.length === 0,
       run: () => {
@@ -184,7 +185,7 @@ export function openTracksMenu(e: MouseEvent, tracks: Track[]) {
       },
     },
     {
-      label: '下载全部',
+      label: t('下载全部'),
       icon: icons.download,
       disabled: tracks.length === 0,
       run: () => {

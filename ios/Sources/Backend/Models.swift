@@ -46,7 +46,7 @@ struct Track: Codable, Identifiable, Hashable, Sendable {
     var isLossless: Bool { quality == "lossless" || codec == "flac" }
     var missingLabel: String? {
         guard !missing.isEmpty else { return nil }
-        return "缺 " + missing.joined(separator: "/")
+        return L("缺 %@", missing.joined(separator: "/"))
     }
 }
 
@@ -97,6 +97,8 @@ struct FavoriteTrack: Codable, Identifiable, Sendable {
 struct FavoriteResult: Codable, Sendable {
     let synced: Bool
     let error: String?
+    /// 收藏副本在「喜欢」目录里的 key（跟歌单里的原始 key 不同）
+    let key: String?
 }
 
 enum JSONValue: Sendable {

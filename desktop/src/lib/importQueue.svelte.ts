@@ -1,5 +1,6 @@
 import { api, type PlaylistRef } from './api';
 import { showToast } from './toast.svelte';
+import { t } from './i18n.svelte';
 
 export type ImportStatus = 'queued' | 'running' | 'done' | 'error';
 
@@ -43,7 +44,7 @@ export function enqueueImport(pl: PlaylistRef, target: string): boolean {
       t.target === dest
   );
   if (dup) {
-    showToast('这个歌单已经在导入队列里');
+    showToast(t('这个歌单已经在导入队列里'));
     return false;
   }
 
@@ -72,7 +73,7 @@ async function pumpQueue() {
   importQueue.running = true;
   task.status = 'running';
   task.pct = null;
-  task.label = '正在导入…';
+  task.label = t('正在导入…');
   task.error = '';
 
   try {
@@ -83,7 +84,7 @@ async function pumpQueue() {
       task.target,
       (p) => {
         if (p.total && p.task_id.startsWith('batch-') && !p.task_id.startsWith('batch-done')) {
-          task.label = `第 ${p.downloaded + 1} / ${p.total} 首`;
+          task.label = t('第 {i} / {n} 首', { i: p.downloaded + 1, n: p.total });
           task.pct = Math.min(1, p.downloaded / p.total);
         }
       }
@@ -92,16 +93,22 @@ async function pumpQueue() {
     task.uploaded = res.uploaded;
     task.failed = res.failed;
     task.pct = 1;
-    task.label = '完成';
+    task.label = t('完成');
     task.status = 'done';
     showToast(
-      `「${task.name}」已导入 ${res.uploaded} 首到网盘` + (res.failed ? `，${res.failed} 首失败` : '')
+      res.failed
+        ? t('「{name}」已导入 {n} 首到网盘，{failed} 首失败', {
+            name: task.name,
+            n: res.uploaded,
+            failed: res.failed
+          })
+        : t('「{name}」已导入 {n} 首到网盘', { name: task.name, n: res.uploaded })
     );
   } catch (e) {
     task.error = String(e);
     task.label = '';
     task.status = 'error';
-    showToast(`「${task.name}」导入失败`);
+    showToast(t('「{name}」导入失败', { name: task.name }));
   } finally {
     importQueue.running = false;
     void pumpQueue();

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { HugeiconsIcon } from '@hugeicons/svelte';
-  import { api, coverUrl, fmtCount, type PlaylistRef, type Track } from '../lib/api';
+  import { api, coverUrl, type PlaylistRef, type Track } from '../lib/api';
   import { icons, ICON_SIZE } from '../lib/icons';
   import { account } from '../lib/account.svelte';
   import { go } from '../lib/router.svelte';
@@ -12,6 +12,7 @@
   import TrackListSkeleton from '../components/TrackListSkeleton.svelte';
   import { delayedVisible } from '../lib/loading.svelte';
   import ErrorNotice from '../components/ErrorNotice.svelte';
+  import { t, fmtPlayCount } from '../lib/i18n.svelte';
 
   let logged = $derived(!!account.netease.uid);
 
@@ -111,7 +112,7 @@
   }
 
   function openDaily() {
-    openPlaylist('netease', 'daily', '每日推荐');
+    openPlaylist('netease', 'daily', t('每日推荐'));
   }
 
   /** 悬浮按钮：直接开始播放这张歌单（不进详情页） */
@@ -127,7 +128,7 @@
     try {
       const d = await api.playlist(pl.provider, pl.id);
       if (d.tracks.length === 0) {
-        showToast('这个歌单还没有可播放的曲目');
+        showToast(t('这个歌单还没有可播放的曲目'));
         return;
       }
       playTrack(d.tracks[0], d.tracks);
@@ -173,16 +174,16 @@
 </script>
 
 <div class="page">
-  <h1>推荐</h1>
+  <h1>{t('推荐')}</h1>
 
   {#if !logged}
     <div class="empty">
       <div class="big" aria-hidden="true">
         <HugeiconsIcon icon={icons.favorite} size={ICON_SIZE.empty} />
       </div>
-      <p>登录网易云后可以看到每日推荐与推荐歌单</p>
+      <p>{t('登录网易云后可以看到每日推荐与推荐歌单')}</p>
       <div class="chips">
-        <button onclick={login} disabled={busy}>{busy ? '等待登录…' : '登录'}</button>
+        <button onclick={login} disabled={busy}>{busy ? t('等待登录…') : t('登录')}</button>
       </div>
     </div>
   {:else if skel.visible}
@@ -198,7 +199,7 @@
           bind:this={cardEl}
           role="button"
           tabindex="0"
-          aria-label="每日推荐，{songs.length} 首，查看全部"
+          aria-label={t('每日推荐，{n} 首，查看全部', { n: songs.length })}
           onclick={openDaily}
           onkeydown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -215,41 +216,41 @@
                 <HugeiconsIcon icon={icons.favorite} size={ICON_SIZE.empty} />
               </span>
             {/if}
-            <span class="daily-badge">每日推荐</span>
+            <span class="daily-badge">{t('每日推荐')}</span>
             <button
               class="fab"
               class:on={fabBusy === 'netease:daily'}
-              title="播放每日推荐"
-              aria-label="播放每日推荐"
+              title={t('播放每日推荐')}
+              aria-label={t('播放每日推荐')}
               onclick={(e) => {
                 stop(e);
-                void playPlaylist({ provider: 'netease', id: 'daily', name: '每日推荐' });
+                void playPlaylist({ provider: 'netease', id: 'daily', name: t('每日推荐') });
               }}
             >
               <HugeiconsIcon icon={icons.play} size={ICON_SIZE.control} />
             </button>
           </div>
-          <div class="daily-name">每日推荐</div>
-          <div class="daily-sub">根据你的口味生成 · {songs.length} 首 · 每天 6:00 更新</div>
+          <div class="daily-name">{t('每日推荐')}</div>
+          <div class="daily-sub">{t('根据你的口味生成 · {n} 首 · 每天 6:00 更新', { n: songs.length })}</div>
         </div>
 
         <div class="daily-side" style={sideH ? `height:${sideH}px` : undefined}>
           <div class="list">
-            {#each preview as t, i (t.provider + t.id + i)}
-              <TrackRow track={t} index={i} queue={songs} />
+            {#each preview as track, i (track.provider + track.id + i)}
+              <TrackRow track={track} index={i} queue={songs} />
             {/each}
           </div>
         </div>
       </div>
     {:else if !loading}
       <div class="note">
-        每日推荐为空。可能是账号当天还没有生成推荐，或登录态已过期（试试在账号页重新登录）。
+        {t('每日推荐为空。可能是账号当天还没有生成推荐，或登录态已过期（试试在账号页重新登录）。')}
       </div>
     {/if}
 
     <!-- 2) 推荐歌单：横向货架 -->
     {#if recommended.length > 0}
-      <div class="section-head"><span>推荐歌单</span></div>
+      <div class="section-head"><span>{t('推荐歌单')}</span></div>
       <div class="shelf" class:can-prev={canPrev} class:can-next={canNext}>
         <div class="albumrow" bind:this={shelfEl} onscroll={measureShelf}>
           {#each recommended as pl (pl.id)}
@@ -278,8 +279,8 @@
                 <button
                   class="fab"
                   class:on={fabBusy === `${pl.provider}:${pl.id}`}
-                  title="播放 {pl.name}"
-                  aria-label="播放 {pl.name}"
+                  title={t('播放 {name}', { name: pl.name })}
+                  aria-label={t('播放 {name}', { name: pl.name })}
                   onclick={(e) => {
                     stop(e);
                     void playPlaylist(pl);
@@ -296,7 +297,7 @@
               </div>
               <div class="nm">{pl.name}</div>
               <div class="sub">
-                {#if pl.play_count}{fmtCount(pl.play_count)} 播放 · {/if}{pl.track_count} 首
+                {#if pl.play_count}{t('{n} 播放', { n: fmtPlayCount(pl.play_count) })} · {/if}{t('{n} 首', { n: pl.track_count })}
               </div>
             </div>
           {/each}
@@ -305,8 +306,8 @@
           <button
             class="shelf-nav prev"
             onclick={() => pageShelf(-1)}
-            title="上一排"
-            aria-label="上一排歌单"
+            title={t('上一排')}
+            aria-label={t('上一排歌单')}
           >
             <HugeiconsIcon icon={icons.back} size={ICON_SIZE.inline} />
           </button>
@@ -315,8 +316,8 @@
           <button
             class="shelf-nav next"
             onclick={() => pageShelf(1)}
-            title="下一排"
-            aria-label="下一排歌单"
+            title={t('下一排')}
+            aria-label={t('下一排歌单')}
           >
             <HugeiconsIcon icon={icons.forward} size={ICON_SIZE.inline} />
           </button>
@@ -326,7 +327,7 @@
 
     <!-- 3) 我的歌单：同样的卡片，换行排列 -->
     {#if mine.length > 0}
-      <div class="section-head"><span>我的歌单 · {mine.length}</span></div>
+      <div class="section-head"><span>{t('我的歌单 · {n}', { n: mine.length })}</span></div>
       <div class="wrap">
         {#each mine as pl (pl.id)}
           <div
@@ -354,8 +355,8 @@
               <button
                 class="fab"
                 class:on={fabBusy === `${pl.provider}:${pl.id}`}
-                title="播放 {pl.name}"
-                aria-label="播放 {pl.name}"
+                title={t('播放 {name}', { name: pl.name })}
+                aria-label={t('播放 {name}', { name: pl.name })}
                 onclick={(e) => {
                   stop(e);
                   void playPlaylist(pl);
@@ -371,7 +372,7 @@
               </button>
             </div>
             <div class="nm">{pl.name}</div>
-            <div class="sub">{pl.track_count} 首</div>
+            <div class="sub">{t('{n} 首', { n: pl.track_count })}</div>
           </div>
         {/each}
       </div>

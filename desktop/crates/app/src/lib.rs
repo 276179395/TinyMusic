@@ -369,44 +369,39 @@ pub fn sanitize_playlist_name(raw: &str) -> Result<String, String> {
 pub const FAVORITES_PLAYLIST: &str = "喜欢";
 
 
-pub fn favorites_object_key(prefix: &str) -> String {
-    let p = prefix.trim().trim_matches('/');
-    if p.is_empty() {
-        "favorites.json".into()
-    } else {
-        format!("{}/favorites.json", p)
-    }
-}
-
-
-/// 把本地喜欢列表写成网盘上的 favorites.json
-pub async fn push_favorites(state: &AppState) -> Result<(), String> {
-    let client = s3_client(state)?;
-    let mut list = state.storage.list_favorites().map_err(|e| e.to_string())?;
-    // s3 曲目的封面是临时签名直链，写进 JSON 只会变成别的设备/几小时后的裂图；
-    // 拉取时按对象名重签（refresh_s3_covers），所以这里一律不落盘。
-    for t in list.iter_mut().filter(|t| t.provider == "s3") {
-        t.cover = None;
-    }
-    let key = favorites_object_key(&client.config().prefix);
-    let body = serde_json::to_vec(&list).map_err(|e| e.to_string())?;
-    client
-        .put_object(&key, body, "application/json; charset=utf-8")
-        .await
-        .map_err(|e| e.to_string())
-}
-
-
-/// 点喜欢之后：同步 favorites.json，并把这歌下载到网盘「喜欢」目录。
+/// 点喜欢之后：把这首歌放进网盘「喜欢」目录（收藏就是目录里那份副本）。
 /// 返回失败记录（有的话）让调用方弹窗。
 pub async fn sync_favorite_track(state: &AppState, track: &Track) -> Option<FailedDownload> {
-    if push_favorites(state).await.is_err() {
-        return None;
-    }
-
     let client = s3_client(state).ok()?;
     let settings = state.settings_snapshot();
     let q = Quality::from_str(&settings.default_quality);
+
+    // 网盘里的歌不用重新下载：直接在桶里复制一份到「喜欢」
+    if track.provider == "s3" {
+        return match tinymusic_core::library::copy_into_favorites(&client, &track.id).await {
+            Ok(target) => {
+                remember_favorite_copy(state, track, &target);
+                let _ = state.storage.save_s3_playlist(FAVORITES_PLAYLIST);
+                None
+            }
+            Err(e) => {
+                let failure = failure_record(
+                    track,
+                    q,
+                    "s3",
+                    FAVORITES_PLAYLIST,
+                    "",
+                    vec![FailedPart {
+                        part: "audio".into(),
+                        error: e,
+                    }],
+                );
+                let _ = state.storage.upsert_download_failure(&failure);
+                Some(failure)
+            }
+        };
+    }
+
     let p = state.provider(&track.provider).ok()?;
 
     let seq = state.task_seq.fetch_add(1, Ordering::Relaxed);
@@ -430,6 +425,18 @@ pub async fn sync_favorite_track(state: &AppState, track: &Track) -> Option<Fail
         let _ = state.storage.save_s3_playlist(FAVORITES_PLAYLIST);
     }
     outcome.failure
+}
+
+
+/// 复制到「喜欢」成功后，把本地收藏缓存换成副本的 key。
+///
+/// 收藏的 id 必须和「喜欢」目录里的对象一致，否则下次拉取会被当成过期收藏清掉。
+fn remember_favorite_copy(state: &AppState, source: &Track, target: &str) {
+    let _ = state.storage.remove_favorite("s3", &source.id);
+    let mut copy = source.clone();
+    copy.id = target.to_string();
+    copy.cover = None;
+    let _ = state.storage.add_favorite(&copy);
 }
 
 
@@ -1379,6 +1386,19 @@ pub async fn download_retry_failed(
             continue;
         };
         let q = Quality::from_str(&f.quality);
+        // 网盘歌曲的收藏是桶内复制，没有平台 provider 可下载
+        if f.target == "s3" && f.track.provider == "s3" {
+            let Ok(s3) = s3_client(state) else {
+                continue;
+            };
+            if let Ok(target) =
+                tinymusic_core::library::copy_into_favorites(&s3, &f.track.id).await
+            {
+                remember_favorite_copy(state, &f.track, &target);
+                let _ = state.storage.remove_download_failure(&f.id);
+            }
+            continue;
+        }
         let provider = match state.provider(&f.track.provider) {
             Ok(p) => p,
             Err(_) => continue,
@@ -1500,32 +1520,39 @@ pub fn favorite_add(
 }
 
 
-/// 取消喜欢时顺手删掉网盘「喜欢」目录里的同名文件，
-/// 否则下次 favorites_pull 会把「喜欢」目录里的歌又补回来。
+/// 取消喜欢：删掉「喜欢」目录里那份副本（只在这个目录里删，绝不碰歌单原文件）。
+///
+/// 不删的话，下次 favorites_pull 又会把目录里的文件读回来。
 pub async fn delete_cloud_favorite(state: &AppState, track: &Track) {
     let Ok(client) = s3_client(state) else {
         return;
     };
-    let folder = playlist_prefix(&client.normalized_prefix(), FAVORITES_PLAYLIST);
-    let Ok(keys) = client.list_keys(&folder).await else {
-        return;
-    };
-    let fname = build_filename(track, "x");
-    let stem = fname.strip_suffix(".x").unwrap_or(&fname);
+    let folder = tinymusic_core::library::favorites_folder(&client.normalized_prefix());
     let mut targets = Vec::new();
-    if track.provider == "s3" {
+    // 收藏本身的 id 就是「喜欢」目录里的对象 key
+    if track.provider == "s3" && track.id.starts_with(&folder) {
         targets.push(track.id.clone());
     }
-    for key in &keys {
-        let base = key.rsplit_once('.').map(|(a, _)| a).unwrap_or(key.as_str());
-        if base.rsplit('/').next() == Some(stem) {
-            targets.push(key.clone());
+    // 平台歌曲（网易云/酷我）的副本按「歌手 - 歌名」对文件名
+    if !track.title.trim().is_empty() || !track.artist.trim().is_empty() {
+        let fname = build_filename(track, "x");
+        let stem = fname.strip_suffix(".x").unwrap_or(&fname);
+        if let Ok(keys) = client.list_keys(&folder).await {
+            for key in &keys {
+                let base = key.rsplit_once('.').map(|(a, _)| a).unwrap_or(key.as_str());
+                if base.rsplit('/').next() == Some(stem) {
+                    targets.push(key.clone());
+                }
+            }
         }
     }
     targets.sort();
     targets.dedup();
     for key in targets {
-        let _ = client.delete_object(&key).await;
+        if !key.starts_with(&folder) {
+            continue;
+        }
+        let _ = tinymusic_core::library::remove_from_favorites(&client, &key).await;
     }
 }
 
@@ -1534,22 +1561,51 @@ pub fn favorite_remove(
     state: &AppState,
     provider: String,
     id: String,
+    title: Option<String>,
+    artist: Option<String>,
 ) -> Result<(), String> {
-    let track = state
-        .storage
-        .list_favorites()
-        .ok()
-        .and_then(|list| list.into_iter().find(|t| t.provider == provider && t.id == id));
-    state
-        .storage
-        .remove_favorite(&provider, &id)
-        .map_err(|e| e.to_string())?;
+    // 「喜欢」目录里的副本和歌单里的原始 key 不是同一个；
+    // 同一首歌在不同平台的条目也要一起清掉，否则下次拉取又冒出来。
+    let all = state.storage.list_favorites().unwrap_or_default();
+    let hit = all
+        .iter()
+        .find(|t| t.provider == provider && t.id == id)
+        .cloned();
+    let same_song = hit
+        .as_ref()
+        .map(tinymusic_core::library::favorite_dedupe_key)
+        .or_else(|| {
+            let (title, artist) = (title?, artist?);
+            if title.trim().is_empty() && artist.trim().is_empty() {
+                return None;
+            }
+            Some(tinymusic_core::library::favorite_key(&title, &artist))
+        });
+    let mut targets: Vec<Track> = all
+        .into_iter()
+        .filter(|t| {
+            (t.provider == provider && t.id == id)
+                || same_song
+                    .as_ref()
+                    .map(|k| *k == tinymusic_core::library::favorite_dedupe_key(t))
+                    .unwrap_or(false)
+        })
+        .collect();
+    if targets.is_empty() {
+        targets.push(Track {
+            provider: provider.clone(),
+            id: id.clone(),
+            ..Track::default()
+        });
+    }
+    for t in &targets {
+        let _ = state.storage.remove_favorite(&t.provider, &t.id);
+    }
     let st = state.strong();
     tokio::spawn(async move {
-        if let Some(t) = track {
+        for t in targets {
             delete_cloud_favorite(&st, &t).await;
         }
-        let _ = push_favorites(&st).await;
     });
     Ok(())
 }
@@ -1560,69 +1616,47 @@ pub fn favorite_list(state: &AppState) -> Result<Vec<Track>, String> {
 }
 
 
+/// 是否已收藏。
+///
+/// 收藏存在「喜欢」目录里，id 是副本的 key，跟歌单里的原始 key 不一样；
+/// 所以按 id 查不到时再按歌名+歌手认一遍（iOS 也是这么判的）。
 pub fn favorite_check(
     state: &AppState,
     provider: String,
     id: String,
+    title: Option<String>,
+    artist: Option<String>,
 ) -> Result<bool, String> {
-    state
+    if state
         .storage
         .is_favorite(&provider, &id)
-        .map_err(|e| e.to_string())
+        .map_err(|e| e.to_string())?
+    {
+        return Ok(true);
+    }
+    let (Some(title), Some(artist)) = (title, artist) else {
+        return Ok(false);
+    };
+    if title.trim().is_empty() && artist.trim().is_empty() {
+        return Ok(false);
+    }
+    let key = tinymusic_core::library::favorite_key(&title, &artist);
+    let list = state.storage.list_favorites().map_err(|e| e.to_string())?;
+    Ok(list
+        .iter()
+        .any(|t| tinymusic_core::library::favorite_dedupe_key(t) == key))
 }
 
 
-pub fn favorite_dedupe_key(t: &Track) -> String {
-    format!(
-        "{}|{}",
-        t.title.trim().to_lowercase(),
-        t.artist.trim().to_lowercase()
-    )
-}
-
-
-/// 从网盘拉取「喜欢」：favorites.json + 「喜欢」目录里的实际音频，合并去重。
+/// 从网盘拉取「喜欢」：只认「喜欢」目录里的实际音频，不再读写 favorites.json。
 ///
-/// 只看 favorites.json 时，如果 JSON 丢了/为空，网盘里已经存在的歌曲就不会显示；
-/// 这里把目录里的文件也补进来，并把补进来的结果写回 JSON。
+/// 歌单里删掉的歌不会因为 JSON 没同步而继续挂在喜欢里（之前的 bug 就是这么来的）。
 pub async fn favorites_pull(state: &AppState) -> Result<Vec<Track>, String> {
-    let client = match s3_client(&state) {
+    let client = match s3_client(state) {
         Ok(c) => c,
         Err(_) => return state.storage.list_favorites().map_err(|e| e.to_string()),
     };
-    let key = favorites_object_key(&client.config().prefix);
-    let mut merged = match client.get_object(&key).await.map_err(|e| e.to_string())? {
-        Some(bytes) => serde_json::from_slice::<Vec<Track>>(&bytes).unwrap_or_default(),
-        None => Vec::new(),
-    };
-    let json_len = merged.len();
-
-    // 目录里存在的音频是「喜欢」的实物；JSON 只是元数据缓存。
-    if let Ok(rows) = list_s3_track_rows(&client, FAVORITES_PLAYLIST).await {
-        let mut seen: Vec<String> = merged.iter().map(favorite_dedupe_key).collect();
-        for row in rows {
-            let k = favorite_dedupe_key(&row.track);
-            if !seen.contains(&k) {
-                seen.push(k);
-                merged.push(row.track);
-            }
-        }
-    }
-
-    for t in &merged {
-        let _ = state.storage.upsert_track(t);
-        let _ = state.storage.add_favorite(t);
-    }
-
-    // 目录里补出来的歌曲写回 JSON，下次启动不再依赖“目录扫描”。
-    if merged.len() > json_len {
-        let _ = push_favorites(&state).await;
-    }
-
-    // 返回给前端之前重签封面，播放条/歌词页才不会加载到过期直链的裂图
-    let mut list = state.storage.list_favorites().map_err(|e| e.to_string())?;
-    refresh_s3_covers(&client, &mut list).await;
-    Ok(list)
+    tinymusic_core::library::pull_favorites(&client, &state.storage).await
 }
 
 
@@ -2229,7 +2263,7 @@ pub fn find_sibling(keys: &[(String, String)], stem: &str, exts: &[&str]) -> Opt
 
 
 /// 给网盘音频对象签一个封面直链：同目录同名 jpg/jpeg/png/webp。
-/// 封面是临时签名地址，所以只能现签现用，不能存进库或 favorites.json。
+/// 封面是临时签名地址，所以只能现签现用，不能存进库。
 pub async fn signed_cover_for(client: &S3, audio_key: &str) -> Option<String> {
     let (folder, _) = audio_key.rsplit_once('/')?;
     let keys = client.list_keys(&format!("{}/", folder)).await.ok()?;
@@ -2245,7 +2279,7 @@ pub async fn signed_cover_for(client: &S3, audio_key: &str) -> Option<String> {
 
 /// 批量刷新 s3 曲目的封面直链；同一个目录只列一次。
 ///
-/// 库里/favorites.json 里存的 s3 封面都是写入那会儿签的直链，几个小时后就失效，
+/// 库里存的 s3 封面都是写入那会儿签的直链，几个小时后就失效，
 /// 播放时播放条会直接显示裂图。所以每次把「喜欢」读出来都重签一次。
 pub async fn refresh_s3_covers(client: &S3, tracks: &mut [Track]) {
     let mut cache: std::collections::HashMap<String, Vec<(String, String)>> =
@@ -2474,9 +2508,8 @@ pub async fn s3_track_delete(state: &AppState, key: String) -> Result<(), String
     for ext in ["lrc", "jpg", "jpeg", "png", "webp"] {
         let _ = client.delete_object(&format!("{}.{}", stem, ext)).await;
     }
-    // 从网盘删掉的 S3 曲目，本地「喜欢」也要一起清掉，避免刷新后复活
+    // 从网盘删掉的 S3 曲目，本地收藏缓存也要一起清掉（收藏只认「喜欢」目录）
     let _ = state.storage.remove_favorite("s3", &key);
-    let _ = push_favorites(&state).await;
     Ok(())
 }
 

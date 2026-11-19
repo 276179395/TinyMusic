@@ -8,6 +8,7 @@ import {
 
 import { api, formatLabel, qualityLabel, type AudioFormat, type LyricLine, type PlayerSource, type Quality, type QualityCapability, type Track, type TrackQualities } from './api';
 import { QUALITY_ORDER, qualityChoices } from './quality';
+import { t } from './i18n.svelte';
 
 /** 播放状态：播放按钮据此显示「播放 / 暂停 / 继续播放 / 加载中」 */
 export type PlayStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'ended' | 'error';
@@ -69,7 +70,8 @@ export const player = $state({
   /** 当前实际档位（可能因服务端降级而不同于 player.quality） */
   actualQuality: 'standard' as Quality | 'original',
   actualFormat: null as AudioFormat | null,
-  actualLabel: '',
+  /** 服务端是否校验过这条直链（决定音质标签要不要带「未校验」） */
+  actualVerified: false,
   /** 实际音源：local（本地文件）/ s3（网盘）/ kuwo / netease / kuwo-bridge */
   via: '',
   degraded: false,
@@ -126,14 +128,22 @@ function applySource(src: PlayerSource) {
   player.via = src.via;
   player.actualQuality = src.quality === 'original' ? 'original' : (src.quality as Quality);
   player.actualFormat = src.format;
-  const actual = formatLabel(src.format) || qualityLabel(src.quality);
-  player.actualLabel =
-    src.quality === 'original'
-      ? '原文件'
-      : src.verified || src.via === 's3'
-        ? actual
-        : `${actual}（未校验）`;
+  player.actualVerified = !!src.verified;
   player.degraded = src.degraded;
+}
+
+/**
+ * 当前实际档位的展示文案。
+ *
+ * 存的是「格式 + 是否校验」这几个事实，文案在模板里现算，语言切换后跟着变。
+ */
+export function actualLabelText(): string {
+  // 还没取到直链时没有标签可标（恢复上次播放、刚开播的瞬间）
+  if (!player.src) return '';
+  const base = formatLabel(player.actualFormat) || t(qualityLabel(player.actualQuality));
+  if (player.actualQuality === 'original') return t('原文件');
+  if (player.actualVerified || player.via === 's3') return base;
+  return t('{label}（未校验）', { label: base });
 }
 
 let qualityToken = 0;
@@ -350,20 +360,20 @@ export function isCurrent(track: Track): boolean {
 
 /** 主按钮的语义标签 */
 export function playButtonLabel(): string {
-  if (!player.current) return '播放';
+  if (!player.current) return t('播放');
   switch (player.status) {
     case 'loading':
-      return '加载中';
+      return t('加载中');
     case 'playing':
-      return '暂停';
+      return t('暂停');
     case 'paused':
-      return '继续播放';
+      return t('继续播放');
     case 'ended':
-      return '重新播放';
+      return t('重新播放');
     case 'error':
-      return '重试';
+      return t('重试');
     default:
-      return '播放';
+      return t('播放');
   }
 }
 
@@ -508,7 +518,7 @@ async function startAt(i: number, fromSec = 0, force = false, retry = false) {
   player.progress = resume ? fromSec : 0;
   player.duration = track.duration_sec || 0;
   player.src = '';
-  player.actualLabel = '';
+  player.actualVerified = false;
   player.via = '';
   player.actualFormat = null;
   player.degraded = false;
@@ -548,7 +558,7 @@ async function startAt(i: number, fromSec = 0, force = false, retry = false) {
     pendingSeek = null;
     const msg = String(e);
     player.error = msg.includes('unavailable')
-      ? '这首曲目在各音质档位都没取到完整音频'
+      ? t('这首曲目在各音质档位都没取到完整音频')
       : msg;
     setStatus('error');
     markUnavailable(track);

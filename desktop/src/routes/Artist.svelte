@@ -9,6 +9,7 @@
   import BackLink from '../components/BackLink.svelte';
   import ArtistPageSkeleton from '../components/ArtistPageSkeleton.svelte';
   import { delayedVisible } from '../lib/loading.svelte';
+  import { t, tc } from '../lib/i18n.svelte';
 
   let route = $derived(router.route.name === 'artist' ? router.route : null);
   let data = $state<ArtistPage | null>(null);
@@ -61,7 +62,9 @@
 
       <div class="artist-info">
         <h1>{data.name}</h1>
-        <div class="muted">{data.tracks.length} 首曲目 · {data.albums.length} 张专辑</div>
+        <div class="muted">
+          {t('{n} 首曲目 · {m} 张专辑', { n: data.tracks.length, m: data.albums.length })}
+        </div>
 
         {#if data.meta.length}
           <div class="artist-meta">
@@ -81,20 +84,20 @@
 
     <div class="artist-toolbar">
       <div class="tabs">
-        <button class:on={tab === 'songs'} onclick={() => (tab = 'songs')}>歌曲</button>
-        <button class:on={tab === 'albums'} onclick={() => (tab = 'albums')}>专辑</button>
+        <button class:on={tab === 'songs'} onclick={() => (tab = 'songs')}>{tc('tab', '歌曲')}</button>
+        <button class:on={tab === 'albums'} onclick={() => (tab = 'albums')}>{tc('tab', '专辑')}</button>
       </div>
       {#if bio && bioTooLong}
         <button class="bio-toggle" onclick={() => (bioOpen = !bioOpen)}>
-          {bioOpen ? '收起简介' : '展开简介'}
+          {bioOpen ? t('收起简介') : t('展开简介')}
         </button>
       {/if}
     </div>
 
     {#if tab === 'songs'}
       <div class="list">
-        {#each data.tracks as t, i (t.provider + t.id)}
-          <TrackRow track={t} index={i} queue={data.tracks} />
+        {#each data.tracks as track, i (track.provider + track.id)}
+          <TrackRow {track} index={i} queue={data.tracks} />
         {/each}
       </div>
     {:else}

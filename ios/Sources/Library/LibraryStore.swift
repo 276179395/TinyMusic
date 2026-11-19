@@ -99,14 +99,22 @@ final class LibraryStore {
                 "title": .string(track.title),
                 "artist": .string(track.artist),
             ])
+            // 收藏就是网盘「喜欢」目录里那份副本；没复制成功就不算收藏，
+            // 否则下次拉取会把本地这条抹掉，喜欢里凭空少一首歌。
+            guard result.synced else {
+                let reason = (result.error?.isEmpty == false ? result.error! : L("收藏失败：没写进网盘"))
+                favoriteSyncWarning = reason
+                error = reason
+                return false
+            }
             favorites.append(FavoriteTrack(
                 provider: "s3",
-                id: track.key,
+                id: result.key ?? track.key,
                 title: track.title,
                 artist: track.artist,
                 cover: track.cover
             ))
-            favoriteSyncWarning = result.synced ? nil : (result.error ?? "favorites.json 未写入，收藏仅在本机")
+            favoriteSyncWarning = nil
             return true
         } catch {
             self.error = error.localizedDescription
@@ -141,7 +149,7 @@ final class LibraryStore {
     func createPlaylist(named raw: String) async -> Bool {
         let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
-            error = "歌单名不能为空"
+            error = L("歌单名不能为空")
             return false
         }
         do {
@@ -159,12 +167,12 @@ final class LibraryStore {
     @discardableResult
     func renamePlaylist(_ playlist: Playlist, to raw: String) async -> Bool {
         guard !playlist.root else {
-            error = "「未分类」是根目录，不能重命名"
+            error = L("「未分类」是根目录，不能重命名")
             return false
         }
         let name = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else {
-            error = "歌单名不能为空"
+            error = L("歌单名不能为空")
             return false
         }
         do {
@@ -186,7 +194,7 @@ final class LibraryStore {
     @discardableResult
     func deletePlaylist(_ playlist: Playlist) async -> Bool {
         guard !playlist.root else {
-            error = "「未分类」是根目录，不能删除"
+            error = L("「未分类」是根目录，不能删除")
             return false
         }
         do {
@@ -222,7 +230,7 @@ final class LibraryStore {
     @discardableResult
     func moveTrack(_ track: Track, to target: Playlist) async -> Bool {
         guard !target.root else {
-            error = "根目录不能作为目标歌单"
+            error = L("根目录不能作为目标歌单")
             return false
         }
         do {
@@ -237,6 +245,8 @@ final class LibraryStore {
             tracksByPlaylist.removeValue(forKey: target.name)
             await loadPlaylists()
             await loadTracks(for: target)
+            // 移进/移出「喜欢」目录会改变收藏，跟着刷一次
+            await pullFavorites()
             error = nil
             return true
         } catch {

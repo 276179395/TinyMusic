@@ -14,11 +14,12 @@
     issueError,
   } from '../lib/s3Integrity.svelte';
   import ErrorNotice from './ErrorNotice.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   const issues = $derived(integrityUi.issues);
   const fixed = $derived(integrityUi.fixed);
   const busy = $derived(integrityBusy());
-  const scope = $derived(integrityUi.playlist || '全部歌单');
+  const scope = $derived(integrityUi.playlist || t('全部歌单'));
   const fixable = $derived(fixableIssues().length);
   const failedCount = $derived(
     issues.filter((i) => issueStatus(i.id) === 'failed').length
@@ -36,23 +37,24 @@
   };
 
   function partLabel(part: string): string {
-    return PART_LABEL[part] ?? part;
+    const label = PART_LABEL[part];
+    return label ? t(label) : part;
   }
 
   function displayTitle(issue: S3IntegrityIssue): string {
-    return issue.title || issue.stem.split('/').pop() || '未命名';
+    return issue.title || issue.stem.split('/').pop() || t('未命名');
   }
 
   function actionLabel(issue: S3IntegrityIssue): string {
     switch (issueStatus(issue.id)) {
       case 'running':
-        return '补齐中…';
+        return t('补齐中…');
       case 'waiting':
-        return busy ? '等待中' : '补齐';
+        return busy ? t('等待中') : t('补齐');
       case 'failed':
-        return '重试';
+        return t('重试');
       default:
-        return '补齐';
+        return t('补齐');
     }
   }
 
@@ -62,9 +64,9 @@
   }
 
   function progressLabel(): string {
-    if (rechecking) return '正在重新检查…';
+    if (rechecking) return t('正在重新检查…');
     const current = Math.min(integrityUi.runDone + 1, integrityUi.runTotal);
-    return `正在补齐 ${current} / ${integrityUi.runTotal}`;
+    return t('正在补齐 {i} / {n}', { i: current, n: integrityUi.runTotal });
   }
 
   function close() {
@@ -87,13 +89,13 @@
       if (e.target === e.currentTarget) close();
     }}
   >
-    <div class="modal" role="dialog" aria-modal="true" aria-label="网盘完整性检查">
+    <div class="modal" role="dialog" aria-modal="true" aria-label={t('网盘完整性检查')}>
       <div class="modal-head">
         <div>
-          <h2>网盘完整性检查</h2>
-          <p class="hint">{scope} · 检查每首歌的音频、歌词、封面是否齐全</p>
+          <h2>{t('网盘完整性检查')}</h2>
+          <p class="hint">{t('{scope} · 检查每首歌的音频、歌词、封面是否齐全', { scope })}</p>
         </div>
-        <button class="icon" onclick={close} aria-label="关闭" disabled={busy}>
+        <button class="icon" onclick={close} aria-label={t('关闭')} disabled={busy}>
           <HugeiconsIcon icon={icons.close} size={ICON_SIZE.inline} />
         </button>
       </div>
@@ -105,7 +107,7 @@
       {#if integrityUi.loading}
         <div class="pad loading">
           <HugeiconsIcon icon={icons.loading} size={ICON_SIZE.inline} />
-          正在扫描网盘…
+          {t('正在扫描网盘…')}
         </div>
       {:else if issues.length === 0 && fixed.length === 0}
         <div class="pad empty">
@@ -114,19 +116,19 @@
           </span>
           <strong>
             {integrityUi.checked > 0
-              ? `已检查 ${integrityUi.checked} 首，内容齐全`
-              : '没有扫描到歌曲'}
+              ? t('已检查 {n} 首，内容齐全', { n: integrityUi.checked })
+              : t('没有扫描到歌曲')}
           </strong>
-          <p>缺音频、歌词或封面的条目会出现在这里，可以逐个补齐。</p>
+          <p>{t('缺音频、歌词或封面的条目会出现在这里，可以逐个补齐。')}</p>
         </div>
       {:else}
         <div class="summary">
-          已检查 {integrityUi.checked} 首，<b>{issues.length}</b> 首缺内容
+          {t('已检查 {n} 首，', { n: integrityUi.checked })}<b>{issues.length}</b> {t('首缺内容')}
           {#if fixed.length > 0}
-            <span class="fixed-note">· 已补齐 {fixed.length} 首</span>
+            <span class="fixed-note">· {t('已补齐 {n} 首', { n: fixed.length })}</span>
           {/if}
           {#if failedCount > 0}
-            <span class="failed-note">· {failedCount} 首补齐失败</span>
+            <span class="failed-note">· {t('{n} 首补齐失败', { n: failedCount })}</span>
           {/if}
         </div>
 
@@ -142,7 +144,7 @@
         {/if}
 
         {#if fixed.length > 0}
-          <div class="block-title ok">已补齐</div>
+          <div class="block-title ok">{t('已补齐')}</div>
           <div class="issue-list fixed-list">
             {#each fixed as issue (issue.id)}
               <div class="issue-row done">
@@ -160,14 +162,14 @@
                     {/each}
                   </div>
                 </div>
-                <span class="state-chip ok">已补齐</span>
+                <span class="state-chip ok">{t('已补齐')}</span>
               </div>
             {/each}
           </div>
         {/if}
 
         {#if issues.length > 0}
-          <div class="block-title">待补齐</div>
+          <div class="block-title">{t('待补齐')}</div>
           <div class="issue-list">
             {#each issues as issue (issue.id)}
               {@const st = issueStatus(issue.id)}
@@ -188,19 +190,19 @@
                   <div class="issue-parts">
                     {#each issue.missing as part}
                       <span class="part" class:audio={part === 'audio'}>
-                        {partLabel(part)}缺失
+                        {t('{part}缺失', { part: partLabel(part) })}
                       </span>
                     {/each}
                     {#if st === 'running'}
-                      <span class="state-chip run">正在补齐</span>
+                      <span class="state-chip run">{t('正在补齐')}</span>
                     {:else if st === 'waiting' && busy}
-                      <span class="state-chip wait">等待中</span>
+                      <span class="state-chip wait">{t('等待中')}</span>
                     {:else if st === 'failed'}
-                      <span class="state-chip fail">失败</span>
+                      <span class="state-chip fail">{t('失败')}</span>
                     {/if}
                     {#if !issue.can_fix}
-                      <span class="nofix" title="没有这台机器的上传记录，找不到原平台信息">
-                        无来源
+                      <span class="nofix" title={t('没有这台机器的上传记录，找不到原平台信息')}>
+                        {t('无来源')}
                       </span>
                     {/if}
                   </div>
@@ -223,7 +225,7 @@
 
       <div class="modal-actions">
         <button class="mini" onclick={runIntegrityCheck} disabled={busy || integrityUi.loading}>
-          重新检查
+          {t('重新检查')}
         </button>
         <button
           class="mini primary"
@@ -231,9 +233,9 @@
           disabled={busy || fixable === 0}
         >
           <HugeiconsIcon icon={icons.refresh} size={ICON_SIZE.inline} />
-          全部补齐
+          {t('全部补齐')}
         </button>
-        <button class="primary" onclick={close} disabled={busy}>关闭</button>
+        <button class="primary" onclick={close} disabled={busy}>{t('关闭')}</button>
       </div>
     </div>
   </div>

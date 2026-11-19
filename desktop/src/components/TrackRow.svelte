@@ -9,6 +9,7 @@
   import { appCfg } from '../lib/config.svelte';
   import { showToast } from '../lib/toast.svelte';
   import { go } from '../lib/router.svelte';
+  import { t, tc } from '../lib/i18n.svelte';
 
   let {
     track,
@@ -35,7 +36,7 @@
     if (favLoaded) return;
     favLoaded = true;
     try {
-      fav = await api.favoriteCheck(track.provider, track.id);
+      fav = await api.favoriteCheck(track);
     } catch {
       /* 忽略 */
     }
@@ -44,15 +45,15 @@
   async function toggleFav() {
     try {
       if (fav) {
-        await api.favoriteRemove(track.provider, track.id);
+        await api.favoriteRemove(track);
         fav = false;
         onFavoriteChange?.(track, false);
-        showToast('已取消喜欢');
+        showToast(t('已取消喜欢'));
       } else {
         await api.favoriteAdd(track);
         fav = true;
         onFavoriteChange?.(track, true);
-        showToast('已收藏到网盘');
+        showToast(t('已收藏到网盘'));
       }
     } catch (e) {
       msg = String(e);
@@ -72,14 +73,14 @@
 
   const playLabel = $derived(
     unavailable
-      ? '不可播放'
+      ? t('不可播放')
       : loading
-        ? '加载中'
+        ? t('加载中')
         : playing
-          ? '暂停'
+          ? t('暂停')
           : current
-            ? '继续播放'
-            : '播放'
+            ? t('继续播放')
+            : t('播放')
   );
 
   // 挂载后查询一次收藏状态（避免依赖悬停事件）
@@ -129,18 +130,18 @@
       >{track.title}{#if track.subtitle}<span class="sub">{track.subtitle}</span>{/if}</span
     >
     {#if track.available_qualities?.includes('lossless')}
-      <span class="badge sq" title="本曲有无损 FLAC">无损</span>
+      <span class="badge sq" title={t('本曲有无损 FLAC')}>{t('无损')}</span>
     {/if}
-    {#if track.availability === 'preview_only'}<span class="badge warn">仅试听</span>{/if}
-    {#if track.availability === 'unavailable'}<span class="badge mute">不可用</span>{/if}
+    {#if track.availability === 'preview_only'}<span class="badge warn">{t('仅试听')}</span>{/if}
+    {#if track.availability === 'unavailable'}<span class="badge mute">{t('不可用')}</span>{/if}
   </div>
 
   <div class="artist">
     <button
       class="link trunc"
-      title={track.artist || '未知艺人'}
+      title={track.artist || t('未知艺人')}
       onclick={() => go({ name: 'artist', provider: track.provider, artistId: track.artist_id, title: track.artist })}
-    >{track.artist || '未知艺人'}</button>
+    >{track.artist || t('未知艺人')}</button>
   </div>
 
   <div class="album">
@@ -153,7 +154,7 @@
     {/if}
   </div>
 
-  <div class="heat" title={track.hot ? `热度 ${track.hot}` : '热度未知'}>
+  <div class="heat" title={track.hot ? t('热度 {n}', { n: track.hot }) : t('热度未知')}>
     {#if (track.hot ?? 0) > 0}
       <span class="heat-bar"><i style="width:{Math.min(100, track.hot ?? 0)}%"></i></span>
     {/if}
@@ -167,8 +168,8 @@
     {/if}
     <button
       class="icon"
-      title={cloudOnly ? '网盘文件已在云端' : pending ? '正在下载' : '下载（含歌词与封面）'}
-      aria-label={cloudOnly ? '网盘文件' : pending ? '正在下载' : '下载'}
+      title={cloudOnly ? t('网盘文件已在云端') : pending ? t('正在下载') : t('下载（含歌词与封面）')}
+      aria-label={cloudOnly ? t('网盘文件') : pending ? t('正在下载') : tc('action', '下载')}
       disabled={unavailable || pending || cloudOnly}
       onclick={() => requestDownload([track])}
     >
@@ -182,8 +183,8 @@
       <button
         class="icon"
         class:on={fav}
-        title={fav ? '取消喜欢' : '喜欢（收藏到网盘）'}
-        aria-label={fav ? '取消喜欢' : '喜欢'}
+        title={fav ? t('取消喜欢') : t('喜欢（收藏到网盘）')}
+        aria-label={fav ? t('取消喜欢') : t('喜欢')}
         onclick={toggleFav}
       >
         <HugeiconsIcon icon={icons.favorite} size={ICON_SIZE.inline} />

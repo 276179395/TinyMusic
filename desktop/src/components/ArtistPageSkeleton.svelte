@@ -1,11 +1,12 @@
 <script lang="ts">
   import TrackListSkeleton from './TrackListSkeleton.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   /** 艺人页：圆形头像 + 资料 + 简介 + 标签页 + 曲目列表 */
   let { rows = 8 }: { rows?: number } = $props();
 </script>
 
-<div class="sk-block" role="status" aria-label="加载中">
+<div class="sk-block" role="status" aria-label={t('加载中')}>
   <div class="artist-head sk-artist-head">
     <span class="sk sk-artist-photo"></span>
     <div class="artist-info sk-artist-info">

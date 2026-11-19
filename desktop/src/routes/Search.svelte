@@ -18,6 +18,7 @@
     removeHistory,
     clearHistory,
   } from '../lib/searchStore.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   let inputEl = $state<HTMLInputElement | null>(null);
   let mainEl: HTMLElement | null = null;
@@ -203,11 +204,11 @@
       bind:this={inputEl}
       bind:value={searchState.kw}
       onkeydown={onKey}
-      placeholder="搜索歌曲、艺人、专辑…"
+      placeholder={t('搜索歌曲、艺人、专辑…')}
       spellcheck="false"
     />
     <button onclick={() => doSearch(0)} disabled={loading}>
-      {loading ? '搜索中…' : '搜索'}
+      {loading ? t('搜索中…') : t('搜索')}
     </button>
   </div>
 
@@ -215,7 +216,7 @@
     <div class="historyrow">
       <span class="hlabel">
         <HugeiconsIcon icon={icons.history} size={ICON_SIZE.inline} />
-        最近搜索
+        {t('最近搜索')}
       </span>
       <div class="hchips">
         {#each searchHistory.items as h (h.kw)}
@@ -226,16 +227,20 @@
               e.preventDefault();
               e.stopPropagation();
               openMenuAt(e.clientX, e.clientY, [
-                { label: `搜索「${h.kw}」`, icon: icons.search, run: () => pickHistory(h.kw) },
                 {
-                  label: '删除这条记录',
+                  label: t('搜索「{kw}」', { kw: h.kw }),
+                  icon: icons.search,
+                  run: () => pickHistory(h.kw),
+                },
+                {
+                  label: t('删除这条记录'),
                   icon: icons.trash,
                   danger: true,
                   run: () => removeHistory(h.kw),
                 },
                 { sep: true },
                 {
-                  label: '清空搜索历史',
+                  label: t('清空搜索历史'),
                   icon: icons.trash,
                   danger: true,
                   run: () => clearHistory(),
@@ -247,15 +252,15 @@
             <button
               class="hx"
               onclick={() => removeHistory(h.kw)}
-              title="删除这条记录"
-              aria-label="删除搜索记录 {h.kw}"
+              title={t('删除这条记录')}
+              aria-label={t('删除搜索记录 {kw}', { kw: h.kw })}
             >
               <HugeiconsIcon icon={icons.close} size={12} />
             </button>
           </span>
         {/each}
       </div>
-      <button class="hclear" onclick={clearHistory} title="清空搜索历史">清空</button>
+      <button class="hclear" onclick={clearHistory} title={t('清空搜索历史')}>{t('清空')}</button>
     </div>
   {/if}
 
@@ -268,7 +273,7 @@
   {:else if result}
     {#if albumsSkel.visible || (!albumsLoading && searchState.albums.length > 0)}
       <div class="section-head">
-        <span>{searchState.artistName} 的专辑</span>
+        <span>{t('{name} 的专辑', { name: searchState.artistName })}</span>
         <button
           class="mini"
           onclick={() =>
@@ -279,7 +284,7 @@
               title: searchState.artistName,
             })}
         >
-          查看艺人
+          {t('查看艺人')}
         </button>
       </div>
       <div class="shelf" class:can-prev={canPrev} class:can-next={canNext}>
@@ -316,8 +321,8 @@
           <button
             class="shelf-nav prev"
             onclick={() => pageShelf(-1)}
-            title="上一排"
-            aria-label="向左翻一页专辑"
+            title={t('上一排')}
+            aria-label={t('向左翻一页专辑')}
           >
             <HugeiconsIcon icon={icons.back} size={ICON_SIZE.inline} />
           </button>
@@ -326,8 +331,8 @@
           <button
             class="shelf-nav next"
             onclick={() => pageShelf(1)}
-            title="下一排"
-            aria-label="向右翻一页专辑"
+            title={t('下一排')}
+            aria-label={t('向右翻一页专辑')}
           >
             <HugeiconsIcon icon={icons.forward} size={ICON_SIZE.inline} />
           </button>
@@ -336,26 +341,30 @@
     {/if}
 
     <div class="summary">
-      共 {result.total.toLocaleString()} 条 · 第 {searchState.page + 1} / {totalPages} 页
-      {#if loading}<span class="hint">更新中…</span>{/if}
+      {t('共 {total} 条 · 第 {page} / {pages} 页', {
+        total: result.total.toLocaleString(),
+        page: searchState.page + 1,
+        pages: totalPages
+      })}
+      {#if loading}<span class="hint">{t('更新中…')}</span>{/if}
     </div>
 
     <BatchBar tracks={result.items} />
 
     <div class="list">
-      {#each result.items as t, i (t.provider + t.id)}
-        <TrackRow track={t} index={i} queue={result.items} />
+      {#each result.items as track, i (track.provider + track.id)}
+        <TrackRow track={track} index={i} queue={result.items} />
       {/each}
     </div>
 
     <div class="pager">
       <button disabled={searchState.page <= 0 || loading} onclick={() => doSearch(searchState.page - 1)}
-        >上一页</button
+        >{t('上一页')}</button
       >
       <span>{searchState.page + 1}</span>
       <button
         disabled={searchState.page + 1 >= totalPages || loading}
-        onclick={() => doSearch(searchState.page + 1)}>下一页</button
+        onclick={() => doSearch(searchState.page + 1)}>{t('下一页')}</button
       >
     </div>
   {:else if !loading}
@@ -363,7 +372,7 @@
       <div class="big" aria-hidden="true">
         <HugeiconsIcon icon={icons.search} size={ICON_SIZE.empty} />
       </div>
-      <p>{searchState.ran ? '没有找到匹配的歌曲' : '输入关键词开始搜索'}</p>
+      <p>{searchState.ran ? t('没有找到匹配的歌曲') : t('输入关键词开始搜索')}</p>
       <div class="chips">
         {#each HOT as c}
           <button onclick={() => pickHistory(c)}>{c}</button>

@@ -13,9 +13,11 @@
     next,
     prev,
     loadLyrics,
+    actualLabelText,
   } from '../lib/player.svelte';
   import { openMenuAt } from '../lib/contextmenu.svelte';
   import { copyText } from '../lib/toast.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   let listEl = $state<HTMLElement | null>(null);
   /** 上方留白只占两成：歌刚开始时不会先在头顶空出一大片 */
@@ -44,7 +46,7 @@
     return idx;
   });
 
-  const qualityText = $derived(player.actualLabel || qualityLabel(player.quality));
+  const qualityText = $derived(actualLabelText() || t(qualityLabel(player.quality)));
 
   /** 封面直链失效（网盘签名过期、CDN 防盗链）时退回占位图 */
   let coverFailedFor = $state('');
@@ -84,11 +86,11 @@
     if (Math.abs(dist) < 1) return;
     const dur = Math.min(560, 240 + Math.abs(dist) * 0.35);
     const t0 = performance.now();
-    const ease = (t: number) => 1 - Math.pow(1 - t, 3);
+    const ease = (v: number) => 1 - Math.pow(1 - v, 3);
     const step = (now: number) => {
-      const t = Math.min(1, (now - t0) / dur);
-      el.scrollTop = from + dist * ease(t);
-      scrollAnim = t < 1 ? requestAnimationFrame(step) : 0;
+      const k = Math.min(1, (now - t0) / dur);
+      el.scrollTop = from + dist * ease(k);
+      scrollAnim = k < 1 ? requestAnimationFrame(step) : 0;
     };
     scrollAnim = requestAnimationFrame(step);
   }
@@ -179,7 +181,7 @@
   class="lyrics-page"
   role="dialog"
   aria-modal="true"
-  aria-label="歌词"
+  aria-label={t('歌词')}
   transition:fly={{ y: REDUCE_MOTION ? 0 : '100%', duration: REDUCE_MOTION ? 0 : 320, opacity: 1 }}
 >
   <div class="lyrics-bg" aria-hidden="true">
@@ -199,21 +201,21 @@
   <div class="lyrics-drag" data-tauri-drag-region aria-hidden="true"></div>
 
   <header class="lyrics-top">
-    <button class="ly-back" onclick={closeLyrics} aria-label="退出歌词页">
+    <button class="ly-back" onclick={closeLyrics} aria-label={t('退出歌词页')}>
       <HugeiconsIcon icon={icons.back} size={ICON_SIZE.inline} />
-      <span>返回</span>
+      <span>{t('返回')}</span>
     </button>
 
     <span class="lyrics-top-label">
       {#if player.status === 'playing'}
         <span class="bars ly-bars" aria-hidden="true"><i></i><i></i><i></i></span>
       {/if}
-      正在播放
+      {t('正在播放')}
     </span>
 
     <div class="lyrics-top-actions">
       {#if qualityText}
-        <span class="ly-quality" title="当前播放音质">{qualityText}</span>
+        <span class="ly-quality" title={t('当前播放音质')}>{qualityText}</span>
       {/if}
     </div>
   </header>
@@ -248,15 +250,15 @@
       </div>
 
       <div class="lp-ctrls">
-        <button class="c" onclick={prev} title="上一首" aria-label="上一首">
+        <button class="c" onclick={prev} title={t('上一首')} aria-label={t('上一首')}>
           <HugeiconsIcon icon={icons.previous} size={ICON_SIZE.control} />
         </button>
         <button
           class="c main"
           onclick={toggle}
           disabled={player.status === 'loading'}
-          title={player.status === 'playing' ? '暂停' : '继续播放'}
-          aria-label={player.status === 'playing' ? '暂停' : '继续播放'}
+          title={player.status === 'playing' ? t('暂停') : t('继续播放')}
+          aria-label={player.status === 'playing' ? t('暂停') : t('继续播放')}
         >
           {#if player.status === 'loading'}
             <span class="spin"><HugeiconsIcon icon={icons.loading} size={ICON_SIZE.control} /></span>
@@ -267,7 +269,7 @@
             />
           {/if}
         </button>
-        <button class="c" onclick={next} title="下一首" aria-label="下一首">
+        <button class="c" onclick={next} title={t('下一首')} aria-label={t('下一首')}>
           <HugeiconsIcon icon={icons.next} size={ICON_SIZE.control} />
         </button>
       </div>
@@ -280,7 +282,7 @@
           value={Math.floor(player.progress)}
           style="--p:{player.duration > 0 ? (player.progress / player.duration) * 100 : 0}%"
           oninput={(e) => seek(Number((e.target as HTMLInputElement).value))}
-          aria-label="播放进度"
+          aria-label={t('播放进度')}
         />
         <div class="lp-times">
           <span>{fmtDuration(player.progress)}</span>
@@ -289,9 +291,9 @@
       </div>
     </div>
 
-    <section class="lyrics-main" aria-label="歌词">
+    <section class="lyrics-main" aria-label={t('歌词')}>
       {#if player.lyricsLoading && lines.length === 0}
-        <div class="ly-skel" role="status" aria-label="歌词加载中">
+        <div class="ly-skel" role="status" aria-label={t('歌词加载中')}>
           {#each SKELETON as w}
             <span class="sk ly-skel-line" style="width:{w}%"></span>
           {/each}
@@ -301,12 +303,12 @@
           <span class="ly-empty-ico" aria-hidden="true">
             <HugeiconsIcon icon={icons.lyric} size={ICON_SIZE.empty} />
           </span>
-          <p>{player.lyricsError ? '歌词加载失败' : '这首歌暂时没有歌词'}</p>
+          <p>{player.lyricsError ? t('歌词加载失败') : t('这首歌暂时没有歌词')}</p>
           {#if player.lyricsError}<span class="ly-empty-sub">{player.lyricsError}</span>{/if}
           {#if player.current}
             <button class="ly-retry" onclick={retryLyrics}>
               <HugeiconsIcon icon={icons.refresh} size={ICON_SIZE.inline} />
-              重新获取
+              {t('重新获取')}
             </button>
           {/if}
         </div>
@@ -316,7 +318,7 @@
           bind:this={listEl}
           style="--pad-top:{padTop}px; --pad-bottom:{padBottom}px"
           role="group"
-          aria-label="歌词内容"
+          aria-label={t('歌词内容')}
           onwheel={onUserScroll}
           ontouchstart={onUserScroll}
         >
@@ -336,18 +338,18 @@
                 e.stopPropagation();
                 openMenuAt(e.clientX, e.clientY, [
                   {
-                    label: '从这一句开始播放',
+                    label: t('从这一句开始播放'),
                     icon: icons.play,
                     run: () => seek(l.time_ms / 1000),
                   },
                   {
-                    label: '复制这句歌词',
+                    label: t('复制这句歌词'),
                     icon: icons.link,
-                    run: () => copyText(l.text, '已复制歌词'),
+                    run: () => copyText(l.text, t('已复制歌词')),
                   },
                 ]);
               }}
-              title="跳转到这一句"
+              title={t('跳转到这一句')}
             >
               {l.text || '…'}
             </button>

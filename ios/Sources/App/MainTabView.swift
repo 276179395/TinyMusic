@@ -5,22 +5,24 @@ struct MainTabView: View {
     @Binding var selection: Int
 
     var body: some View {
+        // 读一下当前语言：标签文字随语言变化，TabView 必须跟着重算。
+        let _ = Localization.shared.language
         ZStack {
             TabView(selection: $selection) {
                 tabContent(FavoritesView(model: model))
-                    .tabItem { Label("喜欢", systemImage: "heart") }
+                    .tabItem { Label(L("喜欢"), systemImage: "heart") }
                     .tag(0)
 
                 tabContent(LibraryView(model: model))
-                    .tabItem { Label("歌单", systemImage: "music.note.list") }
+                    .tabItem { Label(L("歌单"), systemImage: "music.note.list") }
                     .tag(1)
 
                 tabContent(CacheView(model: model))
-                    .tabItem { Label("缓存", systemImage: "arrow.down.circle") }
+                    .tabItem { Label(L("缓存"), systemImage: "arrow.down.circle") }
                     .tag(2)
 
                 tabContent(SettingsView(model: model))
-                    .tabItem { Label("设置", systemImage: "gearshape") }
+                    .tabItem { Label(L("设置"), systemImage: "gearshape") }
                     .tag(3)
             }
             .tint(.accentColor)

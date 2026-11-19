@@ -87,6 +87,9 @@ CREATE TABLE IF NOT EXISTS s3_playlists (
   name TEXT PRIMARY KEY, created_at INTEGER,
   sort_order INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS app_meta (
+  key TEXT PRIMARY KEY, value TEXT
+);
 "#;
 
 /// 老库缺列时补上（SQLite 没有 ADD COLUMN IF NOT EXISTS）
@@ -278,6 +281,26 @@ impl Storage {
             |r| r.get(0),
         )?;
         Ok(n > 0)
+    }
+
+    /// 一次性迁移标记之类的杂项键值（不进网盘、不参与同步）
+    pub fn meta_get(&self, key: &str) -> Option<String> {
+        let conn = self.conn.lock().ok()?;
+        conn.query_row("SELECT value FROM app_meta WHERE key=?1", [key], |r| {
+            r.get::<_, Option<String>>(0)
+        })
+        .ok()
+        .flatten()
+    }
+
+    pub fn meta_set(&self, key: &str, value: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute(
+            "INSERT INTO app_meta (key,value) VALUES (?1,?2)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![key, value],
+        )?;
+        Ok(())
     }
 
     pub fn insert_download(

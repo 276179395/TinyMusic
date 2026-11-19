@@ -13,6 +13,7 @@
   import { delayedVisible } from '../lib/loading.svelte';
   import { openIntegrity, integrityUi } from '../lib/s3Integrity.svelte';
   import ErrorNotice from '../components/ErrorNotice.svelte';
+  import { t } from '../lib/i18n.svelte';
 
   let lists = $state<S3PlaylistInfo[]>([]);
   let rows = $state<S3TrackRow[]>([]);
@@ -148,8 +149,12 @@
   const isPlaying = (key: string) => player.current?.id === key && player.status === 'playing';
 
   const PART_LABEL: Record<string, string> = { lyrics: '歌词', cover: '封面', audio: '音频' };
+  function partLabel(part: string): string {
+    const label = PART_LABEL[part];
+    return label ? t(label) : part;
+  }
   function partsText(list: string[]): string {
-    return list.map((p) => PART_LABEL[p] ?? p).join('、');
+    return list.map((p) => partLabel(p)).join(t('、'));
   }
   const missingCount = $derived(rows.filter((r) => (r.missing?.length ?? 0) > 0).length);
 
@@ -210,7 +215,7 @@
         await api.s3PlaylistCreate(name);
         dialog = null;
         await loadList();
-        showToast('已新建歌单');
+        showToast(t('已新建歌单'));
       } catch (e) {
         dialogErr = String(e);
       } finally {
@@ -232,7 +237,7 @@
         dialog = null;
         if (current === oldName) await openPlaylist(next);
         await loadList();
-        showToast('歌单已重命名');
+        showToast(t('歌单已重命名'));
       } catch (e) {
         dialogErr = String(e);
       } finally {
@@ -248,7 +253,7 @@
       dialog = null;
       if (current === name) back();
       else await loadList();
-      showToast('歌单已删除');
+      showToast(t('歌单已删除'));
     } catch (e) {
       dialogErr = String(e);
     } finally {
@@ -261,7 +266,7 @@
     e.stopPropagation();
     openMenuAt(e.clientX, e.clientY, [
       {
-        label: isPlaying(r.key) ? '暂停' : '播放',
+        label: isPlaying(r.key) ? t('暂停') : t('播放'),
         icon: isPlaying(r.key) ? icons.pause : icons.play,
         run: () => {
           const idx = rows.findIndex((x) => x.key === r.key);
@@ -269,18 +274,18 @@
         },
       },
       {
-        label: '下一首播放',
+        label: t('下一首播放'),
         icon: icons.next,
         run: () => {
           playNext(r.track);
-          showToast('已设为下一首');
+          showToast(t('已设为下一首'));
         },
       },
       ...(current && canManage(current)
         ? [
             { sep: true as const },
             {
-              label: '删除这首歌',
+              label: t('删除这首歌'),
               icon: icons.trash,
               danger: true,
               run: () => deleteTrack(r),
@@ -294,7 +299,7 @@
     try {
       await api.s3TrackDelete(r.key);
       rows = rows.filter((x) => x.key !== r.key);
-      showToast('已删除');
+      showToast(t('已删除'));
       void loadList();
     } catch (e) {
       err = String(e);
@@ -311,23 +316,29 @@
 <div class="page cloud">
   {#if current === null}
     <div class="cloud-top">
-      <h1>网盘</h1>
+      <h1>{t('网盘')}</h1>
       <div class="cloud-top-actions">
         <button
           class="icon-btn"
-          title="检查完整性"
-          aria-label="检查网盘完整性"
+          title={t('检查完整性')}
+          aria-label={t('检查网盘完整性')}
           onclick={() => openIntegrity('')}
           disabled={!appCfg.s3Enabled}
         >
           <HugeiconsIcon icon={icons.shield} size={ICON_SIZE.inline} />
         </button>
-        <button class="icon-btn" title="刷新" aria-label="刷新" onclick={loadList} disabled={loading}>
+        <button
+          class="icon-btn"
+          title={t('刷新')}
+          aria-label={t('刷新')}
+          onclick={loadList}
+          disabled={loading}
+        >
           <HugeiconsIcon icon={icons.refresh} size={ICON_SIZE.inline} />
         </button>
         <button class="primary btn-ico" onclick={openCreate} disabled={!appCfg.s3Enabled}>
           <HugeiconsIcon icon={icons.plus} size={ICON_SIZE.inline} />
-          新建歌单
+          {t('新建歌单')}
         </button>
       </div>
     </div>
@@ -341,15 +352,15 @@
         <div class="big" aria-hidden="true">
           <HugeiconsIcon icon={icons.cloud} size={ICON_SIZE.empty} />
         </div>
-        <p>网盘还没有启用</p>
-        <button class="primary btn-ico" onclick={() => go({ name: 'settings' })}>去启用</button>
+        <p>{t('网盘还没有启用')}</p>
+        <button class="primary btn-ico" onclick={() => go({ name: 'settings' })}>{t('去启用')}</button>
       </div>
     {:else if lists.length === 0 && !loading}
       <div class="empty">
         <div class="big" aria-hidden="true">
           <HugeiconsIcon icon={icons.cloud} size={ICON_SIZE.empty} />
         </div>
-        <p>还没有歌单</p>
+        <p>{t('还没有歌单')}</p>
       </div>
     {:else if lists.length > 0}
       <div class="plrows">
@@ -369,7 +380,7 @@
               if (e.key === 'Enter' || e.key === ' ') openPlaylist(p.name, p.root);
             }}
           >
-            <span class="plgrip" title="按住拖动排序" aria-hidden="true">
+            <span class="plgrip" title={t('按住拖动排序')} aria-hidden="true">
               <HugeiconsIcon icon={icons.grip} size={ICON_SIZE.inline} />
             </span>
 
@@ -383,14 +394,16 @@
 
             <span class="pltext">
               <span class="plname">{p.name}</span>
-              <span class="plsub">{p.count} 首{#if p.root} · 根目录{/if}</span>
+              <span class="plsub"
+                >{t('{n} 首', { n: p.count })}{#if p.root} · {t('根目录')}{/if}</span
+              >
             </span>
 
             <span class="placts">
               <button
                 class="icon-btn"
-                title="播放这个歌单"
-                aria-label="播放 {p.name}"
+                title={t('播放这个歌单')}
+                aria-label={t('播放 {name}', { name: p.name })}
                 onclick={(e) => {
                   e.stopPropagation();
                   openPlaylist(p.name, p.root).then(() => playAll());
@@ -401,8 +414,8 @@
               {#if canManage(p.name, p.root)}
                 <button
                   class="icon-btn"
-                  title="重命名"
-                  aria-label="重命名 {p.name}"
+                  title={t('重命名')}
+                  aria-label={t('重命名 {name}', { name: p.name })}
                   onclick={(e) => {
                     e.stopPropagation();
                     openRename(p.name);
@@ -412,8 +425,8 @@
                 </button>
                 <button
                   class="icon-btn danger"
-                  title="删除歌单"
-                  aria-label="删除 {p.name}"
+                  title={t('删除歌单')}
+                  aria-label={t('删除 {name}', { name: p.name })}
                   onclick={(e) => {
                     e.stopPropagation();
                     openDelete(p.name);
@@ -429,18 +442,18 @@
     {/if}
   {:else}
     <div class="cloud-top">
-      <button class="icon-btn" title="返回" aria-label="返回" onclick={back}>
+      <button class="icon-btn" title={t('返回')} aria-label={t('返回')} onclick={back}>
         <HugeiconsIcon icon={icons.back} size={ICON_SIZE.inline} />
       </button>
       <h1>{current}</h1>
-      <span class="muted">{rows.length} 首</span>
+      <span class="muted">{t('{n} 首', { n: rows.length })}</span>
       {#if !currentRoot && missingCount > 0}
         <button
           class="mini warn"
-          title="这些歌缺歌词或封面，点开可以补齐"
+          title={t('这些歌缺歌词或封面，点开可以补齐')}
           onclick={() => openIntegrity(current!)}
         >
-          {missingCount} 首缺内容
+          {t('{n} 首缺内容', { n: missingCount })}
         </button>
       {/if}
       <div class="cloud-top-actions">
@@ -448,20 +461,20 @@
           <button
             class="mini btn-ico"
             onclick={() => openIntegrity(current!)}
-            title="检查这个歌单里缺音频 / 歌词 / 封面的歌"
+            title={t('检查这个歌单里缺音频 / 歌词 / 封面的歌')}
           >
             <HugeiconsIcon icon={icons.shield} size={ICON_SIZE.inline} />
-            检查完整性
+            {t('检查完整性')}
           </button>
         {/if}
         <button class="primary btn-ico" onclick={playAll} disabled={!rows.length}>
           <HugeiconsIcon icon={icons.play} size={ICON_SIZE.inline} />
-          播放全部
+          {t('播放全部')}
         </button>
         {#if canManage(current, currentRoot)}
           <button class="mini btn-ico" onclick={() => openRename(current!)}>
             <HugeiconsIcon icon={icons.edit} size={ICON_SIZE.inline} />
-            重命名
+            {t('重命名')}
           </button>
         {/if}
       </div>
@@ -474,7 +487,7 @@
     {:else if detailLoading}
       <!-- 等骨架屏延迟 -->
     {:else if rows.length === 0}
-      <div class="empty"><p>这个歌单还是空的</p></div>
+      <div class="empty"><p>{t('这个歌单还是空的')}</p></div>
     {:else}
       <div class="s3list">
         {#each rows as r, i (r.key)}
@@ -494,21 +507,24 @@
             {/if}
             <span class="s3meta">
               <span class="s3title">
-                {r.track.title || '未命名'}
+                {r.track.title || t('未命名')}
                 {#if r.track.available_qualities?.includes('lossless')}
-                  <span class="badge sq">无损</span>
+                  <span class="badge sq">{t('无损')}</span>
                 {/if}
                 {#if r.missing?.length}
-                  <span class="badge warn" title={`缺${partsText(r.missing)}`}>
-                    缺{partsText(r.missing)}
+                  <span
+                    class="badge warn"
+                    title={t('缺{parts}', { parts: partsText(r.missing) })}
+                  >
+                    {t('缺{parts}', { parts: partsText(r.missing) })}
                   </span>
                 {/if}
               </span>
-              <span class="s3sub">{r.track.artist || '未知歌手'}</span>
+              <span class="s3sub">{r.track.artist || t('未知歌手')}</span>
             </span>
             <button
               class="playbtn"
-              aria-label={isPlaying(r.key) ? '暂停' : '播放'}
+              aria-label={isPlaying(r.key) ? t('暂停') : t('播放')}
               onclick={() => playRow(i)}
             >
               <MorphIcon
@@ -519,8 +535,8 @@
             {#if canManage(current, currentRoot)}
               <button
                 class="icon-btn danger"
-                title="删除这首歌"
-                aria-label="删除 {r.track.title}"
+                title={t('删除这首歌')}
+                aria-label={t('删除 {name}', { name: r.track.title })}
                 onclick={() => deleteTrack(r)}
               >
                 <HugeiconsIcon icon={icons.trash} size={ICON_SIZE.inline} />
@@ -541,25 +557,32 @@
       if (e.target === e.currentTarget) closeDialog();
     }}
   >
-    <div class="modal narrow" role="dialog" aria-modal="true" aria-label="歌单操作">
+    <div class="modal narrow" role="dialog" aria-modal="true" aria-label={t('歌单操作')}>
       <div class="modal-head">
         <h2>
-          {dialog.kind === 'create' ? '新建歌单' : dialog.kind === 'rename' ? '重命名歌单' : '删除歌单'}
+          {dialog.kind === 'create'
+            ? t('新建歌单')
+            : dialog.kind === 'rename'
+              ? t('重命名歌单')
+              : t('删除歌单')}
         </h2>
-        <button class="icon" onclick={closeDialog} aria-label="关闭" disabled={dialogBusy}>
+        <button class="icon" onclick={closeDialog} aria-label={t('关闭')} disabled={dialogBusy}>
           <HugeiconsIcon icon={icons.close} size={ICON_SIZE.inline} />
         </button>
       </div>
 
       {#if dialog.kind === 'delete'}
         <p class="modal-note">
-          删除「{dialog.name}」会同时删除云端 {dialog.count} 个文件，无法恢复。
+          {t('删除「{name}」会同时删除云端 {n} 个文件，无法恢复。', {
+            name: dialog.name,
+            n: dialog.count
+          })}
         </p>
       {:else}
         <input
           class="dialog-input"
           bind:value={dialogValue}
-          placeholder="歌单名称"
+          placeholder={t('歌单名称')}
           spellcheck="false"
           maxlength="60"
           onkeydown={(e) => {
@@ -571,7 +594,7 @@
       {#if dialogErr}<ErrorNotice text={dialogErr} compact />{/if}
 
       <div class="modal-actions">
-        <button class="mini" onclick={closeDialog} disabled={dialogBusy}>取消</button>
+        <button class="mini" onclick={closeDialog} disabled={dialogBusy}>{t('取消')}</button>
         <button
           class="mini"
           class:primary={dialog.kind !== 'delete'}
@@ -579,7 +602,7 @@
           onclick={submitDialog}
           disabled={dialogBusy || (dialog.kind !== 'delete' && !dialogValue.trim())}
         >
-          {dialogBusy ? '处理中…' : dialog.kind === 'delete' ? '删除' : '确定'}
+          {dialogBusy ? t('处理中…') : dialog.kind === 'delete' ? t('删除') : t('确定')}
         </button>
       </div>
     </div>

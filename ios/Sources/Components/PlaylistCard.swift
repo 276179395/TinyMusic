@@ -10,7 +10,7 @@ struct PlaylistCard: View {
                     .aspectRatio(1, contentMode: .fill)
                     .frame(maxWidth: .infinity)
                     .clipped()
-                Text("\(playlist.count) 首")
+                Text(L("%@ 首", "\(playlist.count)"))
                     .font(.caption2.weight(.semibold))
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -21,7 +21,7 @@ struct PlaylistCard: View {
                 .font(.subheadline.weight(.semibold))
                 .lineLimit(1)
             if playlist.root {
-                Text("根目录")
+                Text(L("根目录"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
