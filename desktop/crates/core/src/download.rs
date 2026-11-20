@@ -15,6 +15,81 @@ use tokio::io::AsyncWriteExt;
 /// 进度回调：(已下载字节, 总字节)
 pub type ProgressFn = Box<dyn Fn(u64, Option<u64>) + Send + Sync>;
 
+/// Preserve the source bytes and publish the file only after the response is complete.
+pub(crate) async fn save_cloud_object(
+    mut response: reqwest::Response,
+    path: &Path,
+    replace: bool,
+    on_progress: ProgressFn,
+) -> Result<PathBuf> {
+    if response.status() != reqwest::StatusCode::OK {
+        return Err(Error::Http(format!(
+            "网盘下载返回 HTTP {}",
+            response.status().as_u16()
+        )));
+    }
+    let dir = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    tokio::fs::create_dir_all(dir).await?;
+    let temp = tempfile::Builder::new()
+        .prefix(".tinymusic-")
+        .suffix(".part")
+        .tempfile_in(dir)?;
+    let (file, temp_path) = temp.into_parts();
+    let mut file = tokio::fs::File::from_std(file);
+    let total = response.content_length();
+    let mut written = 0;
+    while let Some(chunk) = response.chunk().await? {
+        file.write_all(&chunk).await?;
+        written += chunk.len() as u64;
+        on_progress(written, total);
+    }
+    if written == 0 || total.is_some_and(|expected| expected != written) {
+        return Err(Error::Http("网盘返回的文件不完整".into()));
+    }
+    file.flush().await?;
+    drop(file);
+    let path = if replace {
+        temp_path.persist(path).map_err(|e| e.error)?;
+        path.to_owned()
+    } else {
+        // Reserve a basename for the audio and its sidecars, across concurrent downloads.
+        static PUBLISH: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = PUBLISH.lock().unwrap();
+        let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+        let ext = path.extension().unwrap_or_default().to_string_lossy();
+        let mut temp_path = temp_path;
+        let mut index = 1;
+        loop {
+            let candidate = if index == 1 {
+                path.to_owned()
+            } else {
+                dir.join(format!("{stem} ({index}).{ext}"))
+            };
+            index += 1;
+            if [
+                "mp3", "flac", "m4a", "aac", "ogg", "wav", "lrc", "jpg", "jpeg", "png", "webp",
+            ]
+            .iter()
+            .any(|ext| candidate.with_extension(ext).exists())
+            {
+                continue;
+            }
+            match temp_path.persist_noclobber(&candidate) {
+                Ok(()) => break candidate,
+                Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
+                    temp_path = error.path;
+                }
+                Err(error) => return Err(error.error.into()),
+            }
+        }
+    };
+    on_progress(written, Some(written));
+    Ok(path)
+}
+
 /// 下载时要一并写入的附加内容：封面（嵌进音频标签）与歌词（同名 .lrc）
 #[derive(Debug, Clone, Default)]
 pub struct DownloadExtras {

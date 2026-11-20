@@ -1,22 +1,7 @@
 import type { Track } from './api';
-import { hasNetease } from './account.svelte';
 
-/**
- * 路由表。
- *
- * 注意：判别字段叫 `name`，所以其它字段**不能**再叫 `name`——
- * artist / album 的显示名用 `title`，否则对象字面量里重复键会覆盖判别字段，
- * 跳转后 `route.name` 变成人名，路由直接失效。
- */
 export type Route =
-  | { name: 'search'; kw?: string }
-  | { name: 'recommend' }
-  | { name: 'playlist'; provider: string; playlistId: string; title: string }
   | { name: 'track'; track: Track }
-  | { name: 'artist'; provider: string; artistId: string; title: string }
-  | { name: 'album'; provider: string; albumId: string; title: string }
-  | { name: 'account' }
-  | { name: 'accountplaylists' }
   | { name: 'downloads' }
   | { name: 'cloud' }
   | { name: 'library' }
@@ -24,35 +9,20 @@ export type Route =
 
 /** 侧边栏一级页面：进入时清空返回栈 */
 const TOP_LEVEL: ReadonlySet<Route['name']> = new Set([
-  'search',
-  'recommend',
-  'account',
   'downloads',
   'cloud',
   'library',
   'settings'
 ]);
 
-/**
- * 起始页：登录网易云之后「推荐」就是首页，没登录才落到搜索。
- *
- * 放在模块初始化里算，而不是 onMount 再跳 —— 后者会先闪一下搜索页。
- */
-function initialRoute(): Route {
-  return hasNetease() ? { name: 'recommend' } : { name: 'search' };
-}
-
 export const router = $state<{ route: Route; history: Route[] }>({
-  route: initialRoute(),
+  route: { name: 'cloud' },
   history: []
 });
 
 function sameRoute(a: Route, b: Route): boolean {
   if (a.name !== b.name) return false;
-  if (a.name === 'artist' && b.name === 'artist') return a.artistId === b.artistId;
-  if (a.name === 'album' && b.name === 'album') return a.albumId === b.albumId;
-  if (a.name === 'playlist' && b.name === 'playlist') return a.playlistId === b.playlistId;
-  if (a.name === 'track' && b.name === 'track') return a.track.id === b.track.id;
+  if (a.name === 'track' && b.name === 'track') return a.track.provider === b.track.provider && a.track.id === b.track.id;
   return true;
 }
 

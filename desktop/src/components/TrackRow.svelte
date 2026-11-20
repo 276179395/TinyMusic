@@ -8,7 +8,6 @@
   import { openTrackMenu } from '../lib/trackMenu.svelte';
   import { appCfg } from '../lib/config.svelte';
   import { showToast } from '../lib/toast.svelte';
-  import { go } from '../lib/router.svelte';
   import { t, tc } from '../lib/i18n.svelte';
 
   let {
@@ -69,7 +68,6 @@
   }
 
   const unavailable = $derived(isBlocked(track.availability));
-  const cloudOnly = $derived(track.provider === 's3');
 
   const playLabel = $derived(
     unavailable
@@ -137,20 +135,12 @@
   </div>
 
   <div class="artist">
-    <button
-      class="link trunc"
-      title={track.artist || t('未知艺人')}
-      onclick={() => go({ name: 'artist', provider: track.provider, artistId: track.artist_id, title: track.artist })}
-    >{track.artist || t('未知艺人')}</button>
+    <span class="trunc"    >{track.artist || t('未知艺人')}</span>
   </div>
 
   <div class="album">
     {#if track.album}
-      <button
-        class="link trunc"
-        title={track.album}
-        onclick={() => go({ name: 'album', provider: track.provider, albumId: track.album_id, title: track.album })}
-      >{track.album}</button>
+      <span class="trunc"      >{track.album}</span>
     {/if}
   </div>
 
@@ -168,9 +158,9 @@
     {/if}
     <button
       class="icon"
-      title={cloudOnly ? t('网盘文件已在云端') : pending ? t('正在下载') : t('下载（含歌词与封面）')}
-      aria-label={cloudOnly ? t('网盘文件') : pending ? t('正在下载') : tc('action', '下载')}
-      disabled={unavailable || pending || cloudOnly}
+      title={pending ? t('正在下载') : t('下载（含歌词与封面）')}
+      aria-label={pending ? t('正在下载') : tc('action', '下载')}
+      disabled={unavailable || pending}
       onclick={() => requestDownload([track])}
     >
       {#if pending}

@@ -3,7 +3,8 @@
   import { api, fmtBytes, qualityLabel, type DownloadRow, type Track } from '../lib/api';
   import { icons, ICON_SIZE } from '../lib/icons';
   import { openMenuAt } from '../lib/contextmenu.svelte';
-  import { requestDownload } from '../lib/download.svelte';
+  import { playTrack } from '../lib/player.svelte';
+  import { isCloudProvider } from '../lib/config.svelte';
   import { failureUi, loadFailures, openFailures } from '../lib/downloadFailures.svelte';
   import { copyText, showToast } from '../lib/toast.svelte';
   import DownloadsSkeleton from '../components/DownloadsSkeleton.svelte';
@@ -56,7 +57,7 @@
     if (e.key === 'Escape') confirmClear = false;
   }
 
-  /** 下载记录里只有基础字段，重新下载时补成 Track */
+  /** 下载记录里只有基础字段，播放时补成 Track */
   function rowTrack(r: DownloadRow): Track {
     return {
       provider: r.provider,
@@ -73,11 +74,31 @@
     };
   }
 
+  function canPlay(r: DownloadRow) {
+    return r.status === 'done' && !!r.path && !r.path.startsWith('s3://');
+  }
+
+  function downloadFormat(r: DownloadRow) {
+    if (isCloudProvider(r.provider) && canPlay(r)) {
+      return r.path.split('.').pop()?.toUpperCase() || '';
+    }
+    return t(qualityLabel(r.quality));
+  }
+
+  function playDownload(r: DownloadRow) {
+    if (!canPlay(r)) return;
+    const track = rowTrack(r);
+    void playTrack(track, [track]);
+  }
+
   function rowMenu(e: MouseEvent, r: DownloadRow) {
     e.preventDefault();
     e.stopPropagation();
     const isS3 = r.path.startsWith('s3://');
     openMenuAt(e.clientX, e.clientY, [
+      ...(canPlay(r)
+        ? [{ label: t('播放'), icon: icons.play, run: () => playDownload(r) }]
+        : []),
       ...(isS3
         ? []
         : [
@@ -91,12 +112,6 @@
         label: t('复制文件路径'),
         icon: icons.link,
         run: () => copyText(r.path || t('记录里还没有落盘路径'), t('已复制路径')),
-      },
-      { sep: true },
-      {
-        label: t('重新下载'),
-        icon: icons.download,
-        run: () => requestDownload([rowTrack(r)]),
       },
     ]);
   }
@@ -157,10 +172,13 @@
       </thead>
       <tbody>
         {#each rows as r (r.task_id)}
-          <tr oncontextmenu={(e) => rowMenu(e, r)}>
+          <tr
+            ondblclick={() => playDownload(r)}
+            oncontextmenu={(e) => rowMenu(e, r)}
+          >
             <td>{r.title}</td>
             <td>{r.artist}</td>
-            <td>{t(qualityLabel(r.quality))}</td>
+            <td>{downloadFormat(r)}</td>
             <td class="loc">
               {#if r.path.startsWith('s3://')}
                 <span class="loc-tag cloud">{t('网盘')}</span>

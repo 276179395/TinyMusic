@@ -101,7 +101,11 @@
     s3_prefix: 'TinyMusic',
     s3_path_style: false,
     close_to_tray: true,
-    netease_play_mode: 'netease_first',
+    webdav_enabled: false,
+    webdav_endpoint: '',
+    webdav_root: 'TinyMusic',
+    webdav_username: '',
+    webdav_password: '',
   });
   let loaded = $state(false);
   let err = $state('');
@@ -167,12 +171,23 @@
   let s3Err = $state('');
   let s3Busy = $state(false);
 
-  async function testS3() {
+  async function selectCloud(event: Event) {
+    const protocol = (event.currentTarget as HTMLSelectElement).value;
+    s.s3_enabled = protocol === 's3';
+    s.webdav_enabled = protocol === 'webdav';
+    s3Msg = '';
+    s3Err = '';
+    await saveNow();
+  }
+
+  async function testCloud() {
     s3Busy = true;
     s3Msg = '';
     s3Err = '';
     try {
-      await saveNow();
+      if (saveTimer) clearTimeout(saveTimer);
+      await api.settingsSet($state.snapshot(s) as Settings);
+      await refreshAppCfg();
       s3Msg = await api.s3Test();
     } catch (e) {
       s3Err = String(e);
@@ -409,48 +424,53 @@
   </section>
 
   <section class="st-section">
-    <div class="st-section-title">{t('网易云（推荐与歌单）')}</div>
-    <div class="st-card">
-      <div class="st-row">
-        <div class="st-label">
-          {t('播放音源')}
-          <span class="st-desc">
-            {t('目录（每日推荐/歌单）来自网易云；音源默认先试网易云直链，失败再按「标题 + 歌手 + 时长」到酷我匹配同一首')}
-          </span>
-        </div>
-        <select
-          class="st-select"
-          aria-label={t('网易云播放音源')}
-          bind:value={s.netease_play_mode}
-          onchange={saveNow}
-        >
-          <option value="netease_first">{t('网易云优先，酷我兜底')}</option>
-          <option value="kuwo_only">{t('只用酷我音源')}</option>
-        </select>
-      </div>
-    </div>
-  </section>
-
-  <section class="st-section">
     <div class="st-section-title">{t('网盘')}</div>
     <div class="st-card">
       <div class="st-row">
         <div class="st-label">
-          {t('启用网盘')}
-          <span class="st-desc">{t('S3 兼容存储 · 喜欢、歌单和下载备份')}</span>
+          {t('网盘协议')}
         </div>
-        <label class="st-switch">
-          <input
-            type="checkbox"
-            aria-label={t('启用网盘')}
-            bind:checked={s.s3_enabled}
-            onchange={saveNow}
-          />
-          <span class="st-switch-track" aria-hidden="true"></span>
-        </label>
+        <select class="st-select" aria-label={t('网盘协议')}
+          value={s.webdav_enabled ? 'webdav' : s.s3_enabled ? 's3' : 'off'}
+          onchange={selectCloud}
+        >
+          <option value="off">{t('关闭')}</option>
+          <option value="s3">S3</option>
+          <option value="webdav">WebDAV</option>
+        </select>
       </div>
 
-      {#if s.s3_enabled}
+      {#if s.webdav_enabled}
+        <div class="st-row">
+          <div class="st-label">{t('服务地址')}</div>
+          <input class="st-input st-input-wide" type="url"
+            aria-label={t('服务地址')} bind:value={s.webdav_endpoint}
+            oninput={scheduleSave} placeholder="https://nas.example.com/dav/" spellcheck="false" />
+        </div>
+        <div class="st-row">
+          <div class="st-label">
+            {t('音乐根目录')}
+            <span class="st-desc">{t('留空使用服务地址对应的目录')}</span>
+          </div>
+          <input class="st-input st-input-wide"
+            aria-label={t('音乐根目录')} bind:value={s.webdav_root}
+            oninput={scheduleSave} placeholder="TinyMusic" spellcheck="false" />
+        </div>
+        <div class="st-row">
+          <div class="st-label">{t('WebDAV 用户名')}</div>
+          <input class="st-input st-input-wide"
+            aria-label={t('WebDAV 用户名')} bind:value={s.webdav_username}
+            oninput={scheduleSave} autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="st-row">
+          <div class="st-label">{t('WebDAV 密码')}</div>
+          <input class="st-input st-input-wide" type="password"
+            aria-label={t('WebDAV 密码')} bind:value={s.webdav_password}
+            oninput={scheduleSave} autocomplete="off" />
+        </div>
+      {/if}
+
+      {#if s.s3_enabled && !s.webdav_enabled}
         <div class="st-s3-more" transition:slide={{ duration: REDUCE_MOTION ? 0 : 180 }}>
           <div class="st-row">
             <div class="st-label">Endpoint</div>
@@ -537,19 +557,20 @@
             </label>
           </div>
 
-          <div class="st-row">
-            <div class="st-label">{t('连接')}</div>
-            <button class="st-btn" onclick={testS3} disabled={s3Busy || !s.s3_enabled}>
-              {s3Busy ? t('连接中…') : t('测试连接')}
-            </button>
-          </div>
-
-          {#if s3Err}
-            <ErrorNotice text={s3Err} compact />
-          {:else if s3Msg}
-            <div class="st-status">{s3Msg}</div>
-          {/if}
         </div>
+      {/if}
+      {#if s.s3_enabled || s.webdav_enabled}
+        <div class="st-row">
+          <div class="st-label">{t('连接')}</div>
+          <button class="st-btn" onclick={testCloud} disabled={s3Busy}>
+            {s3Busy ? t('连接中…') : t('测试连接')}
+          </button>
+        </div>
+        {#if s3Err}
+          <ErrorNotice text={s3Err} compact />
+        {:else if s3Msg}
+          <div class="st-status">{s3Msg}</div>
+        {/if}
       {/if}
     </div>
   </section>

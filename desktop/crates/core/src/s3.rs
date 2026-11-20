@@ -324,6 +324,13 @@ impl S3 {
 
     /// 读取对象内容；对象不存在时返回 `Ok(None)`（比如库里的歌已经被删掉）
     pub async fn get_object(&self, key: &str) -> Result<Option<Vec<u8>>> {
+        match self.get_object_response(key).await? {
+            Some(response) => Ok(Some(response.bytes().await?.to_vec())),
+            None => Ok(None),
+        }
+    }
+
+    pub(crate) async fn get_object_response(&self, key: &str) -> Result<Option<reqwest::Response>> {
         let (url, path) = self.object_path(key)?;
         let empty_hash = sha256_hex(&[]);
         let headers = self.sign("GET", &path, "", &empty_hash, &[])?;
@@ -350,7 +357,7 @@ impl S3 {
                 code, brief
             )));
         }
-        Ok(Some(resp.bytes().await?.to_vec()))
+        Ok(Some(resp))
     }
 
     /// 列出前缀下的对象 key（最多 1000 个，单页上限）

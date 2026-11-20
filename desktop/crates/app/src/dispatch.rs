@@ -15,28 +15,6 @@ pub async fn dispatch(
     s3_sink: Option<S3FixFn>,
 ) -> Result<Value, String> {
     match cmd {
-        "get_providers" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {}
-            #[allow(unused_variables)]
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = get_providers(state);
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "search" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-                kw: String,
-                page: u32,
-                limit: u32,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = search(state, a.provider, a.kw, a.page, a.limit).await?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
         "resolve" => {
             #[derive(serde::Deserialize)]
             #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -67,32 +45,6 @@ pub async fn dispatch(
             }
             let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
             let out = track_detail(state, a.provider, a.track).await?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "artist" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-                artist_id: String,
-                name: String,
-                page: u32,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = artist(state, a.provider, a.artist_id, a.name, a.page).await?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "album" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-                album_id: String,
-                name: String,
-                page: u32,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = album(state, a.provider, a.album_id, a.name, a.page).await?;
             serde_json::to_value(out).map_err(|e| e.to_string())
         }
         "player_open" => {
@@ -275,53 +227,6 @@ pub async fn dispatch(
             let out = quality_capabilities();
             serde_json::to_value(out).map_err(|e| e.to_string())
         }
-        "search_playlists" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-                kw: String,
-                page: u32,
-                limit: u32,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = search_playlists(state, a.provider, a.kw, a.page, a.limit).await?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "playlist" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-                id: String,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = playlist(state, a.provider, a.id).await?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "user_playlists" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-                uid: String,
-                limit: Option<u32>,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = user_playlists(state, a.provider, a.uid, a.limit).await?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "favorites" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-                uid: String,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = favorites(state, a.provider, a.uid).await?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
         "download_batch" => {
             #[derive(serde::Deserialize)]
             #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -332,132 +237,6 @@ pub async fn dispatch(
             let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
             let cb: ProgressFn = sink.ok_or_else(|| "缺少进度回调".to_string())?;
             let out = download_batch(state, a.tracks, a.quality, cb).await?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "saved_playlist_add" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                playlist: PlaylistRef,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = saved_playlist_add(state, a.playlist)?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "saved_playlist_remove" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-                id: String,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = saved_playlist_remove(state, a.provider, a.id)?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "saved_playlist_list" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {}
-            #[allow(unused_variables)]
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = saved_playlist_list(state)?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "saved_playlist_check" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-                id: String,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = saved_playlist_check(state, a.provider, a.id)?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "provider_features" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = provider_features(state, a.provider)?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "auth_capabilities" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = auth_capabilities(state, a.provider)?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "login" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-                method: String,
-                user: Option<String>,
-                password: Option<String>,
-                cookie: Option<String>,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = login(state, a.provider, a.method, a.user, a.password, a.cookie).await?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "logout" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = logout(state, a.provider).await?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "session_get" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = session_get(state, a.provider)?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "my_playlists" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = my_playlists(state, a.provider).await?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "recommend_songs" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-                limit: u32,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = recommend_songs(state, a.provider, a.limit).await?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "recommend_playlists" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = recommend_playlists(state, a.provider).await?;
             serde_json::to_value(out).map_err(|e| e.to_string())
         }
         "s3_test" => {
@@ -515,9 +294,10 @@ pub async fn dispatch(
             #[serde(rename_all = "camelCase", deny_unknown_fields)]
             struct A {
                 key: String,
+                provider: Option<String>,
             }
             let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let out = s3_cover(state, a.key).await?;
+            let out = s3_cover(state, a.key, a.provider).await?;
             serde_json::to_value(out).map_err(|e| e.to_string())
         }
         "s3_track_delete" => {
@@ -596,20 +376,6 @@ pub async fn dispatch(
             let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
             let cb: S3FixFn = s3_sink.ok_or_else(|| "缺少进度回调".to_string())?;
             let out = s3_integrity_fix(state, a.playlist, a.ids, cb).await?;
-            serde_json::to_value(out).map_err(|e| e.to_string())
-        }
-        "s3_import_playlist" => {
-            #[derive(serde::Deserialize)]
-            #[serde(rename_all = "camelCase", deny_unknown_fields)]
-            struct A {
-                provider: String,
-                playlist_id: String,
-                name: String,
-                target: Option<String>,
-            }
-            let a: A = serde_json::from_value(args.clone()).map_err(|e| format!("参数错误: {e}"))?;
-            let cb: ProgressFn = sink.ok_or_else(|| "缺少进度回调".to_string())?;
-            let out = s3_import_playlist(state, a.provider, a.playlist_id, a.name, a.target, cb).await?;
             serde_json::to_value(out).map_err(|e| e.to_string())
         }
         other => Err(format!("未知命令: {other}")),

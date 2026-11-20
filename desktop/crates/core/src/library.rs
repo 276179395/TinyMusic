@@ -1,7 +1,4 @@
-//! 网盘库（S3）的纯业务逻辑：歌单推导、曲目行、封面/歌词兄弟文件、收藏（「喜欢」目录）。
-//!
-//! 桌面（crates/app）与 iOS（crates/ffi）共用这一份；平台壳只负责把
-//! S3 配置、Storage 和当前页面串起来。这里不依赖任何 UI / Tauri / Lynx。
+//! 网盘歌单、同名封面与歌词，以及「喜欢」目录中的收藏。
 
 use std::collections::{HashMap, HashSet};
 
@@ -9,7 +6,7 @@ use serde::Serialize;
 
 use crate::download::build_filename;
 use crate::model::{AudioFormat, Availability, Codec, LyricLine, Quality, Track};
-use crate::s3::S3;
+use crate::cloud::CloudLibrary;
 use crate::storage::Storage;
 
 /// 根目录散歌在网盘页里的伪歌单名（不是真实目录，保留名不可用来建歌单）
@@ -17,9 +14,32 @@ pub const ROOT_PLAYLIST_LABEL: &str = "未分类";
 
 /// 网盘里的「喜欢」歌单目录名
 pub const FAVORITES_PLAYLIST: &str = "喜欢";
+const WEBDAV_PLAYLIST_ORDER: &str = "webdav_playlist_order";
 
-/// 封面 / 歌词直链的默认有效期（秒）
-const SIGNED_EXPIRES: u64 = 6 * 3600;
+pub fn reorder_webdav_playlists(storage: &Storage, names: &[String]) -> Result<(), String> {
+    let value = serde_json::to_string(names).map_err(|e| e.to_string())?;
+    storage.meta_set(WEBDAV_PLAYLIST_ORDER, &value).map_err(|e| e.to_string())
+}
+
+fn webdav_playlist_order(storage: &Storage) -> Vec<String> {
+    storage
+        .meta_get(WEBDAV_PLAYLIST_ORDER)
+        .and_then(|value| serde_json::from_str(&value).ok())
+        .unwrap_or_default()
+}
+
+pub fn rename_webdav_playlist_in_order(
+    storage: &Storage,
+    old: &str,
+    new: &str,
+) -> Result<(), String> {
+    let mut order = webdav_playlist_order(storage);
+    let Some(index) = order.iter().position(|name| name == old) else {
+        return Ok(());
+    };
+    order[index] = new.to_owned();
+    reorder_webdav_playlists(storage, &order)
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct S3PlaylistInfo {
@@ -100,10 +120,16 @@ pub fn is_playlist_folder(name: &str, entries: &[String]) -> bool {
 ///
 /// 列不到桶（离线 / 配置错误）时只返回本地记录，不把列表清空。
 pub async fn list_s3_playlists(
-    client: &S3,
+    client: &CloudLibrary,
     storage: &Storage,
 ) -> Result<Vec<S3PlaylistInfo>, String> {
-    let mut names = storage.list_s3_playlists().map_err(|e| e.to_string())?;
+    let is_s3 = client.provider() == "s3";
+    let order = if is_s3 {
+        storage.list_s3_playlists().map_err(|e| e.to_string())?
+    } else {
+        webdav_playlist_order(storage)
+    };
+    let mut names = if is_s3 { order.clone() } else { Vec::new() };
 
     let mut folders: HashMap<String, Vec<String>> = HashMap::new();
     let mut root_keys: Vec<String> = Vec::new();
@@ -113,7 +139,13 @@ pub async fn list_s3_playlists(
     } else {
         format!("{}/", prefix)
     };
-    if let Ok(keys) = client.list_keys_all(&scope).await {
+    let keys = client.list_playlist_keys(&scope).await;
+    if !is_s3 {
+        if let Err(error) = &keys {
+            return Err(error.to_string());
+        }
+    }
+    if let Ok(keys) = keys {
         for key in &keys {
             if is_root_key(key, &prefix) {
                 root_keys.push(key.clone());
@@ -129,20 +161,32 @@ pub async fn list_s3_playlists(
                 .or_default()
                 .push(key.clone());
         }
-        for name in playlists_from_keys(&keys, &prefix) {
+        let mut remote_names = if is_s3 {
+            playlists_from_keys(&keys, &prefix)
+        } else {
+            folders.keys().cloned().collect()
+        };
+        remote_names.sort();
+        for name in remote_names {
             let Some(entries) = folders.get(&name) else {
                 continue;
             };
-            if !is_playlist_folder(&name, entries) {
+                let directory = !is_s3 && !name.starts_with('.') && entries.contains(&format!("{scope}{name}/"));
+                if !directory && !is_playlist_folder(&name, entries) {
                 continue;
             }
             if !names.iter().any(|n| n == &name) {
-                let _ = storage.save_s3_playlist(&name);
+                if is_s3 {
+                    let _ = storage.save_s3_playlist(&name);
+                }
                 names.push(name);
             }
         }
     }
 
+    if !is_s3 {
+        names.sort_by_key(|name| order.iter().position(|saved| saved == name).unwrap_or(usize::MAX));
+    }
     let mut out = Vec::with_capacity(names.len());
     for name in names {
         let mut count = 0u32;
@@ -157,7 +201,7 @@ pub async fn list_s3_playlists(
                     .map(|(a, _)| a)
                     .unwrap_or(first.as_str());
                 if let Some(img) = find_sibling(&lower, stem, &["jpg", "jpeg", "png", "webp"]) {
-                    cover = client.presign_get(&img, SIGNED_EXPIRES).ok();
+                    cover = client.cover_url(&img).await;
                 }
             }
         }
@@ -183,7 +227,7 @@ pub async fn list_s3_playlists(
                 .map(|(a, _)| a)
                 .unwrap_or(first.as_str());
             if let Some(img) = find_sibling(&lower, stem, &["jpg", "jpeg", "png", "webp"]) {
-                cover = client.presign_get(&img, SIGNED_EXPIRES).ok();
+                cover = client.cover_url(&img).await;
             }
         }
         let label = if out.iter().any(|p| p.name == ROOT_PLAYLIST_LABEL) {
@@ -224,32 +268,33 @@ pub fn find_sibling(keys: &[(String, String)], stem: &str, exts: &[&str]) -> Opt
 }
 
 /// 给网盘音频对象签一个封面直链：同目录同名 jpg/jpeg/png/webp。
-pub async fn signed_cover_for(client: &S3, audio_key: &str) -> Option<String> {
-    let (folder, _) = audio_key.rsplit_once('/')?;
-    let keys = client.list_keys(&format!("{}/", folder)).await.ok()?;
+pub async fn signed_cover_for(client: &CloudLibrary, audio_key: &str) -> Option<String> {
+    let folder = parent_prefix(audio_key);
+    let keys = client.list_keys(folder).await.ok()?;
     let lower: Vec<(String, String)> = keys.iter().map(|k| (k.to_lowercase(), k.clone())).collect();
     let stem = audio_key
         .rsplit_once('.')
         .map(|(a, _)| a)
         .unwrap_or(audio_key);
-    find_sibling(&lower, stem, &["jpg", "jpeg", "png", "webp"])
-        .and_then(|k| client.presign_get(&k, SIGNED_EXPIRES).ok())
+    let key = find_sibling(&lower, stem, &["jpg", "jpeg", "png", "webp"])?;
+    client.cover_url(&key).await
+}
+
+fn parent_prefix(key: &str) -> &str {
+    key.rfind('/').map_or("", |end| &key[..=end])
 }
 
 /// 批量刷新 s3 曲目的封面直链；同一个目录只列一次。
-pub async fn refresh_s3_covers(client: &S3, tracks: &mut [Track]) {
+pub async fn refresh_s3_covers(client: &CloudLibrary, tracks: &mut [Track]) {
     let mut cache: HashMap<String, Vec<(String, String)>> = HashMap::new();
-    for t in tracks.iter_mut().filter(|t| t.provider == "s3") {
+    for t in tracks.iter_mut().filter(|t| t.provider == client.provider()) {
         let key = t.id.clone();
-        let Some((folder, _)) = key.rsplit_once('/') else {
-            t.cover = None;
-            continue;
-        };
+        let folder = parent_prefix(&key);
         let entries = match cache.get(folder).cloned() {
             Some(e) => e,
             None => {
                 let entries: Vec<(String, String)> = client
-                    .list_keys(&format!("{}/", folder))
+                    .list_keys(folder)
                     .await
                     .unwrap_or_default()
                     .iter()
@@ -260,13 +305,15 @@ pub async fn refresh_s3_covers(client: &S3, tracks: &mut [Track]) {
             }
         };
         let stem = key.rsplit_once('.').map(|(a, _)| a).unwrap_or(key.as_str());
-        t.cover = find_sibling(&entries, stem, &["jpg", "jpeg", "png", "webp"])
-            .and_then(|k| client.presign_get(&k, SIGNED_EXPIRES).ok());
+        t.cover = match find_sibling(&entries, stem, &["jpg", "jpeg", "png", "webp"]) {
+            Some(key) => client.cover_url(&key).await,
+            None => None,
+        };
     }
 }
 
 /// 把一批对象 key 变成曲目行（同一个目录里的音频 + 同名歌词/封面）
-pub fn build_track_rows(client: &S3, keys: &[String]) -> Vec<S3TrackRow> {
+async fn build_track_rows(client: &CloudLibrary, keys: &[String]) -> Vec<S3TrackRow> {
     let lower: Vec<(String, String)> = keys.iter().map(|k| (k.to_lowercase(), k.clone())).collect();
 
     let mut rows = Vec::new();
@@ -274,9 +321,10 @@ pub fn build_track_rows(client: &S3, keys: &[String]) -> Vec<S3TrackRow> {
         let stem = key.rsplit_once('.').map(|(a, _)| a).unwrap_or(key.as_str());
         let (artist, title) = parse_track_filename(stem);
         let cover_key = find_sibling(&lower, stem, &["jpg", "jpeg", "png", "webp"]);
-        let cover = cover_key
-            .as_ref()
-            .and_then(|k| client.presign_get(k, SIGNED_EXPIRES).ok());
+        let cover = match &cover_key {
+            Some(key) => client.cover_url(key).await,
+            None => None,
+        };
 
         let mut missing = Vec::new();
         if cover_key.is_none() {
@@ -291,7 +339,7 @@ pub fn build_track_rows(client: &S3, keys: &[String]) -> Vec<S3TrackRow> {
             key: key.clone(),
             missing,
             track: Track {
-                provider: "s3".into(),
+                provider: client.provider().into(),
                 id: key.clone(),
                 title,
                 artist,
@@ -310,17 +358,17 @@ pub fn build_track_rows(client: &S3, keys: &[String]) -> Vec<S3TrackRow> {
     rows
 }
 
-pub async fn list_s3_track_rows(client: &S3, name: &str) -> Result<Vec<S3TrackRow>, String> {
-    let folder = playlist_prefix(&client.normalized_prefix(), name);
+pub async fn list_s3_track_rows(client: &CloudLibrary, name: &str) -> Result<Vec<S3TrackRow>, String> {
+    let folder = client.playlist_prefix(name);
     let keys = client
         .list_keys_all(&folder)
         .await
         .map_err(|e| e.to_string())?;
-    Ok(build_track_rows(client, &keys))
+    Ok(build_track_rows(client, &keys).await)
 }
 
 /// 前缀根目录的散歌（「未分类」）
-pub async fn list_root_track_rows(client: &S3) -> Result<Vec<S3TrackRow>, String> {
+pub async fn list_root_track_rows(client: &CloudLibrary) -> Result<Vec<S3TrackRow>, String> {
     let prefix = client.normalized_prefix();
     let scope = if prefix.is_empty() {
         String::new()
@@ -335,11 +383,11 @@ pub async fn list_root_track_rows(client: &S3) -> Result<Vec<S3TrackRow>, String
         .into_iter()
         .filter(|k| is_root_key(k, &prefix))
         .collect();
-    Ok(build_track_rows(client, &root))
+    Ok(build_track_rows(client, &root).await)
 }
 
 pub async fn s3_playlist_tracks(
-    client: &S3,
+    client: &CloudLibrary,
     name: &str,
     root: bool,
 ) -> Result<Vec<S3TrackRow>, String> {
@@ -439,7 +487,7 @@ pub fn sanitize_playlist_name(raw: &str) -> Result<String, String> {
 
 /// 新建歌单：本地记录 + 写一个 .keep 标记，空歌单也能被其他设备发现。
 pub async fn create_s3_playlist(
-    client: &S3,
+    client: &CloudLibrary,
     storage: &Storage,
     name: &str,
 ) -> Result<String, String> {
@@ -460,7 +508,7 @@ pub async fn create_s3_playlist(
 }
 
 /// 删除歌单：连同云端对象一起删。
-pub async fn purge_s3_playlist(client: &S3, storage: &Storage, name: &str) -> Result<(), String> {
+pub async fn purge_s3_playlist(client: &CloudLibrary, storage: &Storage, name: &str) -> Result<(), String> {
     let name = sanitize_playlist_name(name)?;
     let folder = playlist_prefix(&client.normalized_prefix(), &name);
     let keys = client.list_keys(&folder).await.map_err(|e| e.to_string())?;
@@ -475,7 +523,7 @@ pub async fn purge_s3_playlist(client: &S3, storage: &Storage, name: &str) -> Re
 
 /// 重命名歌单：把旧目录里的对象逐个搬到新目录。
 pub async fn rename_s3_playlist(
-    client: &S3,
+    client: &CloudLibrary,
     storage: &Storage,
     old: &str,
     new: &str,
@@ -511,7 +559,7 @@ pub async fn rename_s3_playlist(
 }
 
 /// 删除单曲：音频 + 同名歌词/封面，并从「喜欢」里清掉。
-pub async fn delete_s3_track(client: &S3, storage: &Storage, key: &str) -> Result<(), String> {
+pub async fn delete_s3_track(client: &CloudLibrary, storage: &Storage, key: &str) -> Result<(), String> {
     if key.trim().is_empty() {
         return Err("曲目 key 为空".into());
     }
@@ -526,7 +574,7 @@ pub async fn delete_s3_track(client: &S3, storage: &Storage, key: &str) -> Resul
 
 /// 把单曲（含歌词/封面）移动到另一个歌单目录。
 pub async fn move_s3_track(
-    client: &S3,
+    client: &CloudLibrary,
     storage: &Storage,
     key: &str,
     target: &str,
@@ -674,7 +722,7 @@ fn legacy_favorites_object_key(prefix: &str) -> String {
 ///
 /// 把 key 指向的音频连同同名歌词/封面复制进「喜欢」目录，返回副本的 key；
 /// 已经在「喜欢」里就直接返回原 key。源对象不存在时返回 None。
-pub async fn copy_into_favorites_opt(client: &S3, key: &str) -> Result<Option<String>, String> {
+pub async fn copy_into_favorites_opt(client: &CloudLibrary, key: &str) -> Result<Option<String>, String> {
     let key = key.trim();
     if key.is_empty() {
         return Err("曲目 key 为空".into());
@@ -726,7 +774,7 @@ pub async fn copy_into_favorites_opt(client: &S3, key: &str) -> Result<Option<St
     Ok(Some(target))
 }
 
-pub async fn copy_into_favorites(client: &S3, key: &str) -> Result<String, String> {
+pub async fn copy_into_favorites(client: &CloudLibrary, key: &str) -> Result<String, String> {
     match copy_into_favorites_opt(client, key).await? {
         Some(key) => Ok(key),
         None => Err("原文件已经不在了".into()),
@@ -734,7 +782,7 @@ pub async fn copy_into_favorites(client: &S3, key: &str) -> Result<String, Strin
 }
 
 /// 取消喜欢：只删「喜欢」目录里那份副本，歌单里的原文件一根毫毛都不动。
-pub async fn remove_from_favorites(client: &S3, key: &str) -> Result<(), String> {
+pub async fn remove_from_favorites(client: &CloudLibrary, key: &str) -> Result<(), String> {
     let key = key.trim();
     let prefix = client.normalized_prefix();
     if !is_favorite_key(key, &prefix) {
@@ -749,18 +797,18 @@ pub async fn remove_from_favorites(client: &S3, key: &str) -> Result<(), String>
 }
 
 /// 「喜欢」目录里的全部歌曲：收藏只认这一份实物。
-pub async fn favorites_from_folder(client: &S3) -> Result<Vec<Track>, String> {
+pub async fn favorites_from_folder(client: &CloudLibrary) -> Result<Vec<Track>, String> {
     let rows = list_s3_track_rows(client, FAVORITES_PLAYLIST).await?;
     Ok(rows.into_iter().map(|r| r.track).collect())
 }
 
 /// 本地收藏缓存跟「喜欢」目录对齐：目录里有的补进来，目录里没了的 s3 条目删掉。
-fn sync_favorites_cache(storage: &Storage, folder: &[Track]) {
+fn sync_favorites_cache(storage: &Storage, provider: &str, folder: &[Track]) {
     let ids: HashSet<&str> = folder.iter().map(|t| t.id.as_str()).collect();
     if let Ok(local) = storage.list_favorites() {
-        for t in local.iter().filter(|t| t.provider == "s3") {
+        for t in local.iter().filter(|t| t.provider == provider) {
             if !ids.contains(t.id.as_str()) {
-                let _ = storage.remove_favorite("s3", &t.id);
+                let _ = storage.remove_favorite(provider, &t.id);
             }
         }
     }
@@ -777,7 +825,7 @@ const FAVORITES_MIGRATED: &str = "s3_favorites_migrated_v1";
 ///
 /// 以前收藏只写 favorites.json，歌单里删掉的歌 JSON 没同步，喜欢里就会留着一首点不开的歌。
 /// 这里把文件还在的复制进目录，已经删掉的直接丢掉；迁完把 favorites.json 删掉，之后只认目录。
-async fn migrate_legacy_favorites(client: &S3, storage: &Storage) -> Result<(), String> {
+async fn migrate_legacy_favorites(client: &CloudLibrary, storage: &Storage) -> Result<(), String> {
     let prefix = client.normalized_prefix();
     let existing: HashSet<String> = client
         .list_keys_all(&favorites_folder(&prefix))
@@ -819,28 +867,13 @@ pub fn favorite_dedupe_key(t: &Track) -> String {
 /// 从网盘拉取「喜欢」：只认「喜欢」目录里的实际音频，不再读也不写 favorites.json。
 ///
 /// 目录里有歌才算喜欢——歌单里删掉的歌不会因为 JSON 没同步而继续挂在喜欢里。
-pub async fn pull_favorites(client: &S3, storage: &Storage) -> Result<Vec<Track>, String> {
-    // 老版本的收藏只在 favorites.json / 本地库里，第一次拉取时搬进目录
-    if storage.meta_get(FAVORITES_MIGRATED).is_none() {
+pub async fn pull_favorites(client: &CloudLibrary, storage: &Storage) -> Result<Vec<Track>, String> {
+    if client.provider() == "s3" && storage.meta_get(FAVORITES_MIGRATED).is_none() {
         let _ = migrate_legacy_favorites(client, storage).await;
     }
-
     let folder = favorites_from_folder(client).await?;
-    sync_favorites_cache(storage, &folder);
-
-    // 桌面端的网易云/酷我收藏还没落到网盘时仍留在本地；上传成功后会被目录里的副本取代
-    let mut seen: HashSet<String> = folder.iter().map(favorite_dedupe_key).collect();
-    let mut list = folder;
-    if let Ok(local) = storage.list_favorites() {
-        for t in local.into_iter().filter(|t| t.provider != "s3") {
-            if seen.insert(favorite_dedupe_key(&t)) {
-                list.push(t);
-            }
-        }
-    }
-
-    refresh_s3_covers(client, &mut list).await;
-    Ok(list)
+    sync_favorites_cache(storage, client.provider(), &folder);
+    Ok(folder)
 }
 
 #[cfg(test)]
@@ -960,14 +993,14 @@ mod tests {
     fn favorites_cache_follows_folder_and_keeps_other_providers() {
         let s = Storage::open_in_memory().unwrap();
         let gone = Track {
-            provider: "s3".into(),
+            provider: "webdav".into(),
             id: "TinyMusic/喜欢/gone.mp3".into(),
             title: "Gone".into(),
             artist: "X".into(),
             ..Track::default()
         };
         let keep = Track {
-            provider: "s3".into(),
+            provider: "webdav".into(),
             id: "TinyMusic/喜欢/keep.mp3".into(),
             title: "Keep".into(),
             artist: "X".into(),
@@ -980,11 +1013,16 @@ mod tests {
             artist: "Y".into(),
             ..Track::default()
         };
+        let s3 = Track {
+            provider: "s3".into(),
+            ..gone.clone()
+        };
         s.add_favorite(&gone).unwrap();
         s.add_favorite(&netease).unwrap();
+        s.add_favorite(&s3).unwrap();
 
         // 目录里已经没有 gone.mp3：目录是唯一真相，这条收藏必须清掉
-        sync_favorites_cache(&s, std::slice::from_ref(&keep));
+        sync_favorites_cache(&s, "webdav", std::slice::from_ref(&keep));
 
         let ids: Vec<String> = s
             .list_favorites()
@@ -992,8 +1030,9 @@ mod tests {
             .into_iter()
             .map(|t| format!("{}:{}", t.provider, t.id))
             .collect();
-        assert!(ids.iter().any(|k| k == "s3:TinyMusic/喜欢/keep.mp3"));
-        assert!(!ids.iter().any(|k| k == "s3:TinyMusic/喜欢/gone.mp3"));
+        assert!(ids.iter().any(|k| k == "webdav:TinyMusic/喜欢/keep.mp3"));
+        assert!(!ids.iter().any(|k| k == "webdav:TinyMusic/喜欢/gone.mp3"));
+        assert!(ids.iter().any(|k| k == "s3:TinyMusic/喜欢/gone.mp3"));
         // 桌面端平台收藏不在「喜欢」目录里，不能被顺手删掉
         assert!(ids.iter().any(|k| k == "netease:42"));
     }

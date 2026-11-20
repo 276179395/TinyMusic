@@ -1,3 +1,4 @@
+import { hasCloud, isCloudProvider } from './config.svelte';
 /**
  * 下载流程（本地 / 网盘）。
  *
@@ -71,13 +72,19 @@ export async function loadPlaylists() {
 
 /** 下载入口：按设置决定「直接下载」还是「弹窗选择」 */
 export async function requestDownload(tracks: Track[]) {
+  if (downloadUi.busy) return;
   const list = tracks.filter((track) => track && !isBlocked(track.availability));
   if (!list.length) return;
+
+  if (list.some((track) => isCloudProvider(track.provider))) {
+    await runLocal(list);
+    return;
+  }
 
   let s3Enabled = false;
   try {
     const s = await api.settingsGet();
-    s3Enabled = !!s.s3_enabled && !!s.s3_bucket;
+    s3Enabled = hasCloud(s);
   } catch {
     s3Enabled = false;
   }

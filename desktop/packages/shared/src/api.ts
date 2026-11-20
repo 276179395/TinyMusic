@@ -4,14 +4,9 @@
 
 import type { ProgressCallback } from './transport';
 import { invoke, invokeTask, shellInvoke } from './transport';
-import type { Availability, Quality, Track, Codec, AudioFormat, ProviderInfo, QualityCapability, TrackQualities, SearchPage, LyricLine, TrackDetail, AlbumRef, ArtistPage, AlbumPage, PlayerSource, DownloadRow, S3IntegrityIssue, S3IntegrityReport, S3FixProgress, FailedPartName, FailedPart, FailedDownload, Settings, S3PlaylistInfo, S3TrackRow, S3ImportResult, PlaylistRef, PlaylistPage, PlaylistDetail, AuthMethod, AuthCapability, Session, Progress } from './types';
+import type { Availability, Quality, Track, AudioFormat, QualityCapability, TrackQualities, TrackDetail, PlayerSource, DownloadRow, S3IntegrityIssue, S3IntegrityReport, S3FixProgress, FailedPartName, FailedPart, FailedDownload, Settings, S3PlaylistInfo, S3TrackRow, Progress } from './types';
 
 export const api = {
-  providers: () => invoke<ProviderInfo[]>('get_providers'),
-
-  search: (provider: string, kw: string, page = 0, limit = 30) =>
-    invoke<SearchPage>('search', { provider, kw, page, limit }),
-
   resolve: (track: Track, quality: Quality) =>
     invoke<{
       url: string;
@@ -34,12 +29,6 @@ export const api = {
 
   detail: (provider: string, track: Track) =>
     invoke<TrackDetail>('track_detail', { provider, track }),
-
-  artist: (provider: string, artist_id: string, name: string, page = 0) =>
-    invoke<ArtistPage>('artist', { provider, artistId: artist_id, name, page }),
-
-  album: (provider: string, album_id: string, name: string, page = 0) =>
-    invoke<AlbumPage>('album', { provider, albumId: album_id, name, page }),
 
   playerOpen: (track: Track, quality: Quality, forceRefresh = false, allowLocal = true) =>
     invoke<PlayerSource>('player_open', { track, quality, forceRefresh, allowLocal }),
@@ -84,20 +73,6 @@ export const api = {
       artist: track.artist,
     }),
 
-  searchPlaylists: (provider: string, kw: string, page = 0, limit = 30) =>
-    invoke<PlaylistPage>('search_playlists', { provider, kw, page, limit }),
-
-  playlist: (provider: string, id: string) =>
-    invoke<PlaylistDetail>('playlist', { provider, id }),
-
-  /** 按平台用户 id 列出歌单（酷我这条接口不需要登录） */
-  userPlaylists: (provider: string, uid: string, limit = 100) =>
-    invoke<PlaylistRef[]>('user_playlists', { provider, uid, limit }),
-
-  /** 账号「喜欢」歌单 */
-  favorites: (provider: string, uid: string) =>
-    invoke<PlaylistDetail>('favorites', { provider, uid }),
-
   /** 批量下载（顺序执行） */
   downloadBatch: (
     tracks: Track[],
@@ -107,62 +82,8 @@ export const api = {
     return invokeTask<string[]>('download_batch', { tracks, quality }, onProgress as ProgressCallback);
   },
 
-  /** 打开酷我网页登录窗口 */
-  loginOpen: () => shellInvoke<void>('login_open'),
-  /** 探测是否已登录，返回 uid */
-  loginVisible: () => shellInvoke<boolean>('login_visible'),
-  loginPurge: () => shellInvoke<void>('login_purge'),
   setWindowTheme: (mode: 'auto' | 'light' | 'dark') =>
     shellInvoke<void>('set_window_theme', { theme: mode === 'auto' ? null : mode }),
-  loginProbe: () => shellInvoke<string | null>('login_probe'),
-  loginClose: () => shellInvoke<void>('login_close'),
-
-  savedPlaylistAdd: (playlist: PlaylistRef) =>
-    invoke<void>('saved_playlist_add', { playlist }),
-  savedPlaylistRemove: (provider: string, id: string) =>
-    invoke<void>('saved_playlist_remove', { provider, id }),
-  savedPlaylistList: () => invoke<PlaylistRef[]>('saved_playlist_list'),
-  savedPlaylistCheck: (provider: string, id: string) =>
-    invoke<boolean>('saved_playlist_check', { provider, id }),
-
-  providerFeatures: (provider: string) =>
-    invoke<{ favorites: boolean; recommend: boolean }>('provider_features', { provider }),
-
-  authCapabilities: (provider: string) =>
-    invoke<AuthCapability[]>('auth_capabilities', { provider }),
-  login: (
-    provider: string,
-    method: AuthMethod,
-    opts: { user?: string; password?: string; cookie?: string } = {}
-  ) =>
-    invoke<Session>('login', {
-      provider,
-      method,
-      user: opts.user ?? null,
-      password: opts.password ?? null,
-      cookie: opts.cookie ?? null,
-    }),
-  logout: (provider: string) => invoke<void>('logout', { provider }),
-  sessionGet: (provider: string) => invoke<Session | null>('session_get', { provider }),
-  myPlaylists: (provider: string) => invoke<PlaylistRef[]>('my_playlists', { provider }),
-
-  // ---- 网易云（目录侧）----
-  /** 每日推荐（需要登录态） */
-  recommendSongs: (provider: string, limit = 30) =>
-    invoke<Track[]>('recommend_songs', { provider, limit }),
-  /** 推荐歌单 */
-  recommendPlaylists: (provider: string) =>
-    invoke<PlaylistRef[]>('recommend_playlists', { provider }),
-  /**
-   * 打开网易云网页登录窗口。
-   *
-   * 登录结果通过事件回传：
-   * - `netease://login`       登录成功（payload = Session）
-   * - `netease://login_error` 拿到 cookie 但校验失败
-   * - `netease://login_timeout` 超时未登录
-   */
-  neteaseLoginOpen: () => shellInvoke<void>('netease_login_open'),
-
   settingsGet: () => invoke<Settings>('settings_get'),
   settingsSet: (settings: Settings) => invoke<void>('settings_set', { settings }),
   openDownloadDir: () => shellInvoke<void>('open_download_dir'),
@@ -178,7 +99,7 @@ export const api = {
     invoke<S3TrackRow[]>('s3_playlist_tracks', { name, root }),
   s3ReorderPlaylists: (names: string[]) => invoke<void>('s3_playlists_reorder', { names }),
   /** 重新签一个网盘曲目的封面直链（签名地址会过期） */
-  s3Cover: (key: string) => invoke<string | null>('s3_cover', { key }),
+  s3Cover: (key: string, provider?: string) => invoke<string | null>('s3_cover', { key, provider }),
 
   // ---- 网盘完整性检测 ----
   /** 检查整库（playlist 为空）或某个歌单里缺音频 / 歌词 / 封面的条目 */
@@ -210,21 +131,6 @@ export const api = {
     onProgress: (p: Progress) => void
   ) => {
     return invokeTask<string[]>('s3_download_batch', { tracks, quality, playlist }, onProgress as ProgressCallback);
-  },
-
-  /** 把一个平台歌单整张导入到网盘（后台逐首下载 + 上传） */
-  s3ImportPlaylist: (
-    provider: string,
-    playlistId: string,
-    name: string,
-    target: string,
-    onProgress: (p: Progress) => void
-  ) => {
-    return invokeTask<S3ImportResult>('s3_import_playlist', { provider,
-      playlistId,
-      name,
-      target
-    }, onProgress as ProgressCallback);
   },
 
   /** 把主窗口收进托盘（播放不中断） */

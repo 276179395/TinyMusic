@@ -15,8 +15,8 @@ use tinymusic_core::download::{build_filename, build_lrc, DownloadExtras, Downlo
 use tinymusic_core::http::HttpClient;
 use tinymusic_core::id3;
 use tinymusic_core::model::*;
-use tinymusic_core::providers::kuwo::KuwoProvider;
-use tinymusic_core::providers::netease::{NeteaseProvider, PlayMode};
+use tinymusic_core::cloud::CloudLibrary;
+use tinymusic_core::webdav::WebDav;
 use tinymusic_core::proxy::StreamProxy;
 use tinymusic_core::s3::{S3Config, S3};
 use tinymusic_core::storage::{DownloadRow, FailedDownload, FailedPart, Storage};
@@ -76,6 +76,17 @@ pub struct Settings {
     #[serde(default)]
     pub s3_path_style: bool,
 
+    #[serde(default)]
+    pub webdav_enabled: bool,
+    #[serde(default)]
+    pub webdav_endpoint: String,
+    #[serde(default = "default_webdav_root")]
+    pub webdav_root: String,
+    #[serde(default)]
+    pub webdav_username: String,
+    #[serde(default)]
+    pub webdav_password: String,
+
     // ---- 窗口 / 托盘 ----
     #[serde(default = "default_true")]
     pub close_to_tray: bool,
@@ -91,18 +102,11 @@ pub struct Settings {
     #[serde(default)]
     pub eq_preamp: f32,
 
-    // ---- 网易云（目录侧）----
-    /// `netease_first`：先试网易云直链，失败回落酷我；
-    /// `kuwo_only`：网易云只当目录，音源一律走酷我桥接。
-    #[serde(default = "default_netease_mode")]
-    pub netease_play_mode: String,
 }
 
-
-pub fn default_netease_mode() -> String {
-    "netease_first".into()
+pub fn default_webdav_root() -> String {
+    "TinyMusic".into()
 }
-
 
 pub fn default_concurrency() -> u32 {
     2
@@ -144,11 +148,15 @@ impl Default for Settings {
             s3_secret_key: String::new(),
             s3_prefix: default_s3_prefix(),
             s3_path_style: false,
+            webdav_enabled: false,
+            webdav_endpoint: String::new(),
+            webdav_root: default_webdav_root(),
+            webdav_username: String::new(),
+            webdav_password: String::new(),
             close_to_tray: true,
             eq_enabled: false,
             eq_gains: vec![0.0; 10],
             eq_preamp: 0.0,
-            netease_play_mode: default_netease_mode(),
         }
     }
 }
@@ -191,8 +199,6 @@ pub fn dirs_download() -> String {
 pub struct AppState {
     pub http: Arc<HttpClient>,
     pub providers: Vec<Arc<dyn MusicProvider>>,
-    /// 网易云是「需要登录态 + 可配置播放策略」的平台，单独留一个具体类型的句柄
-    pub netease: Arc<NeteaseProvider>,
     pub proxy: StreamProxy,
     pub storage: Arc<Storage>,
     pub downloader: Arc<Downloader>,
@@ -269,8 +275,20 @@ pub fn save_settings(dir: &std::path::Path, s: &Settings) {
 // ---------- 网盘辅助 ----------
 
 
-pub fn s3_client(state: &AppState) -> Result<S3, String> {
+pub fn s3_client(state: &AppState) -> Result<CloudLibrary, String> {
     let s = state.settings_snapshot();
+    if s.webdav_enabled {
+        let client = WebDav::new(
+            &s.webdav_endpoint,
+            &s.webdav_root,
+            s.webdav_username,
+            s.webdav_password,
+        ).map_err(|error| error.to_string())?;
+        return Ok(CloudLibrary::WebDav(client, state.proxy.clone()));
+    }
+    if !s.s3_enabled {
+        return Err("请先在设置中启用并配置网盘".into());
+    }
     let cfg = S3Config {
         endpoint: s.s3_endpoint.trim().to_string(),
         region: s.s3_region.trim().to_string(),
@@ -285,46 +303,23 @@ pub fn s3_client(state: &AppState) -> Result<S3, String> {
             "请先在 设置 → 网盘（S3）里填写 Endpoint / Bucket / Access Key / Secret Key".into(),
         );
     }
-    Ok(S3::new(cfg, state.http.client().clone()))
+    Ok(CloudLibrary::S3(S3::new(cfg, state.http.client().clone())))
 }
 
 
-/// 歌单在网盘里就是一个前缀目录
-pub fn playlist_prefix(prefix: &str, playlist: &str) -> String {
-    let p = prefix.trim().trim_matches('/');
-    let pl = playlist.trim().trim_matches('/');
-    match (p.is_empty(), pl.is_empty()) {
-        (true, true) => String::new(),
-        (false, true) => format!("{}/", p),
-        (true, false) => format!("{}/", pl),
-        (false, false) => format!("{}/{}/", p, pl),
+fn is_cloud_provider(provider: &str) -> bool {
+    matches!(provider, "s3" | "webdav")
+}
+
+fn track_cloud_client(state: &AppState, provider: &str) -> Result<CloudLibrary, String> {
+    let client = s3_client(state)?;
+    if client.provider() != provider {
+        return Err("歌曲来自另一种网盘连接，请切换网盘后再试".into());
     }
+    Ok(client)
 }
 
-
-pub fn object_key(prefix: &str, playlist: &str, track: &Track, ext: &str) -> String {
-    format!(
-        "{}{}",
-        playlist_prefix(prefix, playlist),
-        build_filename(track, ext)
-    )
-}
-
-
-pub fn replace_ext(key: &str, ext: &str) -> String {
-    match key.rfind('.') {
-        Some(i) if !key[i + 1..].contains('/') => format!("{}.{}", &key[..i], ext),
-        _ => format!("{}.{}", key, ext),
-    }
-}
-
-
-pub fn is_audio_key(key: &str) -> bool {
-    let lower = key.to_ascii_lowercase();
-    [".mp3", ".flac", ".m4a", ".ogg", ".wav"]
-        .iter()
-        .any(|e| lower.ends_with(e))
-}
+pub use tinymusic_core::library::{is_audio_key, object_key, playlist_prefix, replace_ext};
 
 
 pub fn audio_content_type(key: &str) -> &'static str {
@@ -377,11 +372,16 @@ pub async fn sync_favorite_track(state: &AppState, track: &Track) -> Option<Fail
     let q = Quality::from_str(&settings.default_quality);
 
     // 网盘里的歌不用重新下载：直接在桶里复制一份到「喜欢」
-    if track.provider == "s3" {
+    if is_cloud_provider(&track.provider) {
+        if track.provider != client.provider() {
+            return None;
+        }
         return match tinymusic_core::library::copy_into_favorites(&client, &track.id).await {
             Ok(target) => {
                 remember_favorite_copy(state, track, &target);
-                let _ = state.storage.save_s3_playlist(FAVORITES_PLAYLIST);
+                if client.provider() == "s3" {
+                    let _ = state.storage.save_s3_playlist(FAVORITES_PLAYLIST);
+                }
                 None
             }
             Err(e) => {
@@ -432,7 +432,7 @@ pub async fn sync_favorite_track(state: &AppState, track: &Track) -> Option<Fail
 ///
 /// 收藏的 id 必须和「喜欢」目录里的对象一致，否则下次拉取会被当成过期收藏清掉。
 fn remember_favorite_copy(state: &AppState, source: &Track, target: &str) {
-    let _ = state.storage.remove_favorite("s3", &source.id);
+    let _ = state.storage.remove_favorite(&source.provider, &source.id);
     let mut copy = source.clone();
     copy.id = target.to_string();
     copy.cover = None;
@@ -818,29 +818,31 @@ pub async fn download_one_local(
 // ---------- 命令 ----------
 
 
-pub fn get_providers(state: &AppState) -> Vec<ProviderInfo> {
-    state.providers.iter().map(|p| p.info()).collect()
-}
-
-
-pub async fn search(
-    state: &AppState,
-    provider: String,
-    kw: String,
-    page: u32,
-    limit: u32,
-) -> Result<SearchPage, String> {
-    let p = state.provider(&provider)?;
-    p.search(&kw, page, limit).await.map_err(|e| e.to_string())
-}
-
-
 pub async fn resolve(
     state: &AppState,
     track: Track,
     quality: String,
 ) -> Result<StreamInfo, String> {
     let q = Quality::parse(&quality).ok_or_else(|| "未知音质".to_string())?;
+    if is_cloud_provider(&track.provider) {
+        let client = track_cloud_client(state, &track.provider)?;
+        let (actual_quality, format) = s3_audio_format(&track.id);
+        let verified = format.codec != Codec::Unknown;
+        let mime = tinymusic_core::proxy::mime_for_path(Path::new(&track.id));
+        let url = client.audio_url(&track.id, &state.proxy, mime).await.map_err(|e| e.to_string())?;
+        return Ok(StreamInfo {
+            url,
+            quality: actual_quality,
+            requested: q,
+            bytes: None,
+            availability: Availability::Available,
+            content_type: mime.into(),
+            format,
+            via: client.provider().into(),
+            degraded: false,
+            verified,
+        });
+    }
     let p = state.provider(&track.provider)?;
     p.resolve(&track, q).await.map_err(|e| e.to_string())
 }
@@ -858,7 +860,7 @@ pub async fn track_qualities(
             known: true,
         });
     }
-    if track.provider == "s3" {
+    if is_cloud_provider(&track.provider) {
         let mut available = Vec::new();
         if track.id.to_ascii_lowercase().ends_with(".flac") {
             available.push(Quality::Lossless);
@@ -879,8 +881,14 @@ pub async fn track_detail(
     provider: String,
     track: Track,
 ) -> Result<TrackDetail, String> {
-    if provider == "s3" {
-        let client = s3_client(&state)?;
+    if let Some((_, path)) = local_download(state, &provider, &track.id) {
+        let lyrics = std::fs::read_to_string(path.with_extension("lrc"))
+            .map(|text| parse_lrc(text.trim_start_matches('\u{feff}')))
+            .unwrap_or_default();
+        return Ok(TrackDetail { track, lyrics, preview_range_ms: None });
+    }
+    if is_cloud_provider(&provider) {
+        let client = track_cloud_client(state, &provider)?;
         let lyrics = match client.get_object(&replace_ext(&track.id, "lrc")).await {
             Ok(Some(bytes)) => parse_lrc(&String::from_utf8_lossy(&bytes)),
             _ => Vec::new(),
@@ -930,35 +938,6 @@ pub fn parse_lrc(text: &str) -> Vec<LyricLine> {
 }
 
 
-pub async fn artist(
-    state: &AppState,
-    provider: String,
-    artist_id: String,
-    name: String,
-    page: u32,
-) -> Result<ArtistPage, String> {
-    let p = state.provider(&provider)?;
-    p.artist(&artist_id, &name, page)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-
-pub async fn album(
-    state: &AppState,
-    provider: String,
-    album_id: String,
-    name: String,
-    page: u32,
-) -> Result<AlbumPage, String> {
-    let p = state.provider(&provider)?;
-    p.album(&album_id, &name, page)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-
-/// 取链并登记到本地代理，返回可直接给 `<audio src>` 的地址
 pub async fn player_open(
     state: &AppState,
     track: Track,
@@ -970,14 +949,16 @@ pub async fn player_open(
 
     // 已经下载到本地的：直接播硬盘上的文件 —— 不走网络，也就没有「直链过期」。
     // 只有当本地那份音质不低于当前选择时才优先，避免选了 320k 却悄悄播 128k。
-    if track.provider != "s3" && allow_local.unwrap_or(true) {
-        if let Ok(Some(row)) = state.storage.find_local_download(&track.provider, &track.id) {
-            let path = std::path::PathBuf::from(&row.path);
+    if allow_local.unwrap_or(true) {
+        if let Some((row, path)) = local_download(state, &track.provider, &track.id) {
             let local_quality = Quality::parse(&row.quality).unwrap_or_default();
-            if quality_rank(local_quality) >= quality_rank(q) && path.is_file() {
+            if is_cloud_provider(&track.provider)
+                || quality_rank(local_quality) >= quality_rank(q)
+                || state.provider(&track.provider).is_err()
+            {
                 let (_, format) = s3_audio_format(&row.path);
                 let verified = format.codec != Codec::Unknown;
-                let mime = tinymusic_core::proxy::mime_for_path(std::path::Path::new(&row.path));
+                let mime = tinymusic_core::proxy::mime_for_path(&path);
                 let url = state
                     .proxy
                     .register_file(path, Some(mime.to_string()))
@@ -999,24 +980,17 @@ pub async fn player_open(
     // 网盘里的歌：给一个 6 小时有效的签名直链，同样套一层本地代理 ——
     // WebView 对跨域音视频的 Content-Type / HEAD 更挑，代理统一成 Range + 明确 MIME。
     // 格式按文件后缀推断，UI 显示 FLAC/MP3，而不是笼统的“原文件”。
-    if track.provider == "s3" {
-        let client = s3_client(&state)?;
-        let signed = client
-            .presign_get(&track.id, 6 * 3600)
-            .map_err(|e| e.to_string())?;
-        let (actual_quality, format) = s3_audio_format(&track.id);
-        let verified = format.codec != Codec::Unknown;
-        let mime = tinymusic_core::proxy::mime_for_path(std::path::Path::new(&track.id));
-        let url = state.proxy.register(signed, Some(mime.to_string())).await;
+    if is_cloud_provider(&track.provider) {
+        let info = resolve(state, track, q.as_str().into()).await?;
         return Ok(PlayerSource {
-            url,
-            quality: actual_quality.as_str().to_string(),
-            requested_quality: q.as_str().to_string(),
-            format,
-            bytes: None,
-            degraded: false,
-            verified,
-            via: "s3".into(),
+            url: info.url,
+            quality: info.quality.as_str().into(),
+            requested_quality: info.requested.as_str().into(),
+            format: info.format,
+            bytes: info.bytes,
+            degraded: info.degraded,
+            verified: info.verified,
+            via: info.via,
         });
     }
     let p = state.provider(&track.provider)?;
@@ -1069,6 +1043,19 @@ pub async fn download_start(
     quality: Option<String>,
     on_progress: ProgressFn,
 ) -> Result<String, String> {
+    if is_cloud_provider(&track.provider) {
+        let client = track_cloud_client(state, &track.provider)?;
+        let task_id = cloud_download_task_id(state, &track);
+        let state = state.strong();
+        let id = task_id.clone();
+        tokio::spawn(async move {
+            let outcome = download_cloud_track(&state, &client, &track, &id, None, Some(on_progress)).await;
+            if let Some(failure) = outcome.failure {
+                state.host.failed(&[failure]);
+            }
+        });
+        return Ok(task_id);
+    }
     let p = state.provider(&track.provider)?;
     let settings = state.settings_snapshot();
     let q = Quality::from_str(quality.as_deref().unwrap_or(&settings.default_quality));
@@ -1103,6 +1090,84 @@ pub async fn download_start(
     });
 
     Ok(task_id)
+}
+
+fn cloud_download_task_id(state: &AppState, track: &Track) -> String {
+    let seq = state.task_seq.fetch_add(1, Ordering::Relaxed);
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_nanos();
+    format!("cloud-{timestamp}-{seq}-{}", track.id)
+}
+
+async fn download_cloud_track(
+    state: &AppState,
+    client: &CloudLibrary,
+    track: &Track,
+    task_id: &str,
+    existing: Option<PathBuf>,
+    on_progress: Option<ProgressFn>,
+) -> TrackOutcome {
+    let (quality, _) = s3_audio_format(&track.id);
+    let result = if let Some(path) = existing {
+        Ok(path)
+    } else {
+        let _ = state.storage.insert_download(task_id, track, quality, "", 0, "running");
+        let ext = track.id.rsplit_once('.').map(|(_, ext)| ext.to_ascii_lowercase());
+        match ext.filter(|_| is_audio_key(&track.id)) {
+            Some(ext) => {
+                let path = PathBuf::from(state.settings_snapshot().download_dir).join(build_filename(track, &ext));
+                let id = task_id.to_owned();
+                client.download_object(&track.id, &path, false, Box::new(move |downloaded, total| {
+                    if let Some(progress) = &on_progress {
+                        let _ = progress(Progress { task_id: id.clone(), downloaded, total });
+                    }
+                })).await.map_err(|e| e.to_string())
+            }
+            None => Err("曲目路径必须指向音频文件".into()),
+        }
+    };
+    let (location, parts) = match result {
+        Ok(path) => {
+            let parts = download_cloud_sidecars(client, &track.id, &path).await;
+            let location = path.to_string_lossy().into_owned();
+            let bytes = std::fs::metadata(&path).map(|m| m.len() as i64).unwrap_or(0);
+            let _ = state.storage.insert_download(task_id, track, quality, &location, bytes, "done");
+            (location, parts)
+        }
+        Err(error) => {
+            let _ = state.storage.update_download(task_id, &format!("failed: {error}"), 0);
+            (String::new(), vec![FailedPart { part: "audio".into(), error }])
+        }
+    };
+    let failure = if parts.is_empty() {
+        let _ = state.storage.remove_download_failure(&failure_id("local", track));
+        None
+    } else {
+        let failure = failure_record(track, quality, "local", "", &location, parts);
+        let _ = state.storage.upsert_download_failure(&failure);
+        Some(failure)
+    };
+    TrackOutcome { ok: !location.is_empty(), location, failure }
+}
+
+async fn download_cloud_sidecars(client: &CloudLibrary, key: &str, path: &Path) -> Vec<FailedPart> {
+    let folder = key.rfind('/').map_or("", |end| &key[..=end]);
+    let entries = match client.list_keys_all(folder).await {
+        Ok(keys) => keys.into_iter().map(|key| (key.to_lowercase(), key)).collect::<Vec<_>>(),
+        Err(error) => return vec!["lyrics", "cover"].into_iter().map(|part| FailedPart {
+            part: part.into(), error: error.to_string()
+        }).collect(),
+    };
+    let stem = key.rsplit_once('.').map_or(key, |(stem, _)| stem);
+    let mut failed = Vec::new();
+    for (part, extensions) in [("lyrics", &["lrc"][..]), ("cover", &["jpg", "jpeg", "png", "webp"][..])] {
+        let Some(remote) = find_sibling(&entries, stem, extensions) else { continue };
+        let ext = remote.rsplit_once('.').unwrap().1.to_ascii_lowercase();
+        if let Err(error) = client.download_object(&remote, &path.with_extension(ext), true, Box::new(|_, _| {})).await {
+            failed.push(FailedPart { part: part.into(), error: error.to_string() });
+        }
+    }
+    failed
 }
 
 
@@ -1199,6 +1264,13 @@ fn resolve_download_path(stored: &str, download_dir: &std::path::Path) -> String
         }
     }
     stored.to_string()
+}
+
+fn local_download(state: &AppState, provider: &str, id: &str) -> Option<(DownloadRow, PathBuf)> {
+    let row = state.storage.find_local_download(provider, id).ok()??;
+    let dir = PathBuf::from(state.settings_snapshot().download_dir);
+    let path = PathBuf::from(resolve_download_path(&row.path, &dir));
+    path.is_file().then_some((row, path))
 }
 
 
@@ -1312,7 +1384,7 @@ pub async fn repair_local_extras(
 pub async fn repair_s3_extras(
     http: Arc<HttpClient>,
     provider: Arc<dyn MusicProvider>,
-    s3: &S3,
+    s3: &CloudLibrary,
     track: &Track,
     key: &str,
     parts: &[FailedPart],
@@ -1386,9 +1458,18 @@ pub async fn download_retry_failed(
             continue;
         };
         let q = Quality::from_str(&f.quality);
+        if f.target == "local" && is_cloud_provider(&f.track.provider) {
+            let Ok(client) = track_cloud_client(state, &f.track.provider) else { continue };
+            let (id, existing) = match local_download(state, &f.track.provider, &f.track.id) {
+                Some((row, path)) if !f.parts.iter().any(|part| part.part == "audio") => (row.task_id, Some(path)),
+                _ => (cloud_download_task_id(state, &f.track), None),
+            };
+            download_cloud_track(state, &client, &f.track, &id, existing, None).await;
+            continue;
+        }
         // 网盘歌曲的收藏是桶内复制，没有平台 provider 可下载
-        if f.target == "s3" && f.track.provider == "s3" {
-            let Ok(s3) = s3_client(state) else {
+        if f.target == "s3" && is_cloud_provider(&f.track.provider) {
+            let Ok(s3) = track_cloud_client(state, &f.track.provider) else {
                 continue;
             };
             if let Ok(target) =
@@ -1527,13 +1608,16 @@ pub async fn delete_cloud_favorite(state: &AppState, track: &Track) {
     let Ok(client) = s3_client(state) else {
         return;
     };
+    if track.provider != client.provider() {
+        return;
+    }
     let folder = tinymusic_core::library::favorites_folder(&client.normalized_prefix());
     let mut targets = Vec::new();
     // 收藏本身的 id 就是「喜欢」目录里的对象 key
-    if track.provider == "s3" && track.id.starts_with(&folder) {
+    if is_cloud_provider(&track.provider) && track.id.starts_with(&folder) {
         targets.push(track.id.clone());
     }
-    // 平台歌曲（网易云/酷我）的副本按「歌手 - 歌名」对文件名
+    // 原曲可能还在歌单里，按文件名找到「喜欢」中的副本。
     if !track.title.trim().is_empty() || !track.artist.trim().is_empty() {
         let fname = build_filename(track, "x");
         let stem = fname.strip_suffix(".x").unwrap_or(&fname);
@@ -1585,10 +1669,10 @@ pub fn favorite_remove(
         .into_iter()
         .filter(|t| {
             (t.provider == provider && t.id == id)
-                || same_song
+                || (t.provider == provider && same_song
                     .as_ref()
                     .map(|k| *k == tinymusic_core::library::favorite_dedupe_key(t))
-                    .unwrap_or(false)
+                    .unwrap_or(false))
         })
         .collect();
     if targets.is_empty() {
@@ -1644,7 +1728,7 @@ pub fn favorite_check(
     let list = state.storage.list_favorites().map_err(|e| e.to_string())?;
     Ok(list
         .iter()
-        .any(|t| tinymusic_core::library::favorite_dedupe_key(t) == key))
+        .any(|t| t.provider == provider && tinymusic_core::library::favorite_dedupe_key(t) == key))
 }
 
 
@@ -1675,10 +1759,6 @@ pub fn settings_set(state: &AppState, mut settings: Settings) -> Result<(), Stri
     if let Ok(mut s) = state.settings.lock() {
         *s = settings.clone();
     }
-    // 网易云播放策略是 provider 内部状态，改设置时要同步过去
-    state
-        .netease
-        .set_play_mode(PlayMode::parse(&settings.netease_play_mode));
     save_settings(&state.config_dir, &settings);
     Ok(())
 }
@@ -1733,64 +1813,6 @@ pub fn quality_capabilities() -> Vec<QualityCapability> {
 // ---------- 歌单 ----------
 
 
-pub async fn search_playlists(
-    state: &AppState,
-    provider: String,
-    kw: String,
-    page: u32,
-    limit: u32,
-) -> Result<PlaylistPage, String> {
-    let p = state.provider(&provider)?;
-    p.search_playlists(&kw, page, limit)
-        .await
-        .map_err(|e| e.to_string())
-}
-
-
-pub async fn playlist(
-    state: &AppState,
-    provider: String,
-    id: String,
-) -> Result<PlaylistDetail, String> {
-    let p = state.provider(&provider)?;
-    p.playlist(&id).await.map_err(|e| e.to_string())
-}
-
-
-/// 按 uid 列出用户歌单（酷我这条接口不需要登录）
-pub async fn user_playlists(
-    state: &AppState,
-    provider: String,
-    uid: String,
-    limit: Option<u32>,
-) -> Result<Vec<PlaylistRef>, String> {
-    if uid.trim().is_empty() {
-        return Err("uid 不能为空".into());
-    }
-    let p = state.provider(&provider)?;
-    p.user_playlists(uid.trim(), limit.unwrap_or(100))
-        .await
-        .map_err(|e| e.to_string())
-}
-
-// ---------- 网页登录（只为拿 uid，目的就是歌单）----------
-
-
-/// 账号「喜欢」歌单
-pub async fn favorites(
-    state: &AppState,
-    provider: String,
-    uid: String,
-) -> Result<PlaylistDetail, String> {
-    if uid.trim().is_empty() {
-        return Err("请先在账号页登录或填写 uid".into());
-    }
-    let p = state.provider(&provider)?;
-    p.favorites(uid.trim()).await.map_err(|e| e.to_string())
-}
-
-
-/// 批量下载：顺序执行，避免同时对 CDN 发起过多请求
 pub async fn download_batch(
     state: &AppState,
     tracks: Vec<Track>,
@@ -1817,6 +1839,21 @@ pub async fn download_batch(
             total: Some(total_n as u64),
         });
 
+        if is_cloud_provider(&track.provider) {
+            let Ok(client) = track_cloud_client(state, &track.provider) else {
+                failed += 1;
+                continue;
+            };
+            let task_id = cloud_download_task_id(state, track);
+            let outcome = download_cloud_track(state, &client, track, &task_id, None, Some(on_progress.clone())).await;
+            if outcome.ok {
+                ids.push(task_id);
+            } else {
+                failed += 1;
+            }
+            failures.extend(outcome.failure);
+            continue;
+        }
         let p = match state.provider(&track.provider) {
             Ok(p) => p,
             Err(_) => {
@@ -1865,195 +1902,7 @@ pub async fn download_batch(
 }
 
 
-pub fn saved_playlist_add(state: &AppState, playlist: PlaylistRef) -> Result<(), String> {
-    state
-        .storage
-        .save_playlist(&playlist)
-        .map_err(|e| e.to_string())
-}
-
-
-pub fn saved_playlist_remove(
-    state: &AppState,
-    provider: String,
-    id: String,
-) -> Result<(), String> {
-    state
-        .storage
-        .remove_playlist(&provider, &id)
-        .map_err(|e| e.to_string())
-}
-
-
-pub fn saved_playlist_list(state: &AppState) -> Result<Vec<PlaylistRef>, String> {
-    state
-        .storage
-        .list_saved_playlists()
-        .map_err(|e| e.to_string())
-}
-
-
-pub fn saved_playlist_check(
-    state: &AppState,
-    provider: String,
-    id: String,
-) -> Result<bool, String> {
-    state
-        .storage
-        .is_saved_playlist(&provider, &id)
-        .map_err(|e| e.to_string())
-}
-
-// ---------- 账号 ----------
-
-
-pub fn provider_features(
-    state: &AppState,
-    provider: String,
-) -> Result<ProviderFeatures, String> {
-    let p = state.provider(&provider)?;
-    Ok(p.features())
-}
-
-
-pub fn auth_capabilities(
-    state: &AppState,
-    provider: String,
-) -> Result<Vec<AuthCapability>, String> {
-    let p = state.provider(&provider)?;
-    Ok(p.auth_capabilities())
-}
-
-
-/// 统一登录入口。`method` ∈ password | cookie | qr_code。
-/// 平台声明不支持的登录方式会立刻返回带原因的 Unsupported 错误。
-pub async fn login(
-    state: &AppState,
-    provider: String,
-    method: String,
-    user: Option<String>,
-    password: Option<String>,
-    cookie: Option<String>,
-) -> Result<Session, String> {
-    let p = state.provider(&provider)?;
-
-    // 先查能力声明，避免把注定失败的请求发出去
-    let caps = p.auth_capabilities();
-    let wanted = match method.as_str() {
-        "password" => AuthMethod::Password,
-        "cookie" => AuthMethod::Cookie,
-        "qr_code" => AuthMethod::QrCode,
-        other => return Err(format!("未知登录方式: {}", other)),
-    };
-    if let Some(c) = caps.iter().find(|c| c.method == wanted) {
-        if !c.supported {
-            return Err(c
-                .reason
-                .clone()
-                .unwrap_or_else(|| "该登录方式不可用".to_string()));
-        }
-    }
-
-    let session = match wanted {
-        AuthMethod::Password => {
-            p.login_password(
-                user.as_deref().unwrap_or(""),
-                password.as_deref().unwrap_or(""),
-            )
-            .await
-        }
-        AuthMethod::Cookie => p.login_cookie(cookie.as_deref().unwrap_or("")).await,
-        AuthMethod::QrCode => Err(tinymusic_core::Error::Unsupported(
-            "扫码登录暂未接入".into(),
-        )),
-    }
-    .map_err(|e| e.to_string())?;
-
-    state
-        .storage
-        .save_session(&session)
-        .map_err(|e| e.to_string())?;
-    // 让 provider 立刻用上新会话（网易云的后续请求要带 MUSIC_U）
-    p.set_session(&session);
-    Ok(session)
-}
-
-
-pub async fn logout(state: &AppState, provider: String) -> Result<(), String> {
-    let p = state.provider(&provider)?;
-    if let Some(sess) = state
-        .storage
-        .get_session(&provider)
-        .map_err(|e| e.to_string())?
-    {
-        let _ = p.logout(&sess).await;
-    }
-    state
-        .storage
-        .delete_session(&provider)
-        .map_err(|e| e.to_string())
-}
-
-
-pub fn session_get(state: &AppState, provider: String) -> Result<Option<Session>, String> {
-    state
-        .storage
-        .get_session(&provider)
-        .map_err(|e| e.to_string())
-}
-
-
-/// 当前账号的歌单（未登录或平台不支持时返回可读错误）
-pub async fn my_playlists(
-    state: &AppState,
-    provider: String,
-) -> Result<Vec<PlaylistRef>, String> {
-    let p = state.provider(&provider)?;
-    let sess = state
-        .storage
-        .get_session(&provider)
-        .map_err(|e| e.to_string())?
-        .ok_or_else(|| "尚未登录".to_string())?;
-    p.my_playlists(&sess).await.map_err(|e| e.to_string())
-}
-
-
-/// 每日推荐（网易云需要登录态；未登录会返回可读错误）
-pub async fn recommend_songs(
-    state: &AppState,
-    provider: String,
-    limit: u32,
-) -> Result<Vec<Track>, String> {
-    let p = state.provider(&provider)?;
-    p.recommend_songs(limit).await.map_err(|e| e.to_string())
-}
-
-
-/// 推荐歌单（网易云匿名也能取到，登录后更个性化）
-pub async fn recommend_playlists(
-    state: &AppState,
-    provider: String,
-) -> Result<Vec<PlaylistRef>, String> {
-    let p = state.provider(&provider)?;
-    p.recommend_playlists().await.map_err(|e| e.to_string())
-}
-
-
-/// 网易云登录窗口的标签
-pub const NETEASE_LOGIN_LABEL: &str = "nelogin";
-
-
-#[derive(Debug, Clone, Serialize)]
-pub struct S3PlaylistInfo {
-    pub name: String,
-    pub count: u32,
-    /// 第一首歌的封面直链（决定卡片长什么样，可以为空）
-    #[serde(default)]
-    pub cover: Option<String>,
-    /// true 表示这是「未分类」伪歌单（前缀根目录下的散歌）
-    #[serde(default)]
-    pub root: bool,
-}
+pub use tinymusic_core::library::S3PlaylistInfo;
 
 
 pub async fn s3_test(state: &AppState) -> Result<String, String> {
@@ -2062,360 +1911,48 @@ pub async fn s3_test(state: &AppState) -> Result<String, String> {
 }
 
 
-/// 去掉配置的前缀，得到 `歌单名/文件名` 相对路径；不在前缀下的 key 返回 None
-pub fn key_under_prefix<'a>(key: &'a str, prefix: &str) -> Option<&'a str> {
-    let p = prefix.trim_matches('/');
-    if p.is_empty() {
-        return Some(key.trim_start_matches('/'));
-    }
-    key.strip_prefix(p)?.strip_prefix('/')
-}
+pub use tinymusic_core::library::{
+    find_sibling, is_playlist_folder, is_root_key, key_under_prefix, parse_track_filename,
+    playlists_from_keys, S3TrackRow,
+};
 
-
-/// 前缀根目录下的散歌（下载时选了「未分类」）
-pub fn is_root_key(key: &str, prefix: &str) -> bool {
-    key_under_prefix(key, prefix)
-        .map(|rest| !rest.is_empty() && !rest.contains('/'))
-        .unwrap_or(false)
-}
-
-
-/// 从桶里的对象清单反推歌单（prefix 下的一级目录）。
-///
-/// 歌单名原本只存在本机 SQLite 里，换一台设备连同一个桶就什么都看不到了，
-/// 这里按对象 key 把目录找回来。
-pub fn playlists_from_keys(keys: &[String], prefix: &str) -> Vec<String> {
-    let mut names: Vec<String> = Vec::new();
-    for key in keys {
-        let Some(rest) = key_under_prefix(key, prefix) else {
-            continue;
-        };
-        let Some((first, _)) = rest.split_once('/') else {
-            continue; // 桶/前缀根目录下的散歌，不算歌单
-        };
-        let name = first.trim();
-        if name.is_empty() {
-            continue;
-        }
-        if !names.iter().any(|n| n == name) {
-            names.push(name.to_string());
-        }
-    }
-    names.sort();
-    names
-}
-
-
-/// 一个目录算不算歌单：里面有音频，或者有我们写的空歌单标记。
-/// 隐藏目录和别的工具的杂物（只有图片 / 文档）不往列表里塞。
-pub fn is_playlist_folder(name: &str, entries: &[String]) -> bool {
-    if name.starts_with('.') {
-        return false;
-    }
-    entries.iter().any(|key| {
-        is_audio_key(key) || key.rsplit('/').next().map(|f| f == ".keep").unwrap_or(false)
-    })
-}
-
-
-/// 本地记录的歌单 + 网盘上的目录，并统计曲目数
 pub async fn s3_playlists(state: &AppState) -> Result<Vec<S3PlaylistInfo>, String> {
-    let mut names = state
-        .storage
-        .list_s3_playlists()
-        .map_err(|e| e.to_string())?;
-    let client = s3_client(&state).ok();
-
-    // 整库列一次：既能把别的设备建的歌单补进来，也顺手拿到每个目录的对象
-    let mut folders: HashMap<String, Vec<String>> = HashMap::new();
-    let mut root_keys: Vec<String> = Vec::new();
-    if let Some(c) = client.as_ref() {
-        let prefix = c.normalized_prefix();
-        let scope = if prefix.is_empty() {
-            String::new()
-        } else {
-            format!("{}/", prefix)
-        };
-        if let Ok(keys) = c.list_keys_all(&scope).await {
-            for key in &keys {
-                if is_root_key(key, &prefix) {
-                    root_keys.push(key.clone());
-                }
-                let Some(rest) = key_under_prefix(key, &prefix) else {
-                    continue;
-                };
-                let Some((folder, _)) = rest.split_once('/') else {
-                    continue;
-                };
-                folders
-                    .entry(folder.to_string())
-                    .or_default()
-                    .push(key.clone());
-            }
-            for name in playlists_from_keys(&keys, &prefix) {
-                let Some(entries) = folders.get(&name) else {
-                    continue;
-                };
-                if !is_playlist_folder(&name, entries) {
-                    continue;
-                }
-                if !names.iter().any(|n| n == &name) {
-                    // 记到本地，排序稳定；下次列不动也能显示
-                    let _ = state.storage.save_s3_playlist(&name);
-                    names.push(name);
-                }
-            }
-        }
-    }
-    // 列不到桶（离线 / 配置错误）就只显示本地记录，数量为 0，不把列表清空
-
-    let mut out = Vec::with_capacity(names.len());
-    for name in names {
-        let mut count = 0u32;
-        let mut cover = None;
-        if let Some(keys) = folders.get(&name) {
-            count = keys.iter().filter(|k| is_audio_key(k)).count() as u32;
-            if let (Some(c), Some(first)) = (client.as_ref(), keys.iter().find(|k| is_audio_key(k)))
-            {
-                let lower: Vec<(String, String)> =
-                    keys.iter().map(|k| (k.to_lowercase(), k.clone())).collect();
-                let stem = first
-                    .rsplit_once('.')
-                    .map(|(a, _)| a)
-                    .unwrap_or(first.as_str());
-                if let Some(img) = find_sibling(&lower, stem, &["jpg", "jpeg", "png", "webp"]) {
-                    cover = c.presign_get(&img, 6 * 3600).ok();
-                }
-            }
-        }
-        out.push(S3PlaylistInfo {
-            name,
-            count,
-            cover,
-            root: false,
-        });
-    }
-
-    // 根目录散歌：有歌才显示「未分类」，空的时候不占位置
-    if let (Some(c), true) = (client.as_ref(), root_keys.iter().any(|k| is_audio_key(k))) {
-        let count = root_keys.iter().filter(|k| is_audio_key(k)).count() as u32;
-        let mut cover = None;
-        if let Some(first) = root_keys.iter().find(|k| is_audio_key(k)) {
-            let lower: Vec<(String, String)> = root_keys
-                .iter()
-                .map(|k| (k.to_lowercase(), k.clone()))
-                .collect();
-            let stem = first
-                .rsplit_once('.')
-                .map(|(a, _)| a)
-                .unwrap_or(first.as_str());
-            if let Some(img) = find_sibling(&lower, stem, &["jpg", "jpeg", "png", "webp"]) {
-                cover = c.presign_get(&img, 6 * 3600).ok();
-            }
-        }
-        // 老数据里可能已经有一张叫「未分类」的真实歌单，那伪歌单换个名字
-        let label = if out.iter().any(|p| p.name == ROOT_PLAYLIST_LABEL) {
-            format!("{}（根目录）", ROOT_PLAYLIST_LABEL)
-        } else {
-            ROOT_PLAYLIST_LABEL.to_string()
-        };
-        out.push(S3PlaylistInfo {
-            name: label,
-            count,
-            cover,
-            root: true,
-        });
-    }
-    Ok(out)
-}
-
-
-/// 网盘歌单里的一个音频文件（`track.id` 就是对象 key）
-#[derive(Debug, Clone, Serialize)]
-pub struct S3TrackRow {
-    pub key: String,
-    pub track: Track,
-    /// 这首歌缺的附属文件：`lyrics` / `cover`（音频本身在，才可能出现在列表里）
-    #[serde(default)]
-    pub missing: Vec<String>,
-}
-
-
-pub fn parse_track_filename(stem: &str) -> (String, String) {
-    let name = stem.rsplit('/').next().unwrap_or(stem).trim();
-    match name.split_once(" - ") {
-        Some((artist, title)) => (artist.trim().to_string(), title.trim().to_string()),
-        None => (String::new(), name.to_string()),
+    match s3_client(state) {
+        Ok(client) => tinymusic_core::library::list_s3_playlists(&client, &state.storage).await,
+        Err(error) if state.settings_snapshot().webdav_enabled => Err(error),
+        Err(_) => state.storage.list_s3_playlists()
+            .map(|names| names.into_iter().map(|name| S3PlaylistInfo {
+                name, count: 0, cover: None, root: false,
+            }).collect())
+            .map_err(|e| e.to_string()),
     }
 }
-
-
-/// 在对象列表里找同名不同后缀的兄弟文件（歌词/封面）
-pub fn find_sibling(keys: &[(String, String)], stem: &str, exts: &[&str]) -> Option<String> {
-    for ext in exts {
-        let target = format!("{}.{}", stem, ext).to_lowercase();
-        if let Some((_, key)) = keys.iter().find(|(lower, _)| *lower == target) {
-            return Some(key.clone());
-        }
-    }
-    None
-}
-
-
-/// 给网盘音频对象签一个封面直链：同目录同名 jpg/jpeg/png/webp。
-/// 封面是临时签名地址，所以只能现签现用，不能存进库。
-pub async fn signed_cover_for(client: &S3, audio_key: &str) -> Option<String> {
-    let (folder, _) = audio_key.rsplit_once('/')?;
-    let keys = client.list_keys(&format!("{}/", folder)).await.ok()?;
-    let lower: Vec<(String, String)> = keys
-        .iter()
-        .map(|k| (k.to_lowercase(), k.clone()))
-        .collect();
-    let stem = audio_key.rsplit_once('.').map(|(a, _)| a).unwrap_or(audio_key);
-    find_sibling(&lower, stem, &["jpg", "jpeg", "png", "webp"])
-        .and_then(|k| client.presign_get(&k, 6 * 3600).ok())
-}
-
-
-/// 批量刷新 s3 曲目的封面直链；同一个目录只列一次。
-///
-/// 库里存的 s3 封面都是写入那会儿签的直链，几个小时后就失效，
-/// 播放时播放条会直接显示裂图。所以每次把「喜欢」读出来都重签一次。
-pub async fn refresh_s3_covers(client: &S3, tracks: &mut [Track]) {
-    let mut cache: std::collections::HashMap<String, Vec<(String, String)>> =
-        std::collections::HashMap::new();
-    for t in tracks.iter_mut().filter(|t| t.provider == "s3") {
-        let key = t.id.clone();
-        let Some((folder, _)) = key.rsplit_once('/') else {
-            t.cover = None;
-            continue;
-        };
-        let entries = match cache.get(folder).cloned() {
-            Some(e) => e,
-            None => {
-                let entries: Vec<(String, String)> = client
-                    .list_keys(&format!("{}/", folder))
-                    .await
-                    .unwrap_or_default()
-                    .iter()
-                    .map(|k| (k.to_lowercase(), k.clone()))
-                    .collect();
-                cache.insert(folder.to_string(), entries.clone());
-                entries
-            }
-        };
-        let stem = key.rsplit_once('.').map(|(a, _)| a).unwrap_or(key.as_str());
-        t.cover = find_sibling(&entries, stem, &["jpg", "jpeg", "png", "webp"])
-            .and_then(|k| client.presign_get(&k, 6 * 3600).ok());
-    }
-}
-
-
-/// 列出某个网盘歌单里的歌曲（音频 + 同名歌词/封面）。
-/// 把一批对象 key 变成曲目行（同一个目录里的音频 + 同名歌词/封面）
-pub fn build_track_rows(client: &S3, keys: &[String]) -> Vec<S3TrackRow> {
-    let lower: Vec<(String, String)> = keys
-        .iter()
-        .map(|k| (k.to_lowercase(), k.clone()))
-        .collect();
-
-    let mut rows = Vec::new();
-    for key in keys.iter().filter(|k| is_audio_key(k)) {
-        let stem = key.rsplit_once('.').map(|(a, _)| a).unwrap_or(key.as_str());
-        let (artist, title) = parse_track_filename(stem);
-        let cover_key = find_sibling(&lower, stem, &["jpg", "jpeg", "png", "webp"]);
-        let cover = cover_key
-            .as_ref()
-            .and_then(|k| client.presign_get(k, 6 * 3600).ok());
-
-        // 列表里顺手标出缺歌词 / 封面的歌，用户不用先跑一遍完整性检测
-        let mut missing = Vec::new();
-        if cover_key.is_none() {
-            missing.push("cover".to_string());
-        }
-        let lrc_name = format!("{}.lrc", stem).to_lowercase();
-        if !lower.iter().any(|(k, _)| *k == lrc_name) {
-            missing.push("lyrics".to_string());
-        }
-
-        rows.push(S3TrackRow {
-            key: key.clone(),
-            missing,
-            track: Track {
-                provider: "s3".into(),
-                id: key.clone(),
-                title,
-                artist,
-                cover,
-                availability: Availability::Available,
-                available_qualities: if key.to_ascii_lowercase().ends_with(".flac") {
-                    vec![Quality::Lossless]
-                } else {
-                    Vec::new()
-                },
-                ..Track::default()
-            },
-        });
-    }
-    rows.sort_by(|a, b| a.key.cmp(&b.key));
-    rows
-}
-
-
-pub async fn list_s3_track_rows(client: &S3, name: &str) -> Result<Vec<S3TrackRow>, String> {
-    let folder = playlist_prefix(&client.normalized_prefix(), name);
-    let keys = client
-        .list_keys_all(&folder)
-        .await
-        .map_err(|e| e.to_string())?;
-    Ok(build_track_rows(client, &keys))
-}
-
-
-/// 前缀根目录的散歌（「未分类」）
-pub async fn list_root_track_rows(client: &S3) -> Result<Vec<S3TrackRow>, String> {
-    let prefix = client.normalized_prefix();
-    let scope = if prefix.is_empty() {
-        String::new()
-    } else {
-        format!("{}/", prefix)
-    };
-    let keys = client
-        .list_keys_all(&scope)
-        .await
-        .map_err(|e| e.to_string())?;
-    let root: Vec<String> = keys
-        .into_iter()
-        .filter(|k| is_root_key(k, &prefix))
-        .collect();
-    Ok(build_track_rows(client, &root))
-}
-
 
 pub async fn s3_playlist_tracks(
     state: &AppState,
     name: String,
     root: Option<bool>,
 ) -> Result<Vec<S3TrackRow>, String> {
-    let client = s3_client(&state)?;
-    if root.unwrap_or(false) {
-        list_root_track_rows(&client).await
-    } else {
-        list_s3_track_rows(&client, &name).await
-    }
+    let client = s3_client(state)?;
+    tinymusic_core::library::s3_playlist_tracks(&client, &name, root.unwrap_or(false)).await
 }
-
 
 /// 删除网盘歌单：连同云端文件一起删
 pub async fn s3_playlist_purge(state: &AppState, name: String) -> Result<(), String> {
-    let name = sanitize_playlist_name(&name)?;
+    let client = s3_client(state)?;
+    let name = match &client {
+        CloudLibrary::WebDav(..) => name,
+        CloudLibrary::S3(_) => sanitize_playlist_name(&name)?,
+    };
     if name == FAVORITES_PLAYLIST {
         return Err("「喜欢」由红心管理，不能在这里删除".into());
     }
     if name == ROOT_PLAYLIST_LABEL {
         return Err("「未分类」是根目录，不能整组删除".into());
     }
-    let client = s3_client(&state)?;
+    if let CloudLibrary::WebDav(webdav, _) = &client {
+        return webdav.delete_playlist(&name).await.map_err(|error| error.to_string());
+    }
     let folder = playlist_prefix(&client.normalized_prefix(), &name);
     let keys = client.list_keys(&folder).await.map_err(|e| e.to_string())?;
     for key in keys {
@@ -2437,8 +1974,11 @@ pub async fn s3_playlist_rename(
     old: String,
     new: String,
 ) -> Result<String, String> {
-    let old = sanitize_playlist_name(&old)?;
-    let new = sanitize_playlist_name(&new)?;
+    let client = s3_client(state)?;
+    let (old, new) = match &client {
+        CloudLibrary::WebDav(..) => (old, sanitize_playlist_name(&new)?),
+        CloudLibrary::S3(_) => (sanitize_playlist_name(&old)?, sanitize_playlist_name(&new)?),
+    };
     if old == FAVORITES_PLAYLIST {
         return Err("「喜欢」不能重命名".into());
     }
@@ -2451,6 +1991,11 @@ pub async fn s3_playlist_rename(
     if old == new {
         return Ok(new);
     }
+    if let CloudLibrary::WebDav(webdav, _) = &client {
+        webdav.rename_playlist(&old, &new).await.map_err(|error| error.to_string())?;
+        tinymusic_core::library::rename_webdav_playlist_in_order(&state.storage, &old, &new)?;
+        return Ok(new);
+    }
     let existing = state
         .storage
         .list_s3_playlists()
@@ -2459,7 +2004,6 @@ pub async fn s3_playlist_rename(
         return Err(format!("已经有叫「{}」的歌单了", new));
     }
 
-    let client = s3_client(&state)?;
     let prefix = client.normalized_prefix();
     let old_folder = playlist_prefix(&prefix, &old);
     let new_folder = playlist_prefix(&prefix, &new);
@@ -2491,14 +2035,28 @@ pub async fn s3_playlist_rename(
 ///
 /// 队列里的 s3 曲目可能来自几小时前的列表，内嵌的封面直链已经过期；
 /// 播放时重签一次，避免播放条/歌词页显示裂图。
-pub async fn s3_cover(state: &AppState, key: String) -> Result<Option<String>, String> {
-    let client = s3_client(&state)?;
-    Ok(signed_cover_for(&client, &key).await)
+pub async fn s3_cover(state: &AppState, key: String, provider: Option<String>) -> Result<Option<String>, String> {
+    if let Some((_, path)) = provider.as_deref().and_then(|provider| local_download(state, provider, &key)) {
+        for (ext, mime) in [("jpg", "image/jpeg"), ("jpeg", "image/jpeg"), ("png", "image/png"), ("webp", "image/webp")] {
+            let cover = path.with_extension(ext);
+            if cover.is_file() {
+                return Ok(Some(state.proxy.register_file(cover, Some(mime.into())).await));
+            }
+        }
+    }
+    let client = match provider {
+        Some(provider) => track_cloud_client(state, &provider)?,
+        None => s3_client(state)?,
+    };
+    Ok(tinymusic_core::library::signed_cover_for(&client, &key).await)
 }
 
 
 /// 删除歌单里的单曲（音频 + 同名歌词/封面）
 pub async fn s3_track_delete(state: &AppState, key: String) -> Result<(), String> {
+    if !is_audio_key(&key) {
+        return Err("曲目路径必须指向音频文件".into());
+    }
     let client = s3_client(&state)?;
     client
         .delete_object(&key)
@@ -2509,13 +2067,16 @@ pub async fn s3_track_delete(state: &AppState, key: String) -> Result<(), String
         let _ = client.delete_object(&format!("{}.{}", stem, ext)).await;
     }
     // 从网盘删掉的 S3 曲目，本地收藏缓存也要一起清掉（收藏只认「喜欢」目录）
-    let _ = state.storage.remove_favorite("s3", &key);
+    let _ = state.storage.remove_favorite(client.provider(), &key);
     Ok(())
 }
 
 
 /// 按拖拽后的顺序保存歌单排序
 pub fn s3_playlists_reorder(state: &AppState, names: Vec<String>) -> Result<(), String> {
+    if state.settings_snapshot().webdav_enabled {
+        return tinymusic_core::library::reorder_webdav_playlists(&state.storage, &names);
+    }
     state
         .storage
         .reorder_s3_playlists(&names)
@@ -2527,6 +2088,16 @@ pub async fn s3_playlist_create(state: &AppState, name: String) -> Result<String
     let name = sanitize_playlist_name(&name)?;
     if name == ROOT_PLAYLIST_LABEL {
         return Err(format!("「{}」是根目录专用名，换一个", ROOT_PLAYLIST_LABEL));
+    }
+    if state.settings_snapshot().webdav_enabled {
+        let CloudLibrary::WebDav(client, _) = s3_client(state)? else {
+            return Err("网盘协议已切换，请重试".into());
+        };
+        if name == FAVORITES_PLAYLIST {
+            return Err("该歌单名已保留，请换一个名称".into());
+        }
+        client.create_playlist(&name).await.map_err(|error| error.to_string())?;
+        return Ok(name);
     }
     state
         .storage
@@ -2549,7 +2120,7 @@ pub async fn s3_playlist_create(state: &AppState, name: String) -> Result<String
 
 /// 上传一个对象，失败自动重试（歌词 / 封面这种小对象单独走一遍）
 pub async fn put_object_retry(
-    s3: S3,
+    s3: CloudLibrary,
     key: String,
     body: Vec<u8>,
     content_type: &str,
@@ -2575,7 +2146,7 @@ pub async fn upload_one_s3(
     storage: Arc<Storage>,
     downloader: Arc<Downloader>,
     provider: Arc<dyn MusicProvider>,
-    s3: S3,
+    s3: CloudLibrary,
     track: Track,
     q: Quality,
     playlist: String,
@@ -2618,12 +2189,12 @@ pub async fn upload_one_s3(
 
     let _ = storage.insert_download(&task_id, &track, info.quality, "", 0, "running");
     let key = object_key(
-        &s3.config().prefix,
+        &s3.normalized_prefix(),
         &playlist,
         &track,
         actual_ext(&info),
     );
-    let location = format!("s3://{}/{}", s3.config().bucket.trim(), key);
+    let location = format!("s3://{}/{}", s3.bucket().unwrap_or_default(), key);
 
     let (extras, mut parts) = build_extras(http, provider, &track, true, true).await;
 
@@ -3032,12 +2603,12 @@ pub fn folder_playlist(prefix: &str, folder: &str) -> String {
 /// 扫描网盘（整库或单个歌单），找出缺音频 / 歌词 / 封面的条目
 pub async fn check_s3_integrity(
     storage: &Storage,
-    s3: &S3,
+    s3: &CloudLibrary,
     only: Option<&str>,
 ) -> Result<S3IntegrityReport, String> {
     let prefix = s3.normalized_prefix();
-    let scope = match only.map(str::trim).filter(|s| !s.is_empty()) {
-        Some(pl) => playlist_prefix(&prefix, pl),
+    let scope = match only.filter(|s| !s.trim().is_empty()) {
+        Some(pl) => s3.playlist_prefix(pl),
         None => {
             if prefix.is_empty() {
                 String::new()
@@ -3050,7 +2621,7 @@ pub async fn check_s3_integrity(
         .list_keys_all(&scope)
         .await
         .map_err(|e| e.to_string())?;
-    let sources = s3_source_index(storage, s3.config().bucket.trim());
+    let sources = s3_source_index(storage, s3.bucket().unwrap_or_default());
     Ok(analyze_s3_keys(&keys, &prefix, &sources))
 }
 
@@ -3187,7 +2758,7 @@ pub async fn s3_integrity_fix(
 ) -> Result<S3IntegrityReport, String> {
     let s3 = s3_client(&state)?;
     let report = check_s3_integrity(&state.storage, &s3, playlist.as_deref()).await?;
-    let sources = s3_source_index(&state.storage, s3.config().bucket.trim());
+    let sources = s3_source_index(&state.storage, s3.bucket().unwrap_or_default());
     let settings = state.settings_snapshot();
     let q = Quality::from_str(&settings.default_quality);
     let total = ids.len() as u32;
@@ -3235,7 +2806,7 @@ pub async fn s3_integrity_fix(
 /// 返回（仍然缺的部分, 错误说明）。
 pub async fn fix_integrity_issue(
     state: &AppState,
-    s3: &S3,
+    s3: &CloudLibrary,
     sources: &S3SourceIndex,
     issue: &S3IntegrityIssue,
     q: Quality,
@@ -3307,112 +2878,6 @@ pub async fn fix_integrity_issue(
         left.first().map(|p| p.error.clone()).unwrap_or_default(),
     )
 }
-
-// ---------- 歌单一键导入网盘 ----------
-
-
-#[derive(Debug, Clone, Serialize)]
-pub struct S3ImportResult {
-    pub playlist: String,
-    pub total: u32,
-    pub uploaded: u32,
-    pub failed: u32,
-}
-
-
-/// 把一个平台歌单整张导入网盘：逐首取流 → 下载（含封面/歌词）→ 上传。
-///
-/// 目标歌单（桶内目录）默认沿用平台歌单名，也可以在导入弹窗里改。
-pub async fn s3_import_playlist(
-    state: &AppState,
-    provider: String,
-    playlist_id: String,
-    name: String,
-    target: Option<String>,
-    on_progress: ProgressFn,
-) -> Result<S3ImportResult, String> {
-    let p = state.provider(&provider)?;
-    let s3 = s3_client(&state)?;
-
-    let detail = p.playlist(&playlist_id).await.map_err(|e| e.to_string())?;
-    let tracks = detail.tracks;
-    let total = tracks.len();
-    if total == 0 {
-        return Err("这个歌单里没有曲目".into());
-    }
-
-    let target_name = match target {
-        Some(t) if !t.trim().is_empty() => sanitize_playlist_name(&t)?,
-        _ => sanitize_playlist_name(&name).unwrap_or_else(|_| "未命名歌单".to_string()),
-    };
-
-    let settings = state.settings_snapshot();
-    let q = Quality::from_str(&settings.default_quality);
-
-    let mut uploaded = 0u32;
-    let mut failed = 0u32;
-    let mut failures: Vec<FailedDownload> = Vec::new();
-
-    for (i, track) in tracks.iter().enumerate() {
-        let _ = on_progress(Progress {
-            task_id: format!("batch-{}-{}", i, track.id),
-            downloaded: i as u64,
-            total: Some(total as u64),
-        });
-
-        let seq = state.task_seq.fetch_add(1, Ordering::Relaxed);
-        let task_id = format!("imp-{}-{}", seq, track.id);
-        let outcome = upload_one_s3(
-            state.http.clone(),
-            state.storage.clone(),
-            state.downloader.clone(),
-            p.clone(),
-            s3.clone(),
-            track.clone(),
-            q,
-            target_name.clone(),
-            task_id,
-            None,
-        )
-        .await;
-
-        if outcome.ok {
-            uploaded += 1;
-        } else {
-            failed += 1;
-        }
-        if let Some(f) = outcome.failure {
-            failures.push(f);
-        }
-    }
-
-    let _ = on_progress(Progress {
-        task_id: "batch-done".into(),
-        downloaded: uploaded as u64,
-        total: Some(total as u64),
-    });
-
-    if !failures.is_empty() {
-        let _ = state.host.failed(&failures);
-    }
-    if uploaded == 0 {
-        return Err(format!(
-            "{} 首全部失败（可能都不可用，或网盘配置有问题）",
-            failed
-        ));
-    }
-
-    let _ = state.storage.save_s3_playlist(&target_name);
-    Ok(S3ImportResult {
-        playlist: target_name,
-        total: total as u32,
-        uploaded,
-        failed,
-    })
-}
-
-// ---------- 托盘 ----------
-
 
 #[cfg(test)]
 mod tests {
@@ -3635,18 +3100,9 @@ impl AppState {
         );
         let _ = std::fs::create_dir_all(&settings.download_dir);
 
-        let kuwo: Arc<dyn MusicProvider> = Arc::new(KuwoProvider::with_http(http.clone()));
-        let netease = Arc::new(NeteaseProvider::with_http(http.clone(), Some(kuwo.clone())));
-        netease.set_play_mode(PlayMode::parse(&settings.netease_play_mode));
-        if let Ok(Some(sess)) = storage.get_session("netease") {
-            netease.set_session(&sess);
-        }
-        let providers: Vec<Arc<dyn MusicProvider>> = vec![kuwo, netease.clone()];
-
         let state = Arc::new(AppState {
             http: http.clone(),
-            providers,
-            netease,
+            providers: Vec::new(),
             proxy,
             storage,
             downloader: Arc::new(Downloader::new(http)),

@@ -3,7 +3,7 @@
  *
  * 菜单项本身只描述「做什么」，渲染统一交给 <ContextMenu />。
  */
-import { api, isBlocked, type AlbumRef, type Track } from './api';
+import { api, isBlocked, type Track } from './api';
 import { icons } from './icons';
 import { openMenuAt, type MenuEntry } from './contextmenu.svelte';
 import { playTrack, playNext, addToQueue, inQueue } from './player.svelte';
@@ -70,7 +70,7 @@ export async function openTrackMenu(
     {
       label: t('下载（含歌词与封面）'),
       icon: icons.download,
-      disabled: blocked || track.provider === 's3',
+      disabled: blocked,
       run: () => {
         void requestDownload([track]);
       },
@@ -100,97 +100,8 @@ export async function openTrackMenu(
       icon: icons.music,
       run: () => go({ name: 'track', track }),
     },
-    ...(track.artist_id
-      ? [
-          {
-            label: t('打开歌手'),
-            icon: icons.account,
-            run: () =>
-              go({
-                name: 'artist' as const,
-                provider: track.provider,
-                artistId: track.artist_id,
-                title: track.artist,
-              }),
-          },
-        ]
-      : []),
-    ...(track.album_id
-      ? [
-          {
-            label: t('打开专辑'),
-            icon: icons.disc,
-            run: () =>
-              go({
-                name: 'album' as const,
-                provider: track.provider,
-                albumId: track.album_id,
-                title: track.album,
-              }),
-          },
-        ]
-      : []),
     ...(opts.extra ?? []),
   ];
 
   openMenuAt(x, y, items);
-}
-
-/** 专辑卡片右键：打开 / 播放全部 / 下载全部（需要时再拉专辑曲目） */
-export function openAlbumMenu(e: MouseEvent, album: AlbumRef, provider = 'kuwo') {
-  e.preventDefault();
-  e.stopPropagation();
-  const x = e.clientX;
-  const y = e.clientY;
-
-  const fetchTracks = () => api.album(provider, album.id, album.name).then((d) => d.tracks);
-
-  openMenuAt(x, y, [
-    {
-      label: t('打开专辑'),
-      icon: icons.disc,
-      run: () =>
-        go({ name: 'album', provider, albumId: album.id, title: album.name }),
-    },
-    {
-      label: t('播放全部'),
-      icon: icons.play,
-      run: async () => {
-        const tracks = await fetchTracks();
-        if (tracks.length) await playTrack(tracks[0], tracks);
-      },
-    },
-    {
-      label: t('下载全部'),
-      icon: icons.download,
-      run: async () => {
-        const tracks = await fetchTracks();
-        if (tracks.length) void requestDownload(tracks);
-      },
-    },
-  ]);
-}
-
-/** 一组曲目的通用菜单（专辑页/歌单页头部用） */
-export function openTracksMenu(e: MouseEvent, tracks: Track[]) {
-  e.preventDefault();
-  e.stopPropagation();
-  openMenuAt(e.clientX, e.clientY, [
-    {
-      label: t('播放全部'),
-      icon: icons.play,
-      disabled: tracks.length === 0,
-      run: () => {
-        if (tracks.length) void playTrack(tracks[0], tracks);
-      },
-    },
-    {
-      label: t('下载全部'),
-      icon: icons.download,
-      disabled: tracks.length === 0,
-      run: () => {
-        if (tracks.length) void requestDownload(tracks);
-      },
-    },
-  ]);
 }

@@ -27,7 +27,6 @@
   } from './lib/player.svelte';
   import PlayerBar from './components/PlayerBar.svelte';
   import EqualizerDialog from './components/EqualizerDialog.svelte';
-  import AccountAvatar from './components/AccountAvatar.svelte';
   import TitleBar from './components/TitleBar.svelte';
   import WindowControls from './components/WindowControls.svelte';
   import DownloadDialog from './components/DownloadDialog.svelte';
@@ -38,28 +37,19 @@
   import type { FailedDownload } from './lib/api';
   import ContextMenu from './components/ContextMenu.svelte';
   import Toast from './components/Toast.svelte';
-  import Search from './routes/Search.svelte';
-  import Recommend from './routes/Recommend.svelte';
-  import Playlist from './routes/Playlist.svelte';
-  import Account from './routes/Account.svelte';
-  import AccountPlaylists from './routes/AccountPlaylists.svelte';
   import Track from './routes/Track.svelte';
-  import Artist from './routes/Artist.svelte';
-  import Album from './routes/Album.svelte';
   import Downloads from './routes/Downloads.svelte';
   import Library from './routes/Library.svelte';
   import Settings from './routes/Settings.svelte';
   import Cloud from './routes/Cloud.svelte';
   import Lyrics from './routes/Lyrics.svelte';
-  import { appCfg, refreshAppCfg } from './lib/config.svelte';
-  import { account, hasNetease } from './lib/account.svelte';
+  import { appCfg, isCloudProvider, refreshAppCfg } from './lib/config.svelte';
   import {
     bindEqualizerAudio,
     equalizer,
     prepareEqualizerForPlay,
     setEqualizerVolume,
   } from './lib/equalizer.svelte';
-  import { syncNeteaseSession } from './lib/neteaseLogin';
   import { showToast } from './lib/toast.svelte';
 
   // 自绘标题栏只出现在 Windows + Tauri（见 main.ts 的 data-chrome）
@@ -94,8 +84,6 @@
     // 依赖当前菜单和「喜欢」是否出现（导航项数量会变）
     activeNav;
     appCfg.s3Enabled;
-    // 登录/登出会增删「推荐」这一项，导航指示条要跟着重量
-    navTop;
     const raf = requestAnimationFrame(() => {
       measureNav();
       if (!indReady) requestAnimationFrame(() => (indReady = true));
@@ -104,10 +92,8 @@
   });
 
   // 路由变化时把主区域滚回顶部。
-  // 搜索页例外：它自己保存/恢复滚动位置，不能在这里重置。
   $effect(() => {
-    const name = router.route.name;
-    if (name === 'search') return;
+    router.route.name;
     mainEl?.scrollTo({ top: 0 });
   });
 
@@ -152,14 +138,13 @@
         } else {
           setPreferredQuality(s.default_quality);
         }
-        if (s.s3_enabled && s.s3_bucket) a.favoritesPull().catch(() => {});
       } catch {
         /* 后端不可用时保持默认 */
       }
     });
     if (player.current) void refreshTrackQualities(player.current);
-    refreshAppCfg().then((s) => {
-      if (s?.s3_enabled && s.s3_bucket) api.favoritesPull().catch(() => {});
+    refreshAppCfg().then(() => {
+      if (appCfg.s3Enabled) api.favoritesPull().catch(() => {});
     });
     // 「页面里已经出现过真实手势」：托盘 / 自动播放不能用来建 AudioContext
     let eqGesture = false;
@@ -279,16 +264,6 @@
 
   // 侧边栏按 Apple Music 的分组方式排：顶部单项、资料库、其他、底部账号
   //
-  // 「推荐」是网易云专属页面：登录后它同时是首页，排在「搜索」前面；
-  // 没登录时整项不出现——它没有内容可看，留着只会占位。
-  const navTop = $derived(
-    hasNetease()
-      ? [
-          { name: 'recommend', label: t('推荐'), icon: icons.hot },
-          { name: 'search', label: t('搜索'), icon: icons.search }
-        ]
-      : [{ name: 'search', label: t('搜索'), icon: icons.search }]
-  );
   // 「喜欢」存到网盘，只有网盘启用时才出现
   const navLibrary = $derived([
     ...(appCfg.s3Enabled ? [{ name: 'library', label: t('喜欢'), icon: icons.favorite }] : []),
@@ -297,13 +272,7 @@
   ]);
   const navOther = $derived([{ name: 'settings', label: t('设置'), icon: icons.settings }]);
 
-  const activeNav = $derived(
-    ['track', 'artist', 'album', 'lyrics'].includes(router.route.name)
-      ? 'search'
-      : router.route.name === 'accountplaylists'
-        ? 'account'
-        : router.route.name
-  );
+  const activeNav = $derived(router.route.name === 'track' ? 'cloud' : router.route.name);
 </script>
 
 <svelte:window onresize={measureNav} />
@@ -329,13 +298,6 @@
       <!-- 必须按 name 做 key：features 异步加载后导航项会插队，
            不 key 的话 Svelte 会复用按钮，HugeiconsIcon 的 icon 属性不跟随更新，
            结果「喜欢」显示成下载图标、「下载」和「设置」都显示齿轮。 -->
-      {#each navTop as n (n.name)}
-        <button class:on={activeNav === n.name} onclick={() => go({ name: n.name } as never)}>
-          <span class="ico"><HugeiconsIcon icon={n.icon} size={ICON_SIZE.control} /></span>{n.label}
-        </button>
-      {/each}
-      <!-- 分组不再写标题：用一道空气把组分开，避免一条条横线把侧边栏切开 -->
-      <div class="nav-sep" aria-hidden="true"></div>
       {#each navLibrary as n (n.name)}
         <button class:on={activeNav === n.name} onclick={() => go({ name: n.name } as never)}>
           <span class="ico"><HugeiconsIcon icon={n.icon} size={ICON_SIZE.control} /></span>{n.label}
@@ -355,53 +317,12 @@
         </button>
       {/each}
     </nav>
-    <div class="side-foot">
-      <button class="foot" class:on={activeNav === 'account'} onclick={() => go({ name: 'account' })}>
-        <span class="avatar" class:logged={!!account.uid || hasNetease()}>
-          {#if account.uid}
-            <AccountAvatar seed={`kuwo:${account.uid}`} size={28} />
-          {:else if hasNetease()}
-            <AccountAvatar
-              seed={`netease:${account.netease.uid || account.netease.nickname}`}
-              src={account.netease.avatar}
-              size={28}
-            />
-          {:else}
-            <HugeiconsIcon icon={icons.account} size={ICON_SIZE.inline} />
-          {/if}
-        </span>
-        <span class="foot-meta">
-          <span class="foot-name">{t('账号')}</span>
-          <span class="foot-sub"
-            >{account.uid
-              ? t('已登录')
-              : hasNetease()
-                ? account.netease.nickname || t('网易云已登录')
-                : t('未登录')}</span
-          >
-        </span>
-      </button>
-    </div>
   </aside>
 
   <main bind:this={mainEl} class:no-player={!player.current}>
     {#if bootErr}<ErrorNotice text={bootErr} />{/if}
-    {#if router.route.name === 'search'}
-      <Search />
-    {:else if router.route.name === 'recommend'}
-      <Recommend />
-    {:else if router.route.name === 'playlist'}
-      <Playlist />
-    {:else if router.route.name === 'account'}
-      <Account />
-    {:else if router.route.name === 'accountplaylists'}
-      <AccountPlaylists />
-    {:else if router.route.name === 'track'}
+    {#if router.route.name === 'track'}
       <Track />
-    {:else if router.route.name === 'artist'}
-      <Artist />
-    {:else if router.route.name === 'album'}
-      <Album />
     {:else if router.route.name === 'downloads'}
       <Downloads />
     {:else if router.route.name === 'library'}
@@ -472,7 +393,7 @@
       void recoverSource().then((retried) => {
         if (retried) return;
         const what =
-          player.current?.provider === 's3'
+          isCloudProvider(player.current?.provider)
             ? t('网盘文件可能已被删除或直链过期')
             : t('直链可能已过期');
         if (player.src) player.error = t('音频加载失败（{what}）', { what });

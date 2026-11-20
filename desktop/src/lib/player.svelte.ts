@@ -1,3 +1,4 @@
+import { isCloudProvider } from './config.svelte';
 import {
   nextIndexManual,
   nextIndexOnEnded,
@@ -142,7 +143,7 @@ export function actualLabelText(): string {
   if (!player.src) return '';
   const base = formatLabel(player.actualFormat) || t(qualityLabel(player.actualQuality));
   if (player.actualQuality === 'original') return t('原文件');
-  if (player.actualVerified || player.via === 's3') return base;
+  if (player.actualVerified || isCloudProvider(player.via)) return base;
   return t('{label}（未校验）', { label: base });
 }
 
@@ -154,7 +155,7 @@ export async function refreshTrackQualities(track: Track | null) {
     player.qualities = null;
     return;
   }
-  if (track.provider === 's3') {
+  if (isCloudProvider(track.provider)) {
     player.qualities = {
       available: track.available_qualities ?? [],
       has_advanced: false,
@@ -482,11 +483,11 @@ function coverTtlSec(url: string | null | undefined): number {
  * 几小时前的列表；快过期/已过期就重签一次，避免播放条/歌词页显示裂图。
  * 直链还有富余时不打扰网盘。
  */
-async function refreshS3Cover(track: Track) {
-  if (track.provider !== 's3') return;
-  if (coverTtlSec(track.cover) > 300) return;
+async function refreshS3Cover(track: Track, local = false) {
+  if (!isCloudProvider(track.provider)) return;
+  if (!local && coverTtlSec(track.cover) > 300) return;
   try {
-    const fresh = await api.s3Cover(track.id);
+    const fresh = await api.s3Cover(track.id, track.provider);
     if (!player.current || !sameTrack(player.current, track)) return;
     if (fresh) {
       player.current.cover = fresh;
@@ -527,7 +528,6 @@ async function startAt(i: number, fromSec = 0, force = false, retry = false) {
   persistPlayback(true);
   void loadLyrics(track);
   void refreshTrackQualities(track);
-  void refreshS3Cover(track);
 
   try {
     let src: PlayerSource;
@@ -541,6 +541,7 @@ async function startAt(i: number, fromSec = 0, force = false, retry = false) {
     }
     if (token !== playToken) return; // 已经被更新的点击顶替
     applySource(src);
+    void refreshS3Cover(track, src.via === 'local');
     pendingSeek = resume ? fromSec : null;
     listener?.('load');
     if (resume) {

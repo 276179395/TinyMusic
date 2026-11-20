@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isCloudProvider } from '../lib/config.svelte';
   import { fly } from 'svelte/transition';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import MorphIcon from './MorphIcon.svelte';
@@ -56,10 +57,8 @@
     const via = player.via;
     const provider = player.current?.provider ?? '';
     if (via === 'local') return t('本地');
-    if (via === 's3' || provider === 's3') return t('网盘');
+    if (isCloudProvider(via) || isCloudProvider(provider)) return t('网盘');
     if (via.startsWith('kuwo-bridge')) return t('酷我');
-    if (provider === 'netease') return t('网易');
-    if (provider === 'kuwo') return t('酷我');
     return '';
   });
 

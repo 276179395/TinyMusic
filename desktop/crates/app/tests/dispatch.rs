@@ -34,14 +34,8 @@ async fn settings_and_quality_are_shared() {
 }
 
 #[tokio::test]
-async fn providers_and_download_lists() {
-    let st = state("providers").await;
-    let v = dispatch::dispatch(&st, "get_providers", json!({}), None, None)
-        .await
-        .unwrap();
-    let ids: Vec<String> = v.as_array().unwrap().iter().map(|p| p["id"].as_str().unwrap().to_string()).collect();
-    assert!(ids.contains(&"kuwo".to_string()), "providers: {ids:?}");
-
+async fn download_lists_are_empty_on_first_launch() {
+    let st = state("downloads").await;
     let list = dispatch::dispatch(&st, "download_list", json!({}), None, None)
         .await
         .unwrap();
@@ -56,7 +50,7 @@ async fn providers_and_download_lists() {
 #[tokio::test]
 async fn bad_args_and_unknown_cmd_are_reported() {
     let st = state("errors").await;
-    let err = dispatch::dispatch(&st, "search", json!({ "provider": "kuwo" }), None, None)
+    let err = dispatch::dispatch(&st, "track_detail", json!({}), None, None)
         .await
         .unwrap_err();
     assert!(err.contains("参数错误"), "{err}");

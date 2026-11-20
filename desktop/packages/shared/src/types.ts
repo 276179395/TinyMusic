@@ -199,6 +199,11 @@ export interface Settings {
   settings_version: number;
   concurrency: number;
   // ---- 网盘（S3 兼容） ----
+  webdav_enabled: boolean;
+  webdav_endpoint: string;
+  webdav_root: string;
+  webdav_username: string;
+  webdav_password: string;
   s3_enabled: boolean;
   s3_endpoint: string;
   s3_region: string;
@@ -220,7 +225,6 @@ export interface Settings {
    * - `netease_first`（默认）：先试网易云直链，失败回落酷我
    * - `kuwo_only`：网易云只当目录，音源一律走酷我
    */
-  netease_play_mode: 'netease_first' | 'kuwo_only';
 }
 
 /** 网盘里的歌单（= 桶内按目录归类） */
@@ -238,13 +242,6 @@ export interface S3TrackRow {
   track: Track;
   /** 列表里顺手标出的缺失项：lyrics / cover */
   missing?: string[];
-}
-
-export interface S3ImportResult {
-  playlist: string;
-  total: number;
-  uploaded: number;
-  failed: number;
 }
 
 export interface PlaylistRef {

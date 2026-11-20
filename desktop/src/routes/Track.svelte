@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { isCloudProvider } from '../lib/config.svelte';
   import ErrorNotice from '../components/ErrorNotice.svelte';
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import {
@@ -16,7 +17,6 @@
   } from '../lib/api';
   import { icons, ICON_SIZE } from '../lib/icons';
   import { playTrack } from '../lib/player.svelte';
-  import { go } from '../lib/router.svelte';
   import { router } from '../lib/router.svelte';
   import { openMenuAt } from '../lib/contextmenu.svelte';
   import { requestDownload } from '../lib/download.svelte';
@@ -83,7 +83,7 @@
       {
         label: t('下载这首歌（含歌词与封面）'),
         icon: icons.download,
-        disabled: isBlocked(track.availability) || track.provider === 's3',
+        disabled: isBlocked(track.availability) || isCloudProvider(track.provider),
         run: () => requestDownload([track as Track]),
       },
       { sep: true },
@@ -137,14 +137,14 @@
     <div class="info">
       <h1>{track.title}</h1>
       <div class="line">
-        <button class="link" onclick={() => go({ name: 'artist', provider: track.provider, artistId: track.artist_id, title: track.artist })}>
+        <span class="trunc">
           {track.artist}
-        </button>
+        </span>
         {#if track.album}
           <span class="dot">·</span>
-          <button class="link" onclick={() => go({ name: 'album', provider: track.provider, albumId: track.album_id, title: track.album })}>
+          <span class="trunc">
             {track.album}
-          </button>
+          </span>
         {/if}
         {#if track.duration_sec}
           <span class="dot">·</span>

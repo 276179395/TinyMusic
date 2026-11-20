@@ -14,6 +14,7 @@
   import { openIntegrity, integrityUi } from '../lib/s3Integrity.svelte';
   import ErrorNotice from '../components/ErrorNotice.svelte';
   import { t } from '../lib/i18n.svelte';
+  import { downloadUi, requestDownload } from '../lib/download.svelte';
 
   let lists = $state<S3PlaylistInfo[]>([]);
   let rows = $state<S3TrackRow[]>([]);
@@ -281,6 +282,12 @@
           showToast(t('已设为下一首'));
         },
       },
+      {
+        label: t('下载（含歌词与封面）'),
+        icon: icons.download,
+        disabled: downloadUi.busy,
+        run: () => void requestDownload([r.track]),
+      },
       ...(current && canManage(current)
         ? [
             { sep: true as const },
@@ -457,6 +464,10 @@
         </button>
       {/if}
       <div class="cloud-top-actions">
+        <button class="mini btn-ico" disabled={!rows.length || downloadUi.busy} onclick={() => requestDownload(tracks())}>
+          <HugeiconsIcon icon={icons.download} size={ICON_SIZE.inline} />
+          {downloadUi.busy ? t('下载中…') : t('下载全部')}
+        </button>
         {#if !currentRoot}
           <button
             class="mini btn-ico"
@@ -482,6 +493,12 @@
 
     {#if err}<ErrorNotice text={err} />{/if}
 
+    {#if downloadUi.err}
+      <ErrorNotice text={downloadUi.err} compact />
+    {:else if downloadUi.progress || downloadUi.doneMsg}
+      <p class="muted" role="status">{downloadUi.progress || downloadUi.doneMsg}</p>
+    {/if}
+
     {#if detailSkel.visible}
       <CloudSkeleton mode="detail" rows={6} />
     {:else if detailLoading}
@@ -495,6 +512,9 @@
             class="s3row"
             class:on={player.current?.id === r.key}
             role="group"
+            ondblclick={(event) => {
+              if (event.target instanceof Element && !event.target.closest('button')) playRow(i);
+            }}
             oncontextmenu={(e) => rowMenu(e, r, i)}
           >
             <span class="idx">{i + 1}</span>
@@ -531,6 +551,15 @@
                 icon={isPlaying(r.key) ? icons.pause : icons.play}
                 size={ICON_SIZE.inline}
               />
+            </button>
+            <button
+              class="icon-btn"
+              title={t('下载（含歌词与封面）')}
+              aria-label={t('下载（含歌词与封面）')}
+              disabled={downloadUi.busy}
+              onclick={() => requestDownload([r.track])}
+            >
+              <HugeiconsIcon icon={icons.download} size={ICON_SIZE.inline} />
             </button>
             {#if canManage(current, currentRoot)}
               <button

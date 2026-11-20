@@ -5,6 +5,7 @@
 //!   cargo test -p tinymusic-core --test s3_live -- --ignored --nocapture
 //! ```
 
+use tinymusic_core::cloud::CloudLibrary;
 use tinymusic_core::s3::{S3Config, S3};
 
 fn client() -> S3 {
@@ -73,7 +74,7 @@ async fn s3_playlist_crud_lifecycle() {
     use tinymusic_core::library;
     use tinymusic_core::storage::Storage;
 
-    let s3 = client();
+    let s3 = CloudLibrary::S3(client());
     let suffix = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -146,7 +147,7 @@ async fn s3_favorites_follow_liked_folder() {
     use tinymusic_core::model::Track;
     use tinymusic_core::storage::Storage;
 
-    let s3 = client();
+    let s3 = CloudLibrary::S3(client());
     let suffix = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
@@ -220,11 +221,9 @@ async fn s3_favorites_follow_liked_folder() {
     assert!(ids.contains(&copied), "喜欢里应该有复制过来的那首: {ids:?}");
     assert!(ids.contains(&kept_key), "目录里已有的那首不能掉: {ids:?}");
     assert!(!ids.contains(&gone_key), "文件没了就不该再算收藏: {ids:?}");
-    assert!(
-        list.iter().any(|t| t.provider == "netease"),
-        "平台收藏不在网盘里，不能被顺手删掉"
-    );
     let local = storage.list_favorites().unwrap();
+    assert!(local.iter().any(|t| t.provider == "netease"));
+    assert!(list.iter().all(|t| t.provider == "s3"));
     assert!(
         !local.iter().any(|t| t.id == gone_key),
         "本地缓存要跟目录对齐"

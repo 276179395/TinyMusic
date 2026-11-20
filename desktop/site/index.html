@@ -4,7 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <title>TinyMusic — 4.5 MB 的桌面音乐客户端</title>
-<meta name="description" content="TinyMusic 是一个 4.5 MB 的桌面音乐客户端：搜索、试听、下载、歌词、网盘。基于 Tauri 2 + Svelte 5 + Rust，开源 MIT。" />
+<meta name="description" content="TinyMusic 是一个桌面音乐播放器，支持 WebDAV 或 S3 兼容存储中的歌单、歌词和封面。" />
 <meta name="theme-color" content="#0e0f10" media="(prefers-color-scheme: dark)" />
 <meta name="theme-color" content="#f6f6f7" media="(prefers-color-scheme: light)" />
 <link rel="icon" href="assets/icon.png" type="image/png" />
@@ -13,7 +13,7 @@
 <meta property="og:type" content="website" />
 <meta property="og:url" content="https://redcarl.github.io/TinyMusic/" />
 <meta property="og:title" content="TinyMusic — 4.5 MB 的桌面音乐客户端" />
-<meta property="og:description" content="搜索、试听、下载、歌词、网盘，都在一个窗口里。" />
+<meta property="og:description" content="在桌面播放自己的 WebDAV 或 S3 网盘音乐。" />
 <meta property="og:image" content="https://redcarl.github.io/TinyMusic/assets/screenshot.jpg" />
 
 <style>
@@ -448,8 +448,8 @@ footer a:hover { color: var(--fg); }
         <h1><span data-zh>听歌，</span><span data-en hidden>Music on,</span><br /><span data-zh>也把歌<em>留下</em>。</span><span data-en hidden>and <em>kept</em>.</span></h1>
 
         <p class="lede">
-          <span data-zh>一个 4.5 MB 的桌面音乐客户端。搜索、试听、下载、歌词、网盘都在一个窗口里；拿不到的歌会直接置灰，而不是让你盯着「正在搜索」。</span>
-          <span data-en hidden>A 4.5 MB desktop music client. Search, preview, download, lyrics and cloud storage all live in one window; tracks that can't be fetched are greyed out instead of leaving you staring at "Searching…".</span>
+          <span data-zh>在 Windows 和 macOS 上播放自己的 WebDAV 或 S3 网盘音乐。按目录浏览歌单，查看同名歌词和封面，并同步「喜欢」。</span>
+          <span data-en hidden>Play music from your own WebDAV or S3 storage on Windows and macOS. Browse folders as playlists, view matching lyrics and covers, and sync your favorites.</span>
         </p>
 
         <div class="actions">
@@ -551,9 +551,9 @@ footer a:hover { color: var(--fg); }
   var COPY = {
     zh: {
       title: 'TinyMusic — 4.5 MB 的桌面音乐客户端',
-      desc: 'TinyMusic 是一个 4.5 MB 的桌面音乐客户端：搜索、试听、下载、歌词、网盘。基于 Tauri 2 + Svelte 5 + Rust，开源 MIT。',
+      desc: 'TinyMusic 是一个桌面音乐播放器，支持 WebDAV 或 S3 兼容存储中的歌单、歌词和封面。',
       ogTitle: 'TinyMusic — 4.5 MB 的桌面音乐客户端',
-      ogDesc: '搜索、试听、下载、歌词、网盘，都在一个窗口里。',
+      ogDesc: '在桌面播放自己的 WebDAV 或 S3 网盘音乐。',
       shotAlt: 'TinyMusic 主界面：左侧导航、每日推荐、歌单与底部播放器',
       hero: '下载最新版本',
       heroWin: '下载 Windows 版',
@@ -578,9 +578,9 @@ footer a:hover { color: var(--fg); }
     },
     en: {
       title: 'TinyMusic — a 4.5 MB desktop music client',
-      desc: 'TinyMusic is a 4.5 MB desktop music client: search, preview, download, lyrics and cloud storage. Built with Tauri 2 + Svelte 5 + Rust, open source under MIT.',
+      desc: 'TinyMusic is a desktop music player for your own WebDAV or S3 storage.',
       ogTitle: 'TinyMusic — a 4.5 MB desktop music client',
-      ogDesc: 'Search, preview, download, lyrics and cloud storage — all in one window.',
+      ogDesc: 'Play your own WebDAV or S3 music on your desktop.',
       shotAlt: 'TinyMusic main window: sidebar, daily picks, playlists and the player at the bottom',
       hero: 'Download latest',
       heroWin: 'Download for Windows',

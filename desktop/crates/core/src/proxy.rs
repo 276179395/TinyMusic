@@ -10,9 +10,9 @@
 use crate::error::Result;
 use crate::http::HttpClient;
 use crate::quality::normalize_content_type;
+use crate::webdav::WebDav;
 use std::collections::HashMap;
 use std::net::SocketAddr;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -25,6 +25,7 @@ const MAX_HEADER: usize = 8192;
 enum Source {
     /// 远端直链（CDN / 网盘签名地址）
     Url(String),
+    WebDav(WebDav, String),
     /// 已经下载到本地的文件
     File(std::path::PathBuf),
 }
@@ -36,10 +37,10 @@ struct Entry {
     expires: std::time::Instant,
 }
 
+#[derive(Clone)]
 pub struct StreamProxy {
     pub addr: SocketAddr,
     tokens: Arc<Mutex<HashMap<String, Entry>>>,
-    counter: Arc<AtomicU64>,
 }
 
 impl StreamProxy {
@@ -48,7 +49,6 @@ impl StreamProxy {
         let listener = TcpListener::bind(("127.0.0.1", 0)).await?;
         let addr = listener.local_addr()?;
         let tokens: Arc<Mutex<HashMap<String, Entry>>> = Arc::new(Mutex::new(HashMap::new()));
-        let counter = Arc::new(AtomicU64::new(1));
 
         let t = tokens.clone();
         tokio::spawn(async move {
@@ -60,16 +60,22 @@ impl StreamProxy {
                 let t2 = t.clone();
                 let h2 = http.clone();
                 tokio::spawn(async move {
-                    let _ = handle(sock, t2, h2).await;
+                    let mut sock = sock;
+                    let _ = handle(&mut sock, t2, h2).await;
+                    // Finish the response before dropping the socket. On Windows an
+                    // immediate close can reset the connection before the client reads it.
+                    if sock.shutdown().await.is_ok() {
+                        let _ = tokio::time::timeout(
+                            std::time::Duration::from_secs(1),
+                            tokio::io::copy(&mut sock, &mut tokio::io::sink()),
+                        )
+                        .await;
+                    }
                 });
             }
         });
 
-        Ok(Self {
-            addr,
-            tokens,
-            counter,
-        })
+        Ok(Self { addr, tokens })
     }
 
     pub fn base_url(&self) -> String {
@@ -81,25 +87,21 @@ impl StreamProxy {
     /// `content_type` 由调用方传入校验后的 MIME（例如 `audio/flac`）；
     /// 这比依赖 CDN 返回的头更可靠。
     pub async fn register(&self, url: String, content_type: Option<String>) -> String {
-        let n = self.counter.fetch_add(1, Ordering::Relaxed);
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
-        let token = format!("{:x}{:x}", now, n);
-        let mut map = self.tokens.lock().await;
-        // 顺手清理过期 token
-        let now_i = std::time::Instant::now();
-        map.retain(|_, e| e.expires > now_i);
-        map.insert(
-            token.clone(),
-            Entry {
-                source: Source::Url(url),
-                content_type,
-                expires: now_i + TOKEN_TTL,
-            },
-        );
-        format!("{}/stream/{}", self.base_url(), token)
+        self.register_source(Source::Url(url), content_type, TOKEN_TTL)
+            .await
+    }
+
+    pub async fn register_webdav(
+        &self,
+        client: WebDav,
+        key: String,
+        content_type: Option<String>,
+    ) -> Result<String> {
+        client.object_url(&key)?;
+        let ttl = std::time::Duration::from_secs(6 * 3600);
+        Ok(self
+            .register_source(Source::WebDav(client, key), content_type, ttl)
+            .await)
     }
 
     /// 登记一个本地文件，返回可供前端使用的 URL（离线播放用）。
@@ -110,21 +112,28 @@ impl StreamProxy {
         path: impl Into<std::path::PathBuf>,
         content_type: Option<String>,
     ) -> String {
-        let n = self.counter.fetch_add(1, Ordering::Relaxed);
-        let now = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_nanos())
-            .unwrap_or(0);
-        let token = format!("{:x}{:x}", now, n);
+        self.register_source(Source::File(path.into()), content_type, TOKEN_TTL)
+            .await
+    }
+
+    async fn register_source(
+        &self,
+        source: Source,
+        content_type: Option<String>,
+        ttl: std::time::Duration,
+    ) -> String {
+        let mut bytes = [0; 16];
+        getrandom::fill(&mut bytes).expect("OS randomness is required for stream tokens");
+        let token = format!("{:032x}", u128::from_be_bytes(bytes));
         let mut map = self.tokens.lock().await;
         let now_i = std::time::Instant::now();
         map.retain(|_, e| e.expires > now_i);
         map.insert(
             token.clone(),
             Entry {
-                source: Source::File(path.into()),
+                source,
                 content_type,
-                expires: now_i + TOKEN_TTL,
+                expires: now_i + ttl,
             },
         );
         format!("{}/stream/{}", self.base_url(), token)
@@ -132,7 +141,7 @@ impl StreamProxy {
 }
 
 async fn handle(
-    mut sock: TcpStream,
+    sock: &mut TcpStream,
     tokens: Arc<Mutex<HashMap<String, Entry>>>,
     http: Arc<HttpClient>,
 ) -> Result<()> {
@@ -178,7 +187,7 @@ async fn handle(
     let token = match path.strip_prefix("/stream/") {
         Some(t) => t.split('?').next().unwrap_or(""),
         None => {
-            let _ = write_plain(&mut sock, 404, "not found").await;
+            let _ = write_plain(sock, 404, "not found").await;
             return Ok(());
         }
     };
@@ -190,7 +199,7 @@ async fn handle(
                 (e.source.clone(), e.content_type.clone())
             }
             _ => {
-                let _ = write_plain(&mut sock, 404, "token expired").await;
+                let _ = write_plain(sock, 404, "token expired").await;
                 return Ok(());
             }
         }
@@ -198,7 +207,7 @@ async fn handle(
 
     if let Source::File(path) = &source {
         return serve_file(
-            &mut sock,
+            sock,
             path,
             range.as_deref(),
             registered_type.as_deref(),
@@ -206,16 +215,31 @@ async fn handle(
         )
         .await;
     }
-    let url = match source {
-        Source::Url(u) => u,
+    let upstream = match source {
+        Source::Url(url) => http.get_range(&url, range.as_deref()).await,
+        Source::WebDav(client, key) => {
+            let method = if method == "HEAD" {
+                reqwest::Method::HEAD
+            } else {
+                reqwest::Method::GET
+            };
+            let mut request = client.read_request(&key, method)?;
+            if let Some(range) = range {
+                request = request.header(reqwest::header::RANGE, range);
+            }
+            request.send().await.map_err(crate::Error::from)
+        }
         Source::File(_) => unreachable!(),
     };
 
-    // 上游请求（透传 Range）
-    let upstream = match http.get_range(&url, range.as_deref()).await {
-        Ok(r) => r,
+    let upstream = match upstream {
+        Ok(r) if r.status().is_success() => r,
+        Ok(r) => {
+            let _ = write_plain(sock, r.status().as_u16(), "upstream error").await;
+            return Ok(());
+        }
         Err(_) => {
-            let _ = write_plain(&mut sock, 502, "upstream error").await;
+            let _ = write_plain(sock, 502, "upstream error").await;
             return Ok(());
         }
     };
@@ -273,7 +297,6 @@ async fn handle(
             }
         }
     }
-    let _ = sock.shutdown().await;
     Ok(())
 }
 
@@ -356,7 +379,6 @@ async fn serve_file(
     sock.write_all(head.as_bytes()).await?;
 
     if method == "HEAD" {
-        let _ = sock.shutdown().await;
         return Ok(());
     }
 
@@ -382,7 +404,6 @@ async fn serve_file(
             Err(_) => break,
         }
     }
-    let _ = sock.shutdown().await;
     Ok(())
 }
 

@@ -4,26 +4,19 @@
 //! 不含任何 Tauri 依赖，因此可以单独 `cargo test` 验证。
 
 pub mod cache;
+pub mod cloud;
 pub mod download;
 pub mod error;
 pub mod http;
 pub mod id3;
-pub mod kwjson;
 pub mod library;
 pub mod model;
-#[cfg(feature = "providers")]
-pub mod providers;
 pub mod proxy;
 pub mod quality;
 pub mod s3;
 pub mod storage;
 pub mod text;
+pub mod webdav;
 
 pub use error::{Error, Result};
 pub use model::*;
-
-/// 平台注册表：新增平台只需在 `providers::registry` 里加一行。
-#[cfg(feature = "providers")]
-pub fn default_providers() -> Vec<std::sync::Arc<dyn MusicProvider>> {
-    providers::registry()
-}
