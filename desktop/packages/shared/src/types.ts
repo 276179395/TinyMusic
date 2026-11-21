@@ -31,6 +31,17 @@ export interface Track {
 
 export type Codec = 'mp3' | 'aac' | 'flac' | 'alac' | 'ogg' | 'wav' | 'unknown';
 
+export interface LocalMusicItem {
+  track: Track;
+  source: 'imported' | 'download';
+}
+
+export interface LocalFolder {
+  id: string;
+  name: string;
+  tracks: string[];
+}
+
 export interface AudioFormat {
   codec: Codec;
   bitrate_kbps: number | null;
@@ -195,6 +206,7 @@ export interface FailedDownload {
 
 export interface Settings {
   download_dir: string;
+  music_dir: string;
   cache_dir: string;
   default_quality: Quality;
   settings_version: number;

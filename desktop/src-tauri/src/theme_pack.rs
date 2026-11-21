@@ -119,6 +119,13 @@ fn read_pack(bytes: &[u8]) -> Result<ThemePackSource, String> {
 }
 
 pub fn directory(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    if let Some(dir) = super::portable_directory("theme") {
+        return Ok(dir);
+    }
+    legacy_directory(app)
+}
+
+fn legacy_directory(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let base = app.path().app_config_dir().map_err(|e| e.to_string())?;
     let dir = if tauri::is_dev() {
         base.join("dev").join("theme")
@@ -127,6 +134,36 @@ pub fn directory(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     };
     fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     Ok(dir)
+}
+
+pub fn prepare_directory(app: &tauri::AppHandle) -> Result<(), String> {
+    let target = directory(app)?;
+    if tauri::is_dev() {
+        return Ok(());
+    }
+    let legacy = legacy_directory(app)?;
+    if target == legacy {
+        return Ok(());
+    }
+    for entry in fs::read_dir(legacy).map_err(|e| e.to_string())?.flatten() {
+        let path = entry.path();
+        if !is_zip(&path) || !entry.file_type().is_ok_and(|meta| meta.is_file()) {
+            continue;
+        }
+        let dest = target.join(entry.file_name());
+        if dest.exists() {
+            continue;
+        }
+        let Ok(bytes) = pack_bytes(&path) else { continue };
+        let mut temp = tempfile::NamedTempFile::new_in(&target).map_err(|e| e.to_string())?;
+        temp.write_all(&bytes).map_err(|e| e.to_string())?;
+        match temp.persist_noclobber(dest) {
+            Ok(_) => {}
+            Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(error) => return Err(error.error.to_string()),
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]

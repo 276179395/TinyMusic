@@ -22,6 +22,7 @@ use tinymusic_core::s3::{S3Config, S3};
 use tinymusic_core::storage::{DownloadRow, FailedDownload, FailedPart, Storage};
 
 pub mod dispatch;
+pub mod local_music;
 
 /// 进度回调：桌面由 Tauri Channel 包一层，mobile 写入轮询登记表
 pub type ProgressFn = Arc<dyn Fn(Progress) + Send + Sync>;
@@ -51,6 +52,8 @@ use tinymusic_core::Error as CoreError;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     pub download_dir: String,
+    #[serde(default)]
+    pub music_dir: String,
     #[serde(default)]
     pub cache_dir: String,
     pub default_quality: String,
@@ -139,6 +142,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             download_dir: dirs_download(),
+            music_dir: String::new(),
             cache_dir: String::new(),
             default_quality: "super".into(),
             settings_version: 2,
@@ -210,6 +214,7 @@ pub struct AppState {
     pub settings: Mutex<Settings>,
     pub config_dir: PathBuf,
     pub task_seq: AtomicU64,
+    music_lock: Mutex<()>,
     playback_cache: playback_cache::PlaybackCache,
     /// 事件出口：桌面走 Tauri emit，mobile 走进度/失败队列
     pub host: Arc<dyn Host>,
@@ -862,6 +867,13 @@ pub async fn track_qualities(
     state: &AppState,
     track: Track,
 ) -> Result<TrackQualities, String> {
+    if track.provider == local_music::PROVIDER {
+        return Ok(TrackQualities {
+            available: vec![],
+            has_advanced: false,
+            known: true,
+        });
+    }
     if !track.available_qualities.is_empty() {
         return Ok(TrackQualities {
             available: track.available_qualities.clone(),
@@ -888,12 +900,20 @@ pub async fn track_qualities(
 pub async fn track_detail(
     state: &AppState,
     provider: String,
-    track: Track,
+    mut track: Track,
 ) -> Result<TrackDetail, String> {
-    if let Some(path) = local_audio_path(state, &provider, &track.id) {
+    let path = if provider == local_music::PROVIDER {
+        Some(local_music::path(state, &track.id)?)
+    } else {
+        local_audio_path(state, &provider, &track.id)
+    };
+    if let Some(path) = path {
         let lyrics = std::fs::read_to_string(path.with_extension("lrc"))
             .map(|text| parse_lrc(text.trim_start_matches('\u{feff}')))
             .unwrap_or_default();
+        if provider == local_music::PROVIDER {
+            track.cover = local_cover(state, &path).await;
+        }
         return Ok(TrackDetail { track, lyrics, preview_range_ms: None });
     }
     if is_cloud_provider(&provider) {
@@ -955,6 +975,9 @@ pub async fn player_open(
     allow_local: Option<bool>,
 ) -> Result<PlayerSource, String> {
     let q = Quality::parse(&quality).ok_or_else(|| "未知音质".to_string())?;
+    if track.provider == local_music::PROVIDER {
+        return local_music::open(state, &track.id, q).await;
+    }
 
     // 已经下载到本地的：直接播硬盘上的文件 —— 不走网络，也就没有「直链过期」。
     // 只有当本地那份音质不低于当前选择时才优先，避免选了 320k 却悄悄播 128k。
@@ -1139,10 +1162,12 @@ async fn download_cloud_track(
         Ok(path)
     } else {
         let _ = state.storage.insert_download(task_id, track, quality, "", 0, "running");
-        let ext = track.id.rsplit_once('.').map(|(_, ext)| ext.to_ascii_lowercase());
-        match ext.filter(|_| is_audio_key(&track.id)) {
-            Some(ext) => {
-                let path = PathBuf::from(state.settings_snapshot().download_dir).join(build_filename(track, &ext));
+        let destination = track.id.rsplit_once('.')
+            .filter(|_| is_audio_key(&track.id))
+            .ok_or_else(|| "曲目路径必须指向音频文件".to_owned())
+            .and_then(|(_, ext)| local_music::reserve_download(state, track, &ext.to_ascii_lowercase()));
+        match destination {
+            Ok(path) => {
                 if let Some(source) = playback_cache::wait_for_audio(state, track).await {
                     if let Ok(copy) = tinymusic_core::download::copy_cached_file(&source, &path, false).await {
                         cached = Some((source, copy));
@@ -1152,17 +1177,21 @@ async fn download_cloud_track(
                     Ok(copy.clone())
                 } else {
                     let id = task_id.to_owned();
-                    client
+                    let result = client
                         .download_object(&track.id, &path, false, Box::new(move |downloaded, total| {
                             if let Some(progress) = &on_progress {
                                 let _ = progress(Progress { task_id: id.clone(), downloaded, total });
                             }
                         }))
                         .await
-                        .map_err(|e| e.to_string())
+                        .map_err(|e| e.to_string());
+                    if let (Err(_), Some(parent)) = (&result, path.parent()) {
+                        let _ = std::fs::remove_dir(parent);
+                    }
+                    result
                 }
             }
-            None => Err("曲目路径必须指向音频文件".into()),
+            Err(error) => Err(error),
         }
     };
     let (location, parts) = match result {
@@ -1302,8 +1331,7 @@ pub fn download_list(state: &AppState) -> Result<Vec<DownloadRow>, String> {
     // iOS 的沙盒容器路径会随重装/更新变化，库里存的是当时的绝对路径。
     // 原路径不存在时，按文件名到当前下载目录里找一遍，避免"下载了却播不了"。
     for row in rows.iter_mut() {
-        let dir = std::path::PathBuf::from(state.settings_snapshot().download_dir);
-        row.path = resolve_download_path(&row.path, &dir);
+        row.path = local_music::resolve_download(state, &row.path);
     }
     Ok(rows)
 }
@@ -1326,8 +1354,7 @@ fn resolve_download_path(stored: &str, download_dir: &std::path::Path) -> String
 
 fn local_download(state: &AppState, provider: &str, id: &str) -> Option<(DownloadRow, PathBuf)> {
     let row = state.storage.find_local_download(provider, id).ok()??;
-    let dir = PathBuf::from(state.settings_snapshot().download_dir);
-    let path = PathBuf::from(resolve_download_path(&row.path, &dir));
+    let path = PathBuf::from(local_music::resolve_download(state, &row.path));
     path.is_file().then_some((row, path))
 }
 
@@ -1813,7 +1840,14 @@ pub fn settings_get(state: &AppState) -> Settings {
 
 
 pub fn settings_set(state: &AppState, mut settings: Settings) -> Result<(), String> {
+    let _music_guard = state.music_lock.lock().unwrap();
     normalize_settings(&mut settings);
+    let current = state.settings_snapshot();
+    if settings.music_dir.trim().is_empty() {
+        settings.music_dir = current.music_dir;
+    } else if settings.music_dir != current.music_dir {
+        local_music::ensure_root(Path::new(&settings.music_dir))?;
+    }
     if settings.cache_dir.trim().is_empty() {
         settings.cache_dir = playback_cache::default_dir(&state.config_dir);
     }
@@ -2104,13 +2138,24 @@ pub async fn s3_playlist_rename(
 ///
 /// 队列里的 s3 曲目可能来自几小时前的列表，内嵌的封面直链已经过期；
 /// 播放时重签一次，避免播放条/歌词页显示裂图。
+async fn local_cover(state: &AppState, path: &Path) -> Option<String> {
+    for (ext, mime) in [("jpg", "image/jpeg"), ("jpeg", "image/jpeg"), ("png", "image/png"), ("webp", "image/webp")] {
+        let cover = path.with_extension(ext);
+        if cover.symlink_metadata().is_ok_and(|meta| meta.file_type().is_file()) {
+            return Some(state.proxy.register_file(cover, Some(mime.into())).await);
+        }
+    }
+    None
+}
+
 pub async fn s3_cover(state: &AppState, key: String, provider: Option<String>) -> Result<Option<String>, String> {
+    if provider.as_deref() == Some(local_music::PROVIDER) {
+        let path = local_music::path(state, &key)?;
+        return Ok(local_cover(state, &path).await);
+    }
     if let Some(path) = provider.as_deref().and_then(|provider| local_audio_path(state, provider, &key)) {
-        for (ext, mime) in [("jpg", "image/jpeg"), ("jpeg", "image/jpeg"), ("png", "image/png"), ("webp", "image/webp")] {
-            let cover = path.with_extension(ext);
-            if cover.is_file() {
-                return Ok(Some(state.proxy.register_file(cover, Some(mime.into())).await));
-            }
+        if let Some(cover) = local_cover(state, &path).await {
+            return Ok(Some(cover));
         }
     }
     let client = match provider {
@@ -3164,6 +3209,9 @@ impl AppState {
         if !has_settings_file || settings.download_dir.trim().is_empty() {
             settings.download_dir = default_download_dir.to_string_lossy().to_string();
         }
+        if settings.music_dir.trim().is_empty() {
+            settings.music_dir = default_download_dir.to_string_lossy().into_owned();
+        }
         // iOS 的沙盒容器 UUID 会随重装变化，settings.json 里存的是旧容器的绝对路径。
         // 这里把它改写到当前容器，否则新下载会写进一个"已经不存在于本次安装"的目录。
         settings.download_dir = rebase_sandbox_path(
@@ -3181,6 +3229,7 @@ impl AppState {
             settings: Mutex::new(settings),
             config_dir,
             task_seq: AtomicU64::new(1),
+            music_lock: Mutex::new(()),
             playback_cache: playback_cache::PlaybackCache::default(),
             host,
             me: std::sync::OnceLock::new(),

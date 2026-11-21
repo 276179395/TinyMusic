@@ -3,6 +3,7 @@ import type { Track } from './api';
 export type Route =
   | { name: 'track'; track: Track }
   | { name: 'downloads' }
+  | { name: 'local'; folderId?: string }
   | { name: 'cloud' }
   | { name: 'library' }
   | { name: 'settings' };
@@ -10,6 +11,7 @@ export type Route =
 /** 侧边栏一级页面：进入时清空返回栈 */
 const TOP_LEVEL: ReadonlySet<Route['name']> = new Set([
   'downloads',
+  'local',
   'cloud',
   'library',
   'settings'
@@ -22,6 +24,7 @@ export const router = $state<{ route: Route; history: Route[] }>({
 
 function sameRoute(a: Route, b: Route): boolean {
   if (a.name !== b.name) return false;
+  if (a.name === 'local' && b.name === 'local') return a.folderId === b.folderId;
   if (a.name === 'track' && b.name === 'track') return a.track.provider === b.track.provider && a.track.id === b.track.id;
   return true;
 }

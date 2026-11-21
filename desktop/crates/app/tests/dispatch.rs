@@ -3,10 +3,91 @@
 use std::sync::Arc;
 
 use serde_json::json;
-use tinymusic_app::{dispatch, AppState, NoopHost};
+use tinymusic_app::{dispatch, local_music, AppState, NoopHost};
 
 fn tmpdir(name: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("tm-test-{name}-{}", std::process::id()))
+}
+
+#[tokio::test]
+async fn local_music_is_persisted_and_only_registered_files_are_playable() {
+    let app = state("local-music").await;
+    let dir = app.config_dir().to_owned();
+    let audio = dir.join("本地测试.wav");
+    std::fs::write(&audio, b"fixture").unwrap();
+    std::fs::write(audio.with_extension("lrc"), "[00:01.50]测试歌词").unwrap();
+    std::fs::write(audio.with_extension("png"), b"cover fixture").unwrap();
+    let path = audio.to_str().unwrap().to_owned();
+
+    let added = local_music::add(&app, vec![path.clone(), path]).unwrap();
+    assert_eq!(added.len(), 1);
+    assert_eq!(added[0].title, "本地测试");
+    assert_eq!(added[0].id, "本地测试/本地测试.wav");
+    let managed = dir.join("dl").join("Local").join(&added[0].id);
+    assert_eq!(std::fs::read(&managed).unwrap(), b"fixture");
+    local_music::create_folder(&app, "通勤").unwrap();
+    local_music::set_folder_track(&app, "通勤", &added[0].id, true).unwrap();
+    let link = dir.join("dl/通勤/本地测试/track.json");
+    let link: serde_json::Value = serde_json::from_slice(&std::fs::read(link).unwrap()).unwrap();
+    assert_eq!(link["path"], "Local/本地测试/本地测试.wav");
+    drop(app);
+
+    let app = AppState::new(dir.clone(), dir.join("dl"), Arc::new(NoopHost))
+        .await
+        .unwrap();
+    let list = dispatch::dispatch(&app, "local_music_list", json!({}), None, None)
+        .await
+        .unwrap();
+    assert_eq!(list[0]["source"], "imported");
+    let track = &list[0]["track"];
+    assert_eq!(track["id"], added[0].id);
+    let args = json!({"track": track, "quality": "standard", "allowLocal": false});
+    let source = dispatch::dispatch(&app, "player_open", args.clone(), None, None)
+        .await
+        .unwrap();
+    assert_eq!(source["via"], "local");
+    assert_eq!(source["bytes"], 7);
+    let detail = dispatch::dispatch(
+        &app, "track_detail", json!({"provider": "local", "track": track}), None, None,
+    )
+    .await
+    .unwrap();
+    assert_eq!(detail["lyrics"][0]["text"], "测试歌词");
+    assert!(detail["track"]["cover"].as_str().unwrap().starts_with("http://127.0.0.1:"));
+
+    let copy = dir.join("Music Copy");
+    std::fs::create_dir(&copy).unwrap();
+    local_music::copy_library(&app, &copy).unwrap();
+    assert!(managed.is_file());
+    assert!(copy.join("通勤/本地测试/track.json").is_file());
+    assert!(copy.join("Local").join(&added[0].id).is_file());
+
+    dispatch::dispatch(&app, "local_music_remove", json!({"id": track["id"]}), None, None)
+        .await
+        .unwrap();
+    assert!(audio.is_file());
+    assert!(dispatch::dispatch(&app, "player_open", args, None, None).await.is_err());
+}
+
+#[tokio::test]
+async fn legacy_music_and_folder_links_are_migrated_once() {
+    let app = state("legacy-music").await;
+    let audio = app.config_dir().join("老歌曲.wav");
+    std::fs::write(&audio, b"legacy").unwrap();
+    let id = audio.canonicalize().unwrap().to_string_lossy().into_owned();
+    app.storage.add_local_music(&[id.clone()]).unwrap();
+    let legacy = local_music::Folder {
+        id: "old-folder".into(),
+        name: "通勤".into(),
+        tracks: vec![json!(["local", id]).to_string()],
+    };
+    local_music::migrate(&app, vec![legacy.clone()], false).unwrap();
+    local_music::migrate(&app, vec![legacy], false).unwrap();
+    let root = std::path::PathBuf::from(app.settings_snapshot().music_dir);
+    assert!(root.join("Local/老歌曲/老歌曲.wav").is_file());
+    assert!(root.join("通勤/老歌曲/track.json").is_file());
+    assert!(audio.is_file());
+    assert_eq!(local_music::library(&app).unwrap().len(), 1);
 }
 
 #[tokio::test]

@@ -5,7 +5,8 @@
   import { api, type Settings, type Quality, type QualityCapability } from '../lib/api';
   import { icons, ICON_SIZE } from '../lib/icons';
   import { refreshAppCfg } from '../lib/config.svelte';
-  import { setPreferredQuality } from '../lib/player.svelte';
+  import { clearQueue, player, setPreferredQuality } from '../lib/player.svelte';
+  import { initializeLocalFolders, refreshLocalFolders } from '../lib/localFolders.svelte';
   import {
     theme, setTheme, themeBackground, setThemeBackground, importThemeImage,
     type ThemeMode, type ThemeBackground,
@@ -93,6 +94,7 @@
   // ---- 设置（改动即保存） ----
   let s = $state<Settings>({
     download_dir: '',
+    music_dir: '',
     cache_dir: '',
     default_quality: 'super',
     settings_version: 2,
@@ -148,12 +150,12 @@
   }
 
   /** 调系统目录选择框；取消或非 Tauri 环境（浏览器调试）就原样不动 */
-  async function pickDir(field: 'download_dir' | 'cache_dir' = 'download_dir') {
+  async function pickDir(field: 'cache_dir') {
     try {
       const picked = await openDialog({
         directory: true,
         multiple: false,
-        title: field === 'cache_dir' ? t('选择缓存目录') : t('选择下载目录'),
+        title: t('选择缓存目录'),
         defaultPath: s[field] || undefined
       });
       if (typeof picked === 'string' && picked) {
@@ -162,6 +164,36 @@
       }
     } catch {
       /* 浏览器里没有原生对话框，忽略 */
+    }
+  }
+
+  let musicDirectoryBusy = $state(false);
+
+  async function chooseMusicDirectory(copy: boolean) {
+    musicDirectoryBusy = true;
+    err = '';
+    try {
+      await initializeLocalFolders();
+      const picked = await openDialog({
+        directory: true,
+        multiple: false,
+        title: t(copy ? '选择用于复制音乐库的空目录' : '打开音乐库目录'),
+        defaultPath: s.music_dir || undefined,
+      });
+      if (typeof picked !== 'string' || picked === s.music_dir) return;
+      if (copy) {
+        s.music_dir = await api.localMusicCopyLibrary(picked);
+      } else {
+        await api.settingsSet({ ...$state.snapshot(s), music_dir: picked });
+        s.music_dir = picked;
+        if (player.queue.some((track) => track.provider === 'local')) clearQueue();
+      }
+      await refreshLocalFolders();
+      showToast(t('音乐库目录已更新'));
+    } catch (error) {
+      err = String(error);
+    } finally {
+      musicDirectoryBusy = false;
     }
   }
 
@@ -499,17 +531,17 @@
     <div class="st-section-title">{t('下载')}</div>
     <div class="st-card">
       <div class="st-row">
-        <div class="st-label">{t('下载目录')}</div>
+        <div class="st-label">{t('音乐库目录')}</div>
         <div class="st-control st-grow">
           <input
             class="st-input"
-            bind:value={s.download_dir}
-            aria-label={t('下载目录')}
-            oninput={scheduleSave}
+            value={s.music_dir}
+            aria-label={t('音乐库目录')}
+            readonly
             spellcheck="false"
-            placeholder="~/Music/TinyMusic"
           />
-          <button class="st-btn" onclick={() => pickDir()} title={t('选择下载目录')}>{t('选择…')}</button>
+          <button class="st-btn" disabled={!loaded || musicDirectoryBusy} onclick={() => chooseMusicDirectory(false)}>{t('切换音乐库…')}</button>
+          <button class="st-btn" disabled={!loaded || musicDirectoryBusy} onclick={() => chooseMusicDirectory(true)}>{t('复制音乐库…')}</button>
         </div>
       </div>
 

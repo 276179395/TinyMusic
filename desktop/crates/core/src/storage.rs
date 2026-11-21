@@ -90,6 +90,9 @@ CREATE TABLE IF NOT EXISTS s3_playlists (
 CREATE TABLE IF NOT EXISTS app_meta (
   key TEXT PRIMARY KEY, value TEXT
 );
+CREATE TABLE IF NOT EXISTS local_music (
+  path TEXT PRIMARY KEY NOT NULL
+);
 "#;
 
 /// 老库缺列时补上（SQLite 没有 ADD COLUMN IF NOT EXISTS）
@@ -131,6 +134,32 @@ fn now_ts() -> i64 {
 }
 
 impl Storage {
+    pub fn add_local_music(&self, paths: &[String]) -> Result<()> {
+        let mut conn = self.conn.lock().unwrap();
+        let tx = conn.transaction()?;
+        for path in paths {
+            tx.execute("INSERT OR IGNORE INTO local_music (path) VALUES (?1)", [path])?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn list_local_music(&self) -> Result<Vec<String>> {
+        let conn = self.conn.lock().unwrap();
+        let mut stmt = conn.prepare("SELECT path FROM local_music ORDER BY rowid")?;
+        let rows = stmt.query_map([], |row| row.get(0))?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    }
+
+    pub fn has_local_music(&self, path: &str) -> Result<bool> {
+        let conn = self.conn.lock().unwrap();
+        Ok(conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM local_music WHERE path = ?1)",
+            [path],
+            |row| row.get(0),
+        )?)
+    }
+
     pub fn open(path: impl AsRef<Path>) -> Result<Self> {
         if let Some(parent) = path.as_ref().parent() {
             std::fs::create_dir_all(parent)?;
@@ -377,6 +406,12 @@ impl Storage {
             "UPDATE downloads SET status=?2, bytes=?3 WHERE task_id=?1",
             params![task_id, status, bytes],
         )?;
+        Ok(())
+    }
+
+    pub fn update_download_path(&self, task_id: &str, path: &str) -> Result<()> {
+        let conn = self.conn.lock().unwrap();
+        conn.execute("UPDATE downloads SET path = ?1 WHERE task_id = ?2", params![path, task_id])?;
         Ok(())
     }
 

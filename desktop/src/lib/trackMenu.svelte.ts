@@ -33,10 +33,11 @@ export async function openTrackMenu(
   const y = e.clientY;
 
   const blocked = isBlocked(track.availability);
+  const local = track.provider === 'local';
   let fav = false;
   // 本地 SQLite 查一下收藏状态，决定菜单写「喜欢」还是「取消喜欢」
   try {
-    fav = await api.favoriteCheck(track);
+    if (!local) fav = await api.favoriteCheck(track);
   } catch {
     /* 查不到就按未收藏处理 */
   }
@@ -67,15 +68,15 @@ export async function openTrackMenu(
       },
     },
     { sep: true },
-    {
+    ...(local ? [] : [{
       label: t('下载（含歌词与封面）'),
       icon: icons.download,
       disabled: blocked,
       run: () => {
         void requestDownload([track]);
       },
-    },
-    ...(appCfg.s3Enabled
+    }]),
+    ...(!local && appCfg.s3Enabled
       ? [
           {
             label: fav ? t('取消喜欢') : t('喜欢（收藏到网盘）'),
@@ -94,7 +95,7 @@ export async function openTrackMenu(
           },
         ]
       : []),
-    { sep: true },
+    ...(!local ? [{ sep: true } as const] : []),
     {
       label: t('查看歌曲详情'),
       icon: icons.music,

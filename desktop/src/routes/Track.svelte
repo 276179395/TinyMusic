@@ -17,7 +17,7 @@
   } from '../lib/api';
   import { icons, ICON_SIZE } from '../lib/icons';
   import { playTrack } from '../lib/player.svelte';
-  import { router } from '../lib/router.svelte';
+  import { back, go, router } from '../lib/router.svelte';
   import { openMenuAt } from '../lib/contextmenu.svelte';
   import { requestDownload } from '../lib/download.svelte';
   import { copyText } from '../lib/toast.svelte';
@@ -35,7 +35,8 @@
   let caps = $state<QualityCapability[]>([]);
   let availability = $state<TrackQualities | null>(null);
 
-  const choices = $derived(qualityChoices(track, caps, availability, player.quality));
+  const local = $derived(track?.provider === 'local');
+  const choices = $derived(local ? [] : qualityChoices(track, caps, availability, player.quality));
 
   const lyricsSkel = delayedVisible(() => loading);
   const LYRIC_SK_WIDTHS = [58, 74, 46, 82, 64, 70, 52, 78];
@@ -80,13 +81,15 @@
     e.preventDefault();
     e.stopPropagation();
     openMenuAt(e.clientX, e.clientY, [
-      {
-        label: t('下载这首歌（含歌词与封面）'),
-        icon: icons.download,
-        disabled: isBlocked(track.availability) || isCloudProvider(track.provider),
-        run: () => requestDownload([track as Track]),
-      },
-      { sep: true },
+      ...(local ? [] : [
+        {
+          label: t('下载这首歌（含歌词与封面）'),
+          icon: icons.download,
+          disabled: isBlocked(track.availability) || isCloudProvider(track.provider),
+          run: () => requestDownload([track as Track]),
+        },
+        { sep: true } as const,
+      ]),
       {
         label: t('复制歌曲 ID'),
         icon: icons.link,
@@ -120,15 +123,23 @@
 </script>
 
 {#if track}
+{@const cover = local ? (detail?.track.cover ?? track.cover) : track.cover}
 <div class="page detail">
-  <button class="back" onclick={() => history.back()} aria-label={t('返回')}>
+  <button
+    class="back"
+    onclick={() => {
+      if (!local) history.back();
+      else if (!back()) go({ name: 'local' });
+    }}
+    aria-label={t('返回')}
+  >
     <HugeiconsIcon icon={icons.back} size={ICON_SIZE.inline} />
     {t('返回')}
   </button>
 
   <div class="head">
-    {#if track.cover}
-      <img class="cover" src={coverUrl(track.cover, 500)} alt="" oncontextmenu={coverMenu} />
+    {#if cover}
+      <img class="cover" src={coverUrl(cover, 500)} alt="" oncontextmenu={coverMenu} />
     {:else}
       <div class="cover ph" aria-hidden="true" oncontextmenu={coverMenu}>
         <HugeiconsIcon icon={icons.music} size={ICON_SIZE.empty} />
@@ -181,7 +192,7 @@
             '字段。本客户端会通过资源管理链路取直链， 未登录也能完整播放；上面的探测器可以直接验证每一档实际能拿到什么格式。'
           )}
         </div>
-      {:else}
+      {:else if !local}
         <div class="note">
           {t('未登录状态下，酷我服务端对会员专享曲目可能只下发约 11 秒的占位片段。')}
         </div>

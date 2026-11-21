@@ -41,6 +41,8 @@
   import Toast from './components/Toast.svelte';
   import Track from './routes/Track.svelte';
   import Downloads from './routes/Downloads.svelte';
+  import Local from './routes/Local.svelte';
+  import { createLocalFolder, initializeLocalFolders, localFolders } from './lib/localFolders.svelte';
   import Library from './routes/Library.svelte';
   import Settings from './routes/Settings.svelte';
   import Cloud from './routes/Cloud.svelte';
@@ -77,8 +79,15 @@
     }
     const ar = aside.getBoundingClientRect();
     const br = btn.getBoundingClientRect();
-    indTop = br.top - ar.top;
-    indH = br.height;
+    const list = btn.closest('.local-folder-list')?.getBoundingClientRect();
+    const top = list ? Math.max(br.top, list.top) : br.top;
+    const bottom = list ? Math.min(br.bottom, list.bottom) : br.bottom;
+    if (bottom <= top) {
+      indShow = false;
+      return;
+    }
+    indTop = top - ar.top;
+    indH = bottom - top;
     indShow = true;
   }
 
@@ -86,6 +95,8 @@
     // 依赖当前菜单和「喜欢」是否出现（导航项数量会变）
     activeNav;
     appCfg.s3Enabled;
+    localFolders.items.length;
+    creatingFolder;
     const raf = requestAnimationFrame(() => {
       measureNav();
       if (!indReady) requestAnimationFrame(() => (indReady = true));
@@ -120,6 +131,7 @@
   }
 
   onMount(() => {
+    void initializeLocalFolders().catch((error) => showToast(String(error)));
     restoreVolume();
     void loadQualityCapabilities();
     if (audio) bindEqualizerAudio(audio);
@@ -270,11 +282,43 @@
   const navLibrary = $derived([
     ...(appCfg.s3Enabled ? [{ name: 'library', label: t('喜欢'), icon: icons.favorite }] : []),
     { name: 'downloads', label: t('下载'), icon: icons.downloadDir },
-    { name: 'cloud', label: t('网盘'), icon: icons.cloud },
   ]);
   const navOther = $derived([{ name: 'settings', label: t('设置'), icon: icons.settings }]);
 
-  const activeNav = $derived(router.route.name === 'track' ? 'cloud' : router.route.name);
+  let creatingFolder = $state(false);
+  let folderName = $state('');
+  let folderInput = $state<HTMLInputElement>();
+
+  $effect(() => {
+    if (creatingFolder) folderInput?.focus();
+  });
+
+  let savingFolder = $state(false);
+
+  async function addFolder(event: SubmitEvent) {
+    event.preventDefault();
+    if (!folderName.trim() || savingFolder) return;
+    savingFolder = true;
+    try {
+      const id = await createLocalFolder(folderName);
+      folderName = '';
+      creatingFolder = false;
+      go({ name: 'local', folderId: id });
+    } catch (error) {
+      showToast(String(error));
+    } finally {
+      savingFolder = false;
+    }
+  }
+
+  const navRoute = $derived(
+    router.route.name === 'track'
+      ? ([...router.history].reverse().find((route) => route.name === 'local') ??
+        { name: router.route.track.provider === 'local' ? 'local' : 'cloud' })
+      : router.route
+  );
+  const activeFolder = $derived(navRoute.name === 'local' && 'folderId' in navRoute ? navRoute.folderId : undefined);
+  const activeNav = $derived(activeFolder ?? navRoute.name);
 </script>
 
 <svelte:window onresize={measureNav} />
@@ -305,7 +349,48 @@
           <span class="ico"><HugeiconsIcon icon={n.icon} size={ICON_SIZE.control} /></span>{n.label}
         </button>
       {/each}
-      <div class="nav-sep" aria-hidden="true"></div>
+      <div class="nav-sep local-sep" aria-hidden="true"></div>
+      <button class:on={activeNav === 'cloud'}
+        aria-current={activeNav === 'cloud' ? 'page' : undefined}
+        onclick={() => go({ name: 'cloud' })}>
+        <span class="ico"><HugeiconsIcon icon={icons.cloud} size={ICON_SIZE.control} /></span>{t('网盘')}
+      </button>
+      <div class="local-nav-row" class:local-active={activeNav === 'local'}>
+        <button class="local-nav-link" class:on={activeNav === 'local'}
+          aria-current={activeNav === 'local' ? 'page' : undefined}
+          onclick={() => go({ name: 'local' })}>
+          <span class="ico"><HugeiconsIcon icon={icons.music} size={ICON_SIZE.control} /></span>{t('本地')}
+        </button>
+        <button class="local-nav-add" type="button" title={t('新建收藏夹')}
+          aria-label={t('新建收藏夹')} aria-expanded={creatingFolder}
+          onclick={() => (creatingFolder = !creatingFolder)}>
+          <HugeiconsIcon icon={icons.plus} size={ICON_SIZE.control} />
+        </button>
+      </div>
+      {#if creatingFolder}
+        <form class="local-folder-form" onsubmit={addFolder}>
+          <input bind:this={folderInput} bind:value={folderName} maxlength={60}
+            placeholder={t('收藏夹名称')} aria-label={t('收藏夹名称')}
+            onkeydown={(event) => { if (event.key === 'Escape') creatingFolder = false; }} />
+          <button type="submit" aria-label={t('新建收藏夹')} disabled={!folderName.trim() || savingFolder}>
+            <HugeiconsIcon icon={icons.plus} size={ICON_SIZE.inline} />
+          </button>
+        </form>
+      {/if}
+      {#if localFolders.items.length}
+        <div class="local-folder-list" onscroll={measureNav}>
+          {#each localFolders.items as folder (folder.id)}
+            <button class="local-folder" class:on={activeNav === folder.id} title={folder.name}
+              aria-current={activeNav === folder.id ? 'page' : undefined}
+              onclick={() => go({ name: 'local', folderId: folder.id })}>
+              <span class="ico"><HugeiconsIcon icon={icons.folder} size={ICON_SIZE.control} /></span>
+              <span class="folder-name">{folder.name}</span>
+            </button>
+          {/each}
+        </div>
+      {/if}
+    </nav>
+    <nav class="side-settings" aria-label={t('设置')}>
       {#each navOther as n (n.name)}
         <button class:on={activeNav === n.name} onclick={() => go({ name: n.name } as never)}>
           <span class="ico"><HugeiconsIcon icon={n.icon} size={ICON_SIZE.control} /></span>{n.label}
@@ -327,6 +412,8 @@
       <Track />
     {:else if router.route.name === 'downloads'}
       <Downloads />
+    {:else if router.route.name === 'local'}
+      <Local folderId={router.route.folderId} />
     {:else if router.route.name === 'library'}
       <Library />
     {:else if router.route.name === 'settings'}
@@ -396,7 +483,9 @@
       void recoverSource().then((retried) => {
         if (retried) return;
         const what =
-          isCloudProvider(player.current?.provider)
+          player.current?.provider === 'local'
+            ? t('本地文件可能已移动或格式不受支持')
+            : isCloudProvider(player.current?.provider)
             ? t('网盘文件可能已被删除或直链过期')
             : t('直链可能已过期');
         if (player.src) player.error = t('音频加载失败（{what}）', { what });

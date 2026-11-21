@@ -15,6 +15,40 @@ pub async fn dispatch(
     s3_sink: Option<S3FixFn>,
 ) -> Result<Value, String> {
     match cmd {
+        "local_music_list" => {
+            let state = state.strong();
+            tokio::task::spawn_blocking(move || {
+                serde_json::to_value(local_music::library(&state)?).map_err(|e| e.to_string())
+            }).await.map_err(|e| e.to_string())?
+        }
+        "local_music_folders" => {
+            serde_json::to_value(local_music::folders(state)?).map_err(|e| e.to_string())
+        }
+        "local_music_create_folder" => {
+            #[derive(serde::Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct A { name: String }
+            let args: A = serde_json::from_value(args).map_err(|e| format!("参数错误: {e}"))?;
+            serde_json::to_value(local_music::create_folder(state, &args.name)?).map_err(|e| e.to_string())
+        }
+        "local_music_set_folder_track" => {
+            #[derive(serde::Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct A { folder: String, id: String, included: bool }
+            let args: A = serde_json::from_value(args).map_err(|e| format!("参数错误: {e}"))?;
+            serde_json::to_value(local_music::set_folder_track(state, &args.folder, &args.id, args.included)?)
+                .map_err(|e| e.to_string())
+        }
+        "local_music_remove" => {
+            #[derive(serde::Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct A {
+                id: String,
+            }
+            let args: A = serde_json::from_value(args).map_err(|e| format!("参数错误: {e}"))?;
+            local_music::remove(state, &args.id)?;
+            Ok(Value::Null)
+        }
         "playback_cache_queue" => {
             #[derive(serde::Deserialize)]
             #[serde(deny_unknown_fields)]

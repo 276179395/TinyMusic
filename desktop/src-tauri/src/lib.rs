@@ -8,7 +8,11 @@ use std::time::Duration;
 
 use tauri::ipc::Channel;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+#[cfg(target_os = "macos")]
+use tauri::tray::MouseButtonState;
 use tauri::tray::TrayIconBuilder;
+#[cfg(any(target_os = "windows", target_os = "macos"))]
+use tauri::tray::{MouseButton, TrayIconEvent};
 use tauri::{Emitter, Manager, State};
 
 use tinymusic_app::{
@@ -17,6 +21,23 @@ use tinymusic_app::{
 use tinymusic_core::model::*;
 use tinymusic_core::storage::FailedDownload;
 
+fn portable_directory(name: &str) -> Option<std::path::PathBuf> {
+    if tauri::is_dev() {
+        return None;
+    }
+    let exe = std::env::current_exe().ok()?;
+    #[cfg(target_os = "macos")]
+    let base = exe.ancestors()
+        .find(|path| path.extension().is_some_and(|ext| ext == "app"))
+        .unwrap_or(&exe)
+        .parent()?;
+    #[cfg(not(target_os = "macos"))]
+    let base = exe.parent()?;
+    let dir = base.join(name);
+    std::fs::create_dir_all(&dir).ok()?;
+    tempfile::NamedTempFile::new_in(&dir).ok()?;
+    Some(dir)
+}
 
 
 /// 把后端事件转发到前端：桌面用 Tauri 事件总线（前端 `listen` 收到）
@@ -38,6 +59,37 @@ async fn tm_invoke(
     args: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     tinymusic_app::dispatch::dispatch(state.inner(), &cmd, args, None, None).await
+}
+
+#[tauri::command]
+async fn local_music_add(
+    state: State<'_, Arc<AppState>>,
+    paths: Vec<String>,
+) -> Result<Vec<Track>, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || tinymusic_app::local_music::add(&state, paths))
+        .await.map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+async fn local_music_migrate(
+    state: State<'_, Arc<AppState>>,
+    legacy: Vec<tinymusic_app::local_music::Folder>,
+) -> Result<Vec<tinymusic_app::local_music::Folder>, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || tinymusic_app::local_music::migrate(&state, legacy, tauri::is_dev()))
+        .await.map_err(|err| err.to_string())?
+}
+
+#[tauri::command]
+async fn local_music_copy_library(
+    state: State<'_, Arc<AppState>>,
+    destination: String,
+) -> Result<String, String> {
+    let state = state.inner().clone();
+    tauri::async_runtime::spawn_blocking(move ||
+        tinymusic_app::local_music::copy_library(&state, std::path::Path::new(&destination))
+    ).await.map_err(|err| err.to_string())?
 }
 
 /// 以下命令带进度通道（Tauri Channel 只能在类型化命令里传），
@@ -165,7 +217,8 @@ fn os_version() -> String {
 
 #[tauri::command]
 fn open_download_dir(state: State<'_, Arc<AppState>>) -> Result<(), String> {
-    let dir = std::path::absolute(state.settings_snapshot().download_dir)
+    let dir = std::path::absolute(state.settings_snapshot().music_dir)
+        .map(|path| path.join("Local"))
         .map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
@@ -229,6 +282,7 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
 
     let mut builder = TrayIconBuilder::with_id("main")
         .menu(&menu)
+        .show_menu_on_left_click(false)
         .tooltip("TinyMusic")
         .on_menu_event(|app, event| match event.id().as_ref() {
             "show" => show_main(app),
@@ -244,6 +298,39 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
             "quit" => app.exit(0),
             _ => {}
         });
+
+    #[cfg(target_os = "windows")]
+    {
+        builder = builder.on_tray_icon_event(|tray, event| {
+            if matches!(event, TrayIconEvent::DoubleClick { button: MouseButton::Left, .. }) {
+                show_main(tray.app_handle());
+            }
+        });
+    }
+
+    #[cfg(target_os = "macos")]
+    {
+        let last_click = std::sync::Mutex::new(None::<std::time::Instant>);
+        builder = builder.on_tray_icon_event(move |tray, event| {
+            // Tauri 在 macOS 只提供单次点击事件。
+            if let TrayIconEvent::Click { button, button_state: MouseButtonState::Down, .. } = event {
+                let mut last = last_click.lock().unwrap();
+                if button != MouseButton::Left {
+                    *last = None;
+                    return;
+                }
+                let now = std::time::Instant::now();
+                let double = last.take().is_some_and(|previous| now.duration_since(previous) <= Duration::from_millis(500));
+                if !double {
+                    *last = Some(now);
+                }
+                drop(last);
+                if double {
+                    show_main(tray.app_handle());
+                }
+            }
+        });
+    }
 
     // 托盘使用简化的小尺寸图标，开发模式也直接加载内置资源。
     let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))
@@ -290,15 +377,18 @@ pub fn run() {
             let host = Arc::new(AppHost {
                 app: app.handle().clone(),
             });
+            let music_dir = portable_directory("Music").unwrap_or_else(|| {
+                if tauri::is_dev() { config_dir.join("dev").join("Music") } else { config_dir.join("Music") }
+            });
             let state = tauri::async_runtime::block_on(tinymusic_app::AppState::new(
                 config_dir,
-                std::path::PathBuf::from(tinymusic_app::dirs_download()),
+                music_dir,
                 host,
             ))
             .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
             println!("[tinymusic] 流代理: {}", state.proxy.base_url());
             app.manage(state);
-            if let Err(error) = theme_pack::directory(app.handle()) {
+            if let Err(error) = theme_pack::prepare_directory(app.handle()) {
                 eprintln!("[tinymusic] 无法创建主题目录: {error}");
             }
 
@@ -339,6 +429,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             tm_invoke,
+            local_music_add,
+            local_music_migrate,
+            local_music_copy_library,
             download_start,
             download_batch,
             s3_download,

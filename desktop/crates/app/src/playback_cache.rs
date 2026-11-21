@@ -13,7 +13,7 @@ use crate::{
 
 const DIRECTORY: &str = "TinyMusic-playback-cache";
 const EXTENSIONS: &[&str] = &[
-    "flac", "mp3", "m4a", "aac", "ogg", "wav", "lrc", "jpg", "jpeg", "png", "webp",
+    "flac", "mp3", "m4a", "aac", "ogg", "wav", "lrc", "jpg", "jpeg", "png", "webp", "json",
 ];
 
 pub(crate) struct PlaybackCache {
@@ -259,4 +259,41 @@ pub(crate) async fn clear(state: &AppState, expected_dir: Option<&str>) -> Resul
         }
     }
     failure.map_or(Ok(()), Err)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn playback_cache_stays_outside_music_library() {
+        let dir = tempfile::tempdir().unwrap();
+        let app = AppState::new(
+            dir.path().join("config"), dir.path().join("Music"), std::sync::Arc::new(crate::NoopHost),
+        ).await.unwrap();
+        let settings = app.settings_snapshot();
+        let track = Track {
+            provider: "webdav".into(),
+            id: "音乐/测试.wav".into(),
+            title: "测试".into(),
+            ..Track::default()
+        };
+        let cache = path(&settings, &track.provider, &track.id).unwrap();
+        std::fs::create_dir_all(cache.parent().unwrap()).unwrap();
+        std::fs::write(&cache, b"cached audio").unwrap();
+        assert!(crate::local_music::library(&app).unwrap().is_empty());
+
+        let download = crate::local_music::reserve_download(&app, &track, "wav").unwrap();
+        std::fs::write(&download, b"downloaded audio").unwrap();
+        app.storage.insert_download(
+            "download", &track, crate::Quality::Lossless, download.to_str().unwrap(), 16, "done",
+        ).unwrap();
+        let items = serde_json::to_value(crate::local_music::library(&app).unwrap()).unwrap();
+        assert_eq!(items.as_array().unwrap().len(), 1);
+        assert_eq!(items[0]["source"], "download");
+
+        clear(&app, Some(&settings.cache_dir)).await.unwrap();
+        assert!(!cache.exists());
+        assert!(download.is_file());
+    }
 }

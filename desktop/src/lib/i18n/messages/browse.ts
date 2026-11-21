@@ -1,5 +1,23 @@
 /** 搜索、推荐、网盘、下载、导入、S3 完整性的英文译文。 */
 export const browse: Record<string, string> = {
+  '本地音乐': 'Local music',
+  '音乐库目录': 'Music library directory',
+  '打开音乐库目录': 'Open a music library directory',
+  '切换音乐库…': 'Switch library…',
+  '复制音乐库…': 'Copy music library…',
+  '选择用于复制音乐库的空目录': 'Choose an empty directory for the music library copy',
+  '音乐库目录已更新': 'Music library directory updated',
+  '已下载': 'Downloaded',
+  '新建收藏夹': 'New folder',
+  '收藏夹名称': 'Folder name',
+  '选择收藏夹': 'Choose folders',
+  '从收藏夹移除 {title}': 'Remove {title} from this folder',
+  '在「本地」选择曲目旁的收藏夹按钮来添加歌曲': 'Use the folder button beside a track in Local to add it here',
+  '添加音乐文件': 'Add music files',
+  '音频文件': 'Audio files',
+  '添加本机上的音频文件以开始播放': 'Add audio files from this device to start playing',
+  '从本地音乐移除 {title}': 'Remove {title} from local music',
+  '本地文件可能已移动或格式不受支持': 'The local file may have moved or its format may be unsupported',
   // ---- 搜索 ----
   '搜索歌曲、艺人、专辑…': 'Search songs, artists and albums…',
   '搜索中…': 'Searching…',

@@ -94,25 +94,28 @@
       await refreshTrackQualities(track);
     }
     const downloading = isPending(track);
+    const local = track.provider === 'local';
     openMenuAt(e.clientX, e.clientY, [
       { label: t('查看歌词'), icon: icons.lyric, run: openLyrics },
-      {
-        label: downloading ? t('正在下载…') : t('下载当前曲目'),
-        icon: icons.download,
-        disabled: downloading || isBlocked(track.availability),
-        run: () => void requestDownload([track]),
-      },
-      { sep: true },
-      {
-        label: t('音质'),
-        icon: icons.quality,
-        submenu: currentQualityChoices().map((o) => ({
-          label: t(o.label),
-          selected: o.current,
-          disabled: o.disabled,
-          run: () => void setQuality(o.value),
-        })),
-      },
+      ...(local ? [] : [
+        {
+          label: downloading ? t('正在下载…') : t('下载当前曲目'),
+          icon: icons.download,
+          disabled: downloading || isBlocked(track.availability),
+          run: () => void requestDownload([track]),
+        },
+        { sep: true } as const,
+        {
+          label: t('音质'),
+          icon: icons.quality,
+          submenu: currentQualityChoices().map((o) => ({
+            label: t(o.label),
+            selected: o.current,
+            disabled: o.disabled,
+            run: () => void setQuality(o.value),
+          })),
+        },
+      ]),
       { sep: true },
       { label: t('歌曲详情'), icon: icons.disc, run: () => go({ name: 'track', track }) },
       ...(track.album_id

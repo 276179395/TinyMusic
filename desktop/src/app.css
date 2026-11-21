@@ -1008,6 +1008,68 @@ aside nav button.on .ico {
   flex: none;
 }
 
+.nav-sep.local-sep {
+  height: 1px;
+  margin: 6px 10px;
+  background: var(--hover);
+}
+
+aside nav.side-settings {
+  margin-top: auto;
+}
+
+.local-nav-row {
+  display: flex;
+  align-items: stretch;
+  border-radius: var(--r-sm);
+}
+
+aside nav .local-nav-row:hover:not(.local-active) {
+  background-color: var(--nav-hover);
+}
+
+aside nav .local-nav-row button:hover:not(.on) {
+  background-color: transparent;
+}
+
+.local-nav-link {
+  flex: 1;
+}
+
+.local-nav-add {
+  justify-content: center;
+  min-width: 36px;
+}
+
+aside nav .local-folder {
+  padding-left: 22px;
+}
+
+.local-folder-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 36vh;
+  overflow-y: auto;
+}
+
+.folder-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.local-folder-form {
+  display: flex;
+  align-items: center;
+  padding-left: 10px;
+}
+
+.local-folder-form input {
+  min-width: 0;
+  flex: 1;
+}
+
 .ico {
   display: grid;
   place-items: center;

@@ -4,6 +4,7 @@
 
 import type { ProgressCallback } from './transport';
 import { invoke, invokeTask, shellInvoke } from './transport';
+import type { LocalFolder, LocalMusicItem } from './types';
 import type { Availability, Quality, Track, AudioFormat, QualityCapability, TrackQualities, TrackDetail, PlayerSource, DownloadRow, S3IntegrityIssue, S3IntegrityReport, S3FixProgress, FailedPartName, FailedPart, FailedDownload, Settings, S3PlaylistInfo, S3TrackRow, Progress } from './types';
 
 type ThemePackSource = { config: unknown; css: string; images: Record<string, string> };
@@ -34,6 +35,16 @@ export const api = {
 
   playerOpen: (track: Track, quality: Quality, forceRefresh = false, allowLocal = true) =>
     invoke<PlayerSource>('player_open', { track, quality, forceRefresh, allowLocal }),
+
+  localMusicList: () => invoke<LocalMusicItem[]>('local_music_list'),
+  localMusicAdd: (paths: string[]) => shellInvoke<Track[]>('local_music_add', { paths }),
+  localMusicRemove: (id: string) => invoke<void>('local_music_remove', { id }),
+  localMusicMigrate: (legacy: LocalFolder[]) => shellInvoke<LocalFolder[]>('local_music_migrate', { legacy }),
+  localMusicFolders: () => invoke<LocalFolder[]>('local_music_folders'),
+  localMusicCreateFolder: (name: string) => invoke<LocalFolder[]>('local_music_create_folder', { name }),
+  localMusicSetFolderTrack: (folder: string, id: string, included: boolean) =>
+    invoke<LocalFolder[]>('local_music_set_folder_track', { folder, id, included }),
+  localMusicCopyLibrary: (destination: string) => shellInvoke<string>('local_music_copy_library', { destination }),
 
   downloadStart: (track: Track, quality: Quality, onProgress: (p: Progress) => void) => {
     return invokeTask<string>('download_start', { track, quality }, onProgress as ProgressCallback);

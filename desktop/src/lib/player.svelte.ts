@@ -285,7 +285,7 @@ function restorePlayback() {
     player.src = '';
     setStatus('paused');
     // 上次播放的网盘曲目，封面直链可能已经过期
-    void refreshS3Cover(queue[index]);
+    void refreshTrackCover(queue[index]);
   } catch {
     /* 记录损坏就当没有 */
   }
@@ -499,15 +499,16 @@ function coverTtlSec(url: string | null | undefined): number {
  * 几小时前的列表；快过期/已过期就重签一次，避免播放条/歌词页显示裂图。
  * 直链还有富余时不打扰网盘。
  */
-async function refreshS3Cover(track: Track, local = false) {
-  if (!isCloudProvider(track.provider)) return;
-  if (!local && coverTtlSec(track.cover) > 300) return;
+async function refreshTrackCover(track: Track, local = false) {
+  const localTrack = track.provider === 'local';
+  if (!localTrack && !isCloudProvider(track.provider)) return;
+  if (!localTrack && !local && coverTtlSec(track.cover) > 300) return;
   try {
     const fresh = await api.s3Cover(track.id, track.provider);
     if (!player.current || !sameTrack(player.current, track)) return;
     if (fresh) {
       player.current.cover = fresh;
-    } else if (coverTtlSec(player.current.cover) <= 300) {
+    } else if (localTrack || coverTtlSec(player.current.cover) <= 300) {
       // 网盘里没有封面，留空让界面走占位图，别挂一张过期直链
       player.current.cover = null;
     }
@@ -557,7 +558,7 @@ async function startAt(i: number, fromSec = 0, force = false, retry = false) {
     }
     if (token !== playToken) return; // 已经被更新的点击顶替
     applySource(src);
-    void refreshS3Cover(track, src.via === 'local' || src.via === 'cache');
+    void refreshTrackCover(track, src.via === 'local' || src.via === 'cache');
     pendingSeek = resume ? fromSec : null;
     listener?.('load');
     if (resume) {
