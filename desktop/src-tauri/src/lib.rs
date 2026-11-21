@@ -298,6 +298,9 @@ pub fn run() {
             .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
             println!("[tinymusic] 流代理: {}", state.proxy.base_url());
             app.manage(state);
+            if let Err(error) = theme_pack::directory(app.handle()) {
+                eprintln!("[tinymusic] 无法创建主题目录: {error}");
+            }
 
             #[cfg(target_os = "windows")]
             if let Some(window) = app.get_webview_window("main") {
@@ -343,6 +346,8 @@ pub fn run() {
             s3_integrity_fix,
             open_download_dir,
             theme_pack::read_theme_pack,
+            theme_pack::list_theme_packs,
+            theme_pack::save_theme_pack,
             set_window_theme,
             set_ui_language,
             system_info,

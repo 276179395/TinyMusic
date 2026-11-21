@@ -27,7 +27,7 @@
 
 ## 外观与主题包
 
-- `desktop/src/lib/theme.svelte.ts` 控制主题模式和自定义背景。`themePacks.svelte.ts` 管理主题包、底板选择与 IndexedDB 持久化。
+- `desktop/src/lib/theme.svelte.ts` 控制主题模式和自定义背景。`themePacks.svelte.ts` 管理主题列表、底板与选中状态。Rust 在应用配置目录下保存导入的 ZIP，安装版使用 `theme/`，开发环境使用 `dev/theme/`。
 - `desktop/src-tauri/src/theme_pack.rs` 读取 ZIP 并校验容量、条目和资源路径。前端只应用允许的颜色、包内图片及内置动效。格式见 [CSS 主题包](<desktop/docs/CSS 主题包.md>)。
 - 内置主题使用应用外观。切入「自定义」会恢复已选主题包，由包内 `appearance` 决定底板，缺省为深色。
 

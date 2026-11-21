@@ -6,6 +6,8 @@ import type { ProgressCallback } from './transport';
 import { invoke, invokeTask, shellInvoke } from './transport';
 import type { Availability, Quality, Track, AudioFormat, QualityCapability, TrackQualities, TrackDetail, PlayerSource, DownloadRow, S3IntegrityIssue, S3IntegrityReport, S3FixProgress, FailedPartName, FailedPart, FailedDownload, Settings, S3PlaylistInfo, S3TrackRow, Progress } from './types';
 
+type ThemePackSource = { config: unknown; css: string; images: Record<string, string> };
+
 export const api = {
   resolve: (track: Track, quality: Quality) =>
     invoke<{
@@ -89,9 +91,9 @@ export const api = {
   playbackCacheQueue: (track: Track) => invoke<void>('playback_cache_queue', { track }),
   playbackCacheClear: (cacheDir: string) => invoke<void>('playback_cache_clear', { cacheDir }),
   openDownloadDir: () => shellInvoke<void>('open_download_dir'),
-  readThemePack: (path: string) => shellInvoke<{
-    config: unknown; css: string; images: Record<string, string>;
-  }>('read_theme_pack', { path }),
+  readThemePack: (path: string) => shellInvoke<ThemePackSource>('read_theme_pack', { path }),
+  listThemePacks: () => shellInvoke<ThemePackSource[]>('list_theme_packs'),
+  saveThemePack: (path: string, id: string) => shellInvoke<void>('save_theme_pack', { path, id }),
 
   // ---- 网盘（S3） ----
   s3Test: () => invoke<string>('s3_test'),

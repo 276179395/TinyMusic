@@ -1,7 +1,7 @@
 import { api } from './api';
 import type { ResolvedTheme } from './theme.svelte';
 
-export const THEME_PACK_KEY = 'tinymusic.themePack';
+export const THEME_PACK_KEY = import.meta.env.DEV ? 'tinymusic.themePack.dev' : 'tinymusic.themePack.installed';
 const TOKENS = [
   '--background', '--foreground', '--fg2', '--fg3', '--bg2', '--popover', '--brand', '--line',
   '--bg-tint',
@@ -20,17 +20,7 @@ export const themePacks = $state({
   error: '',
 });
 
-let database: Promise<IDBDatabase> | undefined;
 let onSelectionChange: (() => void) | undefined;
-
-function openDatabase() {
-  return database ??= new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open('tinymusic-theme-packs', 1);
-    request.onupgradeneeded = () => request.result.createObjectStore('packs', { keyPath: 'id' });
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
-}
 
 function selectedPack() {
   return themePacks.items.find((item) => item.id === themePacks.activeId);
@@ -63,12 +53,15 @@ export function applyThemePack(resolved: ResolvedTheme, enabled: boolean) {
 export async function initThemePacks(applySelection: () => void) {
   onSelectionChange = applySelection;
   try {
-    const db = await openDatabase();
-    themePacks.items = await new Promise<ThemePack[]>((resolve, reject) => {
-      const request = db.transaction('packs').objectStore('packs').getAll();
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error);
-    });
+    // 旧版使用共享的 WebView 缓存。只删除主题数据库和它的选中记录。
+    indexedDB.deleteDatabase('tinymusic-theme-packs');
+    localStorage.removeItem('tinymusic.themePack');
+    const results = await Promise.allSettled((await api.listThemePacks()).map(parseThemePack));
+    const byId = new Map<string, ThemePack>();
+    for (const result of results) {
+      if (result.status === 'fulfilled') byId.set(result.value.id.toLowerCase(), result.value);
+    }
+    themePacks.items = [...byId.values()];
     const id = localStorage.getItem(THEME_PACK_KEY) ?? '';
     themePacks.activeId = themePacks.items.some((pack) => pack.id === id) ? id : '';
     applySelection();
@@ -144,13 +137,7 @@ async function parseThemePack(source: Awaited<ReturnType<typeof api.readThemePac
 
 export async function importThemePack(path: string) {
   const pack = await parseThemePack(await api.readThemePack(path));
-  const db = await openDatabase();
-  await new Promise<void>((resolve, reject) => {
-    const transaction = db.transaction('packs', 'readwrite');
-    transaction.oncomplete = () => resolve();
-    transaction.onabort = () => reject(transaction.error);
-    transaction.objectStore('packs').put(pack);
-  });
-  themePacks.items = [...themePacks.items.filter((item) => item.id !== pack.id), pack];
+  await api.saveThemePack(path, pack.id);
+  themePacks.items = [...themePacks.items.filter((item) => item.id.toLowerCase() !== pack.id.toLowerCase()), pack];
   selectThemePack(pack.id);
 }

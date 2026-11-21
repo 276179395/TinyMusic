@@ -9,6 +9,8 @@
 - `--bg-effect: petals` 可开启内置的落樱动画。开启系统的减少动态效果后，只显示静态背景。
 - 切换到内置主题后，再回到「自定义」即可恢复原来的主题包和背景。选择「应用外观」可使用自定义背景。主题包和选中状态仅保存在本机。
 
+Windows 安装版第一次启动会创建 `%APPDATA%\com.tinymusic.app\theme`，导入时把原始 ZIP 复制到该目录。连接前端开发服务器的构建使用独立的 `dev\theme`，两边的选中记录也各自保存。旧版的主题缓存会在新版启动时清理，旧主题可从原 ZIP 重新导入。
+
 [星夜](主题包示例/night-star/)使用静态背景，[樱花](主题包示例/sakura/)使用静态底图和落樱动画。两个示例可按页首的目录规则打包导入。
 
-安装包、两个示例和 MusicFree 静态主题合集见 [v0.7.7 发布页](https://github.com/276179395/TinyMusic/releases/tag/v0.7.7)。合集包含 27 套图片背景、6 套纯色和 2 套渐变。先解压合集，再在 TinyMusic 里逐个导入内层 ZIP。包内保留原作者与来源链接，完整名单见合集中的 `catalog.md`。
+安装包、两个示例和 MusicFree 静态主题合集见 [GitHub Releases](https://github.com/276179395/TinyMusic/releases/latest)。合集包含 27 套图片背景、6 套纯色和 2 套渐变。先解压合集，再在 TinyMusic 里逐个导入内层 ZIP。包内保留原作者与来源链接，完整名单见合集中的 `catalog.md`。
