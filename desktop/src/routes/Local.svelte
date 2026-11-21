@@ -160,14 +160,14 @@
             {/if}
           </button>
           {#if localFolders.items.length && !folder}
-            <button class="mini remove" title={t('选择收藏夹')} aria-label={t('选择收藏夹')}
+            <button class="song-action" title={t('选择收藏夹')} aria-label={t('选择收藏夹')}
               disabled={busy} onclick={(event) => chooseFolder(event, track)}>
-              <HugeiconsIcon icon={icons.folder} size={ICON_SIZE.inline} />
+              <HugeiconsIcon icon={icons.star} size={ICON_SIZE.inline} />
             </button>
           {/if}
           {#if folder || source === 'imported'}
             <button
-            class="mini remove"
+            class="song-action delete"
             title={t(folder ? '从收藏夹移除 {title}' : '从本地音乐移除 {title}', { title: track.title })}
             aria-label={t(folder ? '从收藏夹移除 {title}' : '从本地音乐移除 {title}', { title: track.title })}
             disabled={busy}
@@ -220,9 +220,20 @@
     color: var(--fg2);
     white-space: nowrap;
   }
-  .remove {
+  .song-action {
+    display: grid;
+    place-items: center;
     min-width: 44px;
     min-height: 44px;
-    justify-content: center;
+    color: var(--fg2);
+  }
+  .song-action:hover:enabled {
+    color: var(--fg);
+  }
+  .song-action.delete {
+    color: var(--danger);
+  }
+  .song-action.delete:hover:enabled {
+    filter: brightness(1.2);
   }
 </style>

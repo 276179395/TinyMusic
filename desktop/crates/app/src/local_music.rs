@@ -448,6 +448,47 @@ pub fn create_folder(state: &AppState, name: &str) -> Result<Vec<Folder>, String
     folders(state)
 }
 
+pub fn change_folder(
+    state: &AppState,
+    id: &str,
+    name: Option<&str>,
+) -> Result<Vec<Folder>, String> {
+    let _guard = state.music_lock.lock().unwrap();
+    let root = root(state);
+    let source = folder_path(&root, id)?;
+    if !real_dir(&source) {
+        return Err("收藏夹不存在".into());
+    }
+    if let Some(name) = name {
+        let target = folder_path(&root, name)?;
+        if name != id {
+            match target.symlink_metadata() {
+                Ok(meta)
+                    if !meta.file_type().is_dir()
+                        || source.canonicalize().map_err(io_error)?
+                            != target.canonicalize().map_err(io_error)? =>
+                {
+                    return Err("收藏夹名称已存在".into());
+                }
+                Ok(_) => {}
+                Err(error) if error.kind() == ErrorKind::NotFound => {}
+                Err(error) => return Err(io_error(error)),
+            }
+            std::fs::rename(source, target).map_err(io_error)?;
+        }
+    } else {
+        let trash = root.join(".tinymusic-trash");
+        std::fs::create_dir_all(&trash).map_err(io_error)?;
+        if !real_dir(&trash) {
+            return Err("收藏夹回收目录无效".into());
+        }
+        let backup = tempfile::tempdir_in(&trash).map_err(io_error)?;
+        std::fs::rename(source, backup.path().join(id)).map_err(io_error)?;
+        let _ = backup.keep();
+    }
+    folders(state)
+}
+
 fn write_link(root: &Path, folder: &str, id: &str, included: bool) -> Result<(), String> {
     let (song, _) = relative(id).ok_or("无效的本地歌曲路径")?;
     let folder = folder_path(root, folder)?;

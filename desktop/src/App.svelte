@@ -42,7 +42,7 @@
   import Track from './routes/Track.svelte';
   import Downloads from './routes/Downloads.svelte';
   import Local from './routes/Local.svelte';
-  import { createLocalFolder, initializeLocalFolders, localFolders } from './lib/localFolders.svelte';
+  import { createLocalFolder, deleteLocalFolder, initializeLocalFolders, localFolders, renameLocalFolder } from './lib/localFolders.svelte';
   import Library from './routes/Library.svelte';
   import Settings from './routes/Settings.svelte';
   import Cloud from './routes/Cloud.svelte';
@@ -97,6 +97,7 @@
     appCfg.s3Enabled;
     localFolders.items.length;
     creatingFolder;
+    editingFolder;
     const raf = requestAnimationFrame(() => {
       measureNav();
       if (!indReady) requestAnimationFrame(() => (indReady = true));
@@ -294,6 +295,52 @@
   });
 
   let savingFolder = $state(false);
+  let editingFolder = $state<string>();
+  let renamedFolder = $state('');
+  let renameInput = $state<HTMLInputElement>();
+
+  $effect(() => {
+    if (editingFolder && renameInput) {
+      renameInput.focus();
+      renameInput.select();
+    }
+  });
+
+  function editFolder(id: string, name: string) {
+    if (savingFolder) return;
+    renamedFolder = name;
+    editingFolder = id;
+  }
+
+  async function saveFolderName(event: SubmitEvent, id: string) {
+    event.preventDefault();
+    const name = renamedFolder.trim();
+    if (!name || savingFolder) return;
+    savingFolder = true;
+    try {
+      await renameLocalFolder(id, name);
+      editingFolder = undefined;
+      if (activeFolder === id) go({ name: 'local', folderId: name });
+    } catch (error) {
+      showToast(String(error));
+    } finally {
+      savingFolder = false;
+    }
+  }
+
+  async function removeFolder(id: string) {
+    if (savingFolder) return;
+    savingFolder = true;
+    try {
+      await deleteLocalFolder(id);
+      if (editingFolder === id) editingFolder = undefined;
+      if (activeFolder === id) go({ name: 'local' });
+    } catch (error) {
+      showToast(String(error));
+    } finally {
+      savingFolder = false;
+    }
+  }
 
   async function addFolder(event: SubmitEvent) {
     event.preventDefault();
@@ -380,12 +427,35 @@
       {#if localFolders.items.length}
         <div class="local-folder-list" onscroll={measureNav}>
           {#each localFolders.items as folder (folder.id)}
-            <button class="local-folder" class:on={activeNav === folder.id} title={folder.name}
-              aria-current={activeNav === folder.id ? 'page' : undefined}
-              onclick={() => go({ name: 'local', folderId: folder.id })}>
-              <span class="ico"><HugeiconsIcon icon={icons.folder} size={ICON_SIZE.control} /></span>
-              <span class="folder-name">{folder.name}</span>
-            </button>
+            <div class="local-folder-row">
+              {#if editingFolder === folder.id}
+                <form class="local-folder-form local-folder-rename" onsubmit={(event) => saveFolderName(event, folder.id)}>
+                  <input bind:this={renameInput} bind:value={renamedFolder} maxlength={60}
+                    aria-label={t('重命名收藏夹')} disabled={savingFolder}
+                    onkeydown={(event) => { if (event.key === 'Escape') editingFolder = undefined; }} />
+                </form>
+              {:else}
+                <button class="local-folder" class:on={activeNav === folder.id} title={folder.name}
+                  aria-current={activeNav === folder.id ? 'page' : undefined}
+                  onclick={() => go({ name: 'local', folderId: folder.id })}
+                  ondblclick={() => editFolder(folder.id, folder.name)}
+                  onkeydown={(event) => {
+                    if (event.key === 'F2') {
+                      event.preventDefault();
+                      editFolder(folder.id, folder.name);
+                    }
+                  }}>
+                  <span class="ico"><HugeiconsIcon icon={icons.folder} size={ICON_SIZE.control} /></span>
+                  <span class="folder-name">{folder.name}</span>
+                </button>
+              {/if}
+              <button class="folder-delete" type="button" disabled={savingFolder}
+                title={t('删除收藏夹 {name}', { name: folder.name })}
+                aria-label={t('删除收藏夹 {name}', { name: folder.name })}
+                onclick={() => removeFolder(folder.id)}>
+                <HugeiconsIcon icon={icons.trash} size={ICON_SIZE.inline} />
+              </button>
+            </div>
           {/each}
         </div>
       {/if}

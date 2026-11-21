@@ -15,6 +15,7 @@
 import {
   Search01Icon,
   HeartIcon,
+  StarIcon,
   Download01Icon,
   FolderDownloadIcon,
   Settings01Icon,
@@ -63,6 +64,7 @@ export const icons = {
   search: Search01Icon,
   /** 喜欢（爱心） */
   favorite: HeartIcon,
+  star: StarIcon,
   /** 单曲下载 */
   download: Download01Icon,
   /** 侧边栏「下载」页：带箭头的文件夹，避免和齿轮图标混 */

@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      macos:
+        description: 同时构建 macOS 安装包
+        type: boolean
+        default: false
 
 jobs:
   build:
@@ -13,16 +18,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - platform: macos-latest
-            target: aarch64-apple-darwin
-            label: macOS-arm64
-          - platform: macos-latest
-            target: x86_64-apple-darwin
-            label: macOS-x64
-          - platform: windows-latest
-            target: ''
-            label: Windows-x64
+        include: ${{ fromJSON(inputs.macos && '[{"platform":"windows-latest","target":"","label":"Windows-x64"},{"platform":"macos-latest","target":"aarch64-apple-darwin","label":"macOS-arm64"},{"platform":"macos-latest","target":"x86_64-apple-darwin","label":"macOS-x64"}]' || '[{"platform":"windows-latest","target":"","label":"Windows-x64"}]') }}
 
     runs-on: ${{ matrix.platform }}
     name: ${{ matrix.label }}
@@ -82,11 +78,9 @@ jobs:
             跨平台音乐客户端（Tauri + Svelte）。官网与下载页：https://redcarl.github.io/TinyMusic/
 
             - Windows：`TinyMusic_<版本>_x64-setup.exe`，或用 `.msi`
-            - macOS：`TinyMusic_<版本>_aarch64.dmg`（Apple 芯片）/ `TinyMusic_<版本>_x64.dmg`（Intel）
             - `.sig` 与 `latest.json` 是应用内自动更新用的，不需要手动下载
-            - macOS 首次打开若提示「已损坏」，在 Finder 里右键 → 打开
 
-            安装包未做代码签名，SmartScreen / 门禁提示属正常现象。
+            Windows 安装包未做代码签名。
           releaseDraft: false
           prerelease: false
           args: --config tauri-release-config.json ${{ matrix.target != '' && format('--target {0}', matrix.target) || '' }}

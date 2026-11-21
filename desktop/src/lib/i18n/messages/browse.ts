@@ -9,6 +9,8 @@ export const browse: Record<string, string> = {
   '音乐库目录已更新': 'Music library directory updated',
   '已下载': 'Downloaded',
   '新建收藏夹': 'New folder',
+  '重命名收藏夹': 'Rename folder',
+  '删除收藏夹 {name}': 'Delete folder {name}',
   '收藏夹名称': 'Folder name',
   '选择收藏夹': 'Choose folders',
   '从收藏夹移除 {title}': 'Remove {title} from this folder',

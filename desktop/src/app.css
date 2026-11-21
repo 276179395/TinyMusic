@@ -1043,6 +1043,28 @@ aside nav .local-nav-row button:hover:not(.on) {
 
 aside nav .local-folder {
   padding-left: 22px;
+  flex: 1;
+  min-width: 0;
+}
+
+.local-folder-row {
+  display: flex;
+}
+
+.local-folder-rename {
+  flex: 1;
+  min-width: 0;
+}
+
+aside nav .folder-delete,
+aside nav .folder-delete:hover:not(.on) {
+  color: var(--danger);
+  background: transparent;
+  justify-content: center;
+}
+
+aside nav .folder-delete:hover:enabled {
+  filter: brightness(1.2);
 }
 
 .local-folder-list {

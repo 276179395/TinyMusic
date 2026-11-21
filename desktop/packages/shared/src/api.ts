@@ -43,6 +43,8 @@ export const api = {
   localMusicMigrate: (legacy: LocalFolder[]) => shellInvoke<LocalFolder[]>('local_music_migrate', { legacy }),
   localMusicFolders: () => invoke<LocalFolder[]>('local_music_folders'),
   localMusicCreateFolder: (name: string) => invoke<LocalFolder[]>('local_music_create_folder', { name }),
+  localMusicRenameFolder: (id: string, name: string) => invoke<LocalFolder[]>('local_music_change_folder', { id, name }),
+  localMusicDeleteFolder: (id: string) => invoke<LocalFolder[]>('local_music_delete_folder', { id }),
   localMusicSetFolderTrack: (folder: string, id: string, included: boolean) =>
     invoke<LocalFolder[]>('local_music_set_folder_track', { folder, id, included }),
   localMusicCopyLibrary: (destination: string) => shellInvoke<string>('local_music_copy_library', { destination }),

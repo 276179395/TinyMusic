@@ -73,6 +73,18 @@ async fn local_music_is_persisted_and_only_registered_files_are_playable() {
     assert!(copy.join("通勤/本地测试/track.json").is_file());
     assert!(copy.join("Local").join(&added[0].id).is_file());
 
+    local_music::create_folder(&app, "工作").unwrap();
+    assert!(local_music::change_folder(&app, "通勤", Some("工作")).is_err());
+    let folders = local_music::change_folder(&app, "通勤", Some("路上")).unwrap();
+    assert_eq!(folders.iter().find(|folder| folder.id == "路上").unwrap().tracks.len(), 1);
+    let folders = local_music::change_folder(&app, "路上", None).unwrap();
+    assert_eq!(folders.len(), 1);
+    assert!(!copy.join("路上").exists());
+    let archived = std::fs::read_dir(copy.join(".tinymusic-trash")).unwrap()
+        .next().unwrap().unwrap().path();
+    assert!(archived.join("路上/本地测试/track.json").is_file());
+    assert!(copy.join("Local").join(&added[0].id).is_file());
+
     dispatch::dispatch(&app, "local_music_remove", json!({"id": track["id"]}), None, None)
         .await
         .unwrap();

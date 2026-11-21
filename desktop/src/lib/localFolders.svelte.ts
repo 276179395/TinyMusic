@@ -47,3 +47,11 @@ export async function createLocalFolder(input: string) {
 export async function setLocalFolderTrack(id: string, track: Track, included: boolean) {
   localFolders.items = await api.localMusicSetFolderTrack(id, track.id, included);
 }
+
+export async function renameLocalFolder(id: string, name: string) {
+  localFolders.items = await api.localMusicRenameFolder(id, name);
+}
+
+export async function deleteLocalFolder(id: string) {
+  localFolders.items = await api.localMusicDeleteFolder(id);
+}
