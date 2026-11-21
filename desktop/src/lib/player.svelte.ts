@@ -158,7 +158,7 @@ export function actualLabelText(): string {
   // 还没取到直链时没有标签可标（恢复上次播放、刚开播的瞬间）
   if (!player.src) return '';
   const base = formatLabel(player.actualFormat) || t(qualityLabel(player.actualQuality));
-  if (player.actualQuality === 'original') return t('原文件');
+  if (player.actualQuality === 'original' || player.actualFormat?.codec === 'unknown') return t('原文件');
   if (player.actualVerified || isCloudProvider(player.via)) return base;
   return t('{label}（未校验）', { label: base });
 }

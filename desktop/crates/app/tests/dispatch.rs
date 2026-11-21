@@ -13,8 +13,9 @@ fn tmpdir(name: &str) -> std::path::PathBuf {
 async fn local_music_is_persisted_and_only_registered_files_are_playable() {
     let app = state("local-music").await;
     let dir = app.config_dir().to_owned();
-    let audio = dir.join("本地测试.wav");
-    std::fs::write(&audio, b"fixture").unwrap();
+    let audio = dir.join("本地测试.flac");
+    let wave = b"RIFF\x26\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x40\x1f\x00\x00\x80\x3e\x00\x00\x02\x00\x10\x00data\x02\x00\x00\x00\x00\x00";
+    std::fs::write(&audio, wave).unwrap();
     std::fs::write(audio.with_extension("lrc"), "[00:01.50]测试歌词").unwrap();
     std::fs::write(audio.with_extension("png"), b"cover fixture").unwrap();
     let path = audio.to_str().unwrap().to_owned();
@@ -22,14 +23,14 @@ async fn local_music_is_persisted_and_only_registered_files_are_playable() {
     let added = local_music::add(&app, vec![path.clone(), path]).unwrap();
     assert_eq!(added.len(), 1);
     assert_eq!(added[0].title, "本地测试");
-    assert_eq!(added[0].id, "本地测试/本地测试.wav");
+    assert_eq!(added[0].id, "本地测试/本地测试.flac");
     let managed = dir.join("dl").join("Local").join(&added[0].id);
-    assert_eq!(std::fs::read(&managed).unwrap(), b"fixture");
+    assert_eq!(std::fs::read(&managed).unwrap(), wave);
     local_music::create_folder(&app, "通勤").unwrap();
     local_music::set_folder_track(&app, "通勤", &added[0].id, true).unwrap();
     let link = dir.join("dl/通勤/本地测试/track.json");
     let link: serde_json::Value = serde_json::from_slice(&std::fs::read(link).unwrap()).unwrap();
-    assert_eq!(link["path"], "Local/本地测试/本地测试.wav");
+    assert_eq!(link["path"], "Local/本地测试/本地测试.flac");
     drop(app);
 
     let app = AppState::new(dir.clone(), dir.join("dl"), Arc::new(NoopHost))
@@ -46,7 +47,17 @@ async fn local_music_is_persisted_and_only_registered_files_are_playable() {
         .await
         .unwrap();
     assert_eq!(source["via"], "local");
-    assert_eq!(source["bytes"], 7);
+    assert_eq!(source["bytes"], wave.len());
+    assert_eq!(source["format"]["codec"], "wav");
+    assert_eq!(source["format"]["lossless"], true);
+    let http = tinymusic_core::http::HttpClient::new(0, 4);
+    let response = http
+        .get_range(source["url"].as_str().unwrap(), Some("bytes=0-11"))
+        .await
+        .unwrap();
+    assert_eq!(response.status().as_u16(), 206);
+    assert_eq!(response.headers()["content-type"], "audio/wav");
+    assert_eq!(response.bytes().await.unwrap().as_ref(), &wave[..12]);
     let detail = dispatch::dispatch(
         &app, "track_detail", json!({"provider": "local", "track": track}), None, None,
     )

@@ -117,6 +117,7 @@ impl Quality {
 pub enum Codec {
     Mp3,
     Aac,
+    Mp4,
     Flac,
     Alac,
     Ogg,
@@ -130,7 +131,7 @@ impl Codec {
     pub fn extension(self) -> &'static str {
         match self {
             Codec::Mp3 => "mp3",
-            Codec::Aac | Codec::Alac => "m4a",
+            Codec::Aac | Codec::Alac | Codec::Mp4 => "m4a",
             Codec::Flac => "flac",
             Codec::Ogg => "ogg",
             Codec::Wav => "wav",

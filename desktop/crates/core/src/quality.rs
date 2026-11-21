@@ -7,6 +7,36 @@
 use crate::error::{Error, Result};
 use crate::http::{HttpClient, ProbeInfo};
 use crate::model::{AudioFormat, Codec, Quality, StreamInfo};
+use std::io::SeekFrom;
+use std::path::Path;
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
+
+pub(crate) const AUDIO_HEADER_BYTES: usize = 64 * 1024;
+
+pub async fn probe_audio_file(path: &Path) -> Result<(AudioFormat, u64)> {
+    let mut file = tokio::fs::File::open(path).await?;
+    let bytes = file.metadata().await?.len();
+    let mut head = Vec::new();
+    (&mut file)
+        .take(AUDIO_HEADER_BYTES as u64)
+        .read_to_end(&mut head)
+        .await?;
+    if let Some(offset) = audio_offset(&head).filter(|offset| *offset < bytes) {
+        file.seek(SeekFrom::Start(offset)).await?;
+        head.clear();
+        file.take(AUDIO_HEADER_BYTES as u64)
+            .read_to_end(&mut head)
+            .await?;
+    }
+    Ok((AudioFormat::from_audio_header(&head), bytes))
+}
+
+/// Seek past large ID3 tags, which can contain an embedded cover image.
+pub(crate) fn audio_offset(head: &[u8]) -> Option<u64> {
+    id3_offset(head)
+        .filter(|offset| offset.saturating_add(42) > head.len())
+        .map(|offset| offset as u64)
+}
 
 /// 酷我匿名受限请求固定下发的占位文件大小。
 pub const PLACEHOLDER_BYTES: u64 = 181_521;
@@ -23,9 +53,11 @@ pub fn mime_for_codec(codec: Codec) -> &'static str {
     match codec {
         Codec::Flac => "audio/flac",
         Codec::Ogg => "audio/ogg",
-        Codec::Aac | Codec::Alac => "audio/mp4",
+        Codec::Aac => "audio/aac",
+        Codec::Alac | Codec::Mp4 => "audio/mp4",
         Codec::Wav => "audio/wav",
-        Codec::Mp3 | Codec::Unknown => "audio/mpeg",
+        Codec::Mp3 => "audio/mpeg",
+        Codec::Unknown => "application/octet-stream",
     }
 }
 
@@ -37,8 +69,10 @@ pub fn normalize_content_type(ct: &str) -> String {
         "audio/mpeg".into()
     } else if l.contains("ogg") {
         "audio/ogg".into()
-    } else if l.contains("mp4") || l.contains("m4a") || l.contains("aac") {
+    } else if l.contains("mp4") || l.contains("m4a") {
         "audio/mp4".into()
+    } else if l.contains("aac") {
+        "audio/aac".into()
     } else if l.contains("wav") || l.contains("wave") {
         "audio/wav".into()
     } else {
@@ -217,79 +251,97 @@ pub fn verify_probe(
 }
 
 impl AudioFormat {
+    pub fn from_audio_header(head: &[u8]) -> Self {
+        let head = match id3_offset(head) {
+            Some(offset) => head.get(offset..).unwrap_or_default(),
+            None => head,
+        };
+        let mut format = Self::default();
+        format.codec = if let Some((rate, bits, channels)) = parse_flac_streaminfo(head) {
+            format.sample_rate_hz = Some(rate);
+            format.bits_per_sample = Some(bits);
+            format.channels = Some(channels);
+            Codec::Flac
+        } else if head.starts_with(b"OggS\0") {
+            Codec::Ogg
+        } else if head.starts_with(b"RIFF") && head.get(8..12) == Some(b"WAVE") {
+            Codec::Wav
+        } else if head.len() >= 16 && matches!(head.get(4..8), Some(b"ftyp" | b"moov")) {
+            // WebView demuxes the MP4 tracks and selects AAC, ALAC, or another decoder.
+            Codec::Mp4
+        } else if looks_like_adts(head) {
+            Codec::Aac
+        } else if looks_like_mpeg_layer3(head) {
+            Codec::Mp3
+        } else {
+            Codec::Unknown
+        };
+        format.verified = format.codec != Codec::Unknown;
+        format.lossless =
+            format.codec == Codec::Flac || (format.codec == Codec::Wav && wav_is_pcm(head));
+        format
+    }
+
     /// 从探测结果推断实际格式。
     pub fn from_probe(probe: &ProbeInfo, duration_sec: u32) -> AudioFormat {
-        let head = probe.head.as_slice();
-        let ct = probe.content_type.to_ascii_lowercase();
-        let mut codec = Codec::Unknown;
-        let mut verified = false;
-        let mut sample_rate_hz = None;
-        let mut bits_per_sample = None;
-        let mut channels = None;
-
-        if let Some((rate, bits, ch)) = parse_flac_streaminfo(head) {
-            codec = Codec::Flac;
-            verified = true;
-            sample_rate_hz = Some(rate);
-            bits_per_sample = Some(bits);
-            channels = Some(ch);
-        } else if head.starts_with(b"OggS") {
-            codec = Codec::Ogg;
-            verified = true;
-        } else if head.starts_with(b"RIFF") && head.get(8..12) == Some(b"WAVE") {
-            codec = Codec::Wav;
-            verified = true;
-        } else if looks_like_mp3(head) {
-            codec = Codec::Mp3;
-            verified = true;
-        } else if ct.contains("flac") {
-            codec = Codec::Flac;
-        } else if ct.contains("ogg") {
-            codec = Codec::Ogg;
-        } else if ct.contains("aac") || ct.contains("mp4") || ct.contains("m4a") {
-            codec = Codec::Aac;
-        } else if ct.contains("mpeg") || ct.contains("mp3") {
-            codec = Codec::Mp3;
+        let mut format = AudioFormat::from_audio_header(&probe.head);
+        if !format.verified {
+            format.codec = match normalize_content_type(&probe.content_type).as_str() {
+                "audio/flac" => Codec::Flac,
+                "audio/ogg" => Codec::Ogg,
+                "audio/wav" => Codec::Wav,
+                "audio/mp4" => Codec::Mp4,
+                "audio/aac" => Codec::Aac,
+                "audio/mpeg" => Codec::Mp3,
+                _ => Codec::Unknown,
+            };
         }
-
-        // ID3 头前面的 FLAC 也能识别（部分 CDN 会在 FLAC 前塞 ID3）。
-        if codec == Codec::Unknown {
-            if let Some(offset) = id3_offset(head) {
-                if head.get(offset..offset + 4) == Some(b"fLaC") {
-                    codec = Codec::Flac;
-                    verified = true;
-                    if let Some((rate, bits, ch)) = parse_flac_streaminfo(&head[offset..]) {
-                        sample_rate_hz = Some(rate);
-                        bits_per_sample = Some(bits);
-                        channels = Some(ch);
-                    }
-                }
-            }
+        if let Some(bytes) = probe.bytes.filter(|bytes| *bytes > 0 && duration_sec > 0) {
+            format.bitrate_kbps =
+                Some(((bytes as f64 * 8.0) / (duration_sec as f64 * 1000.0)).round() as u32);
         }
-
-        let bitrate_kbps = match (probe.bytes, duration_sec) {
-            (Some(bytes), d) if d > 0 && bytes > 0 => {
-                Some(((bytes as f64 * 8.0) / (d as f64 * 1000.0)).round() as u32)
-            }
-            _ => None,
-        };
-
-        AudioFormat {
-            codec,
-            bitrate_kbps,
-            sample_rate_hz,
-            bits_per_sample,
-            channels,
-            lossless: codec.is_lossless() && verified,
-            verified,
-        }
+        format
     }
+}
+
+fn looks_like_adts(head: &[u8]) -> bool {
+    head.len() >= 7
+        && head[0] == 0xff
+        && head[1] & 0xf6 == 0xf0
+        && (head[2] >> 2) & 0x0f < 13
+        && (u16::from(head[3] & 3) << 11 | u16::from(head[4]) << 3 | u16::from(head[5] >> 5)) >= 7
+}
+
+fn looks_like_mpeg_layer3(head: &[u8]) -> bool {
+    head.len() >= 4
+        && head[0] == 0xff
+        && head[1] & 0xe6 == 0xe2
+        && head[1] & 0x18 != 0x08
+        && head[2] >> 4 != 0x0f
+        && head[2] & 0x0c != 0x0c
+}
+
+fn wav_is_pcm(mut chunks: &[u8]) -> bool {
+    chunks = &chunks[12..];
+    while let Some(header) = chunks.get(..8) {
+        let len = u32::from_le_bytes(header[4..8].try_into().unwrap()) as usize;
+        if &header[..4] == b"fmt " {
+            return len >= 16 && matches!(chunks.get(8..10), Some([1 | 3, 0]));
+        }
+        let Some(next) = chunks.get(8usize.saturating_add(len).saturating_add(len % 2)..) else {
+            break;
+        };
+        chunks = next;
+    }
+    false
 }
 
 /// 解析 FLAC 的 STREAMINFO（采样率/位深/声道）。
 fn parse_flac_streaminfo(head: &[u8]) -> Option<(u32, u8, u8)> {
-    let offset = head.windows(4).position(|w| w == b"fLaC")?;
-    let p = offset + 4;
+    if !head.starts_with(b"fLaC") {
+        return None;
+    }
+    let p = 4;
     let block = head.get(p..p + 4)?;
     // 只处理 STREAMINFO（block type 0），长度必须 34
     if block[0] & 0x7f != 0 {
@@ -314,18 +366,15 @@ fn id3_offset(head: &[u8]) -> Option<usize> {
     if head.len() < 10 || &head[..3] != b"ID3" {
         return None;
     }
+    if head[6..10].iter().any(|byte| byte & 0x80 != 0) {
+        return None;
+    }
     let size = ((head[6] as usize & 0x7f) << 21)
         | ((head[7] as usize & 0x7f) << 14)
         | ((head[8] as usize & 0x7f) << 7)
         | (head[9] as usize & 0x7f);
-    Some(10 + size)
-}
-
-fn looks_like_mp3(head: &[u8]) -> bool {
-    if head.starts_with(b"ID3") {
-        return true;
-    }
-    head.len() >= 2 && head[0] == 0xff && (head[1] & 0xe0) == 0xe0
+    let footer = usize::from(head[3] == 4 && head[5] & 0x10 != 0) * 10;
+    Some(10 + size + footer)
 }
 
 #[cfg(test)]
@@ -376,12 +425,23 @@ mod tests {
     fn flac_streaminfo() {
         // 440613 稻香的真实前 64 字节
         let head = b"fLaC\x00\x00\x00\"\x10\x00\x10\x00\x00\t\xe9\x008N\n\xc4B\xf0\x00\x96]E\xaf\x11A\xbd\xe7\x04\x80\xff2\xc3S\n\x9f\xad\xf7'\x03\x00\x01\x9e\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10\x00";
-        let f = AudioFormat::from_probe(&probe(head, 26_012_257, "audio/x-flac"), 223);
+        let f = AudioFormat::from_probe(&probe(head, 26_012_257, "audio/mpeg"), 223);
         assert_eq!(f.codec, Codec::Flac);
         assert!(f.lossless);
         assert_eq!(f.sample_rate_hz, Some(44_100));
         assert_eq!(f.bits_per_sample, Some(16));
         assert_eq!(f.channels, Some(2));
+    }
+
+    #[test]
+    fn distinguishes_aac_mp3_and_mp4_from_audio_bytes() {
+        let mp3 = b"ID3\x04\x00\x00\x00\x00\x00\x00\xff\xfb\x90\x64";
+        let aac = b"\xff\xf1\x50\x80\x00\xff\xfc";
+        let mp4 = b"\x00\x00\x00\x18ftypM4A \x00\x00\x00\x00";
+        assert_eq!(AudioFormat::from_audio_header(mp3).codec, Codec::Mp3);
+        assert_eq!(AudioFormat::from_audio_header(aac).codec, Codec::Aac);
+        assert_eq!(AudioFormat::from_audio_header(mp4).codec, Codec::Mp4);
+        assert!(!AudioFormat::from_audio_header(&mp3[..10]).verified);
     }
 
     #[test]

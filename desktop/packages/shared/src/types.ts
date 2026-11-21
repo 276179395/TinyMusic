@@ -29,7 +29,7 @@ export interface Track {
   has_advanced?: boolean;
 }
 
-export type Codec = 'mp3' | 'aac' | 'flac' | 'alac' | 'ogg' | 'wav' | 'unknown';
+export type Codec = 'mp3' | 'aac' | 'mp4' | 'flac' | 'alac' | 'ogg' | 'wav' | 'unknown';
 
 export interface LocalMusicItem {
   track: Track;

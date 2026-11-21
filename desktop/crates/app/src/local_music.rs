@@ -666,19 +666,5 @@ pub(super) async fn open(
     id: &str,
     requested: Quality,
 ) -> Result<PlayerSource, String> {
-    let path = path(state, id)?;
-    let bytes = std::fs::metadata(&path).ok().map(|meta| meta.len());
-    let (quality, format) = s3_audio_format(&path.to_string_lossy());
-    let mime = tinymusic_core::proxy::mime_for_path(&path);
-    let url = state.proxy.register_file(path, Some(mime.into())).await;
-    Ok(PlayerSource {
-        url,
-        quality: quality.as_str().into(),
-        requested_quality: requested.as_str().into(),
-        verified: format.codec != Codec::Unknown,
-        format,
-        bytes,
-        degraded: false,
-        via: PROVIDER.into(),
-    })
+    open_audio_file(state, path(state, id)?, requested, PROVIDER).await
 }

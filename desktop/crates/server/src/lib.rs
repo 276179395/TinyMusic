@@ -165,3 +165,60 @@ pub fn random_token() -> String {
     let pid = std::process::id();
     format!("{nanos:x}{pid:x}")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::{header, HeaderMap, StatusCode};
+    use tinymusic_core::{
+        cloud::CloudLibrary, http::HttpClient, model::Codec, proxy::StreamProxy, webdav::WebDav,
+    };
+
+    #[tokio::test]
+    async fn webdav_playback_uses_audio_bytes_over_filename_and_upstream_mime() {
+        let app = Router::new().route(
+            "/music/song.flac",
+            get(|headers: HeaderMap| async move {
+                assert!(matches!(
+                    headers[header::RANGE].to_str().unwrap(),
+                    "bytes=0-65535" | "bytes=0-3"
+                ));
+                (
+                    StatusCode::PARTIAL_CONTENT,
+                    [
+                        (header::CONTENT_TYPE, "audio/flac"),
+                        (header::CONTENT_RANGE, "bytes 0-3/4"),
+                    ],
+                    [0xff, 0xfb, 0x90, 0x64],
+                )
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        let upstream = tokio::spawn(async move { axum::serve(listener, app).await });
+        let http = Arc::new(HttpClient::new(0, 4));
+        let proxy = StreamProxy::start(http.clone()).await.unwrap();
+        let dav = WebDav::new(&endpoint, "music", String::new(), String::new()).unwrap();
+        let cloud = CloudLibrary::WebDav(dav, proxy.clone());
+        let (url, format, bytes) = cloud
+            .audio_url("music/song.flac", &proxy, http.client())
+            .await
+            .unwrap();
+        assert_eq!(format.codec, Codec::Mp3);
+        assert!(!format.lossless);
+        assert_eq!(bytes, Some(4));
+        let response = http
+            .client()
+            .get(url)
+            .header(header::RANGE, "bytes=0-3")
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(response.headers()[header::CONTENT_TYPE], "audio/mpeg");
+        assert_eq!(
+            response.bytes().await.unwrap().as_ref(),
+            &[0xff, 0xfb, 0x90, 0x64]
+        );
+        upstream.abort();
+    }
+}

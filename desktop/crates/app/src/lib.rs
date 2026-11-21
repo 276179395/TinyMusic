@@ -840,15 +840,18 @@ pub async fn resolve(
     let q = Quality::parse(&quality).ok_or_else(|| "未知音质".to_string())?;
     if is_cloud_provider(&track.provider) {
         let client = track_cloud_client(state, &track.provider)?;
-        let (actual_quality, format) = s3_audio_format(&track.id);
-        let verified = format.codec != Codec::Unknown;
-        let mime = tinymusic_core::proxy::mime_for_path(Path::new(&track.id));
-        let url = client.audio_url(&track.id, &state.proxy, mime).await.map_err(|e| e.to_string())?;
+        let (url, format, bytes) = client
+            .audio_url(&track.id, &state.proxy, state.http.client())
+            .await
+            .map_err(|e| e.to_string())?;
+        let actual_quality = format.tier().unwrap_or_default();
+        let verified = format.verified;
+        let mime = tinymusic_core::quality::mime_for_codec(format.codec);
         return Ok(StreamInfo {
             url,
             quality: actual_quality,
             requested: q,
-            bytes: None,
+            bytes,
             availability: Availability::Available,
             content_type: mime.into(),
             format,
@@ -967,6 +970,29 @@ pub fn parse_lrc(text: &str) -> Vec<LyricLine> {
 }
 
 
+async fn open_audio_file(
+    state: &AppState,
+    path: PathBuf,
+    requested: Quality,
+    via: &str,
+) -> Result<PlayerSource, String> {
+    let (format, bytes) = tinymusic_core::quality::probe_audio_file(&path)
+        .await
+        .map_err(|error| error.to_string())?;
+    let mime = tinymusic_core::quality::mime_for_codec(format.codec);
+    let url = state.proxy.register_file(path, Some(mime.into())).await;
+    Ok(PlayerSource {
+        url,
+        quality: format.tier().unwrap_or_default().as_str().into(),
+        requested_quality: requested.as_str().into(),
+        verified: format.verified,
+        format,
+        bytes: Some(bytes),
+        degraded: false,
+        via: via.into(),
+    })
+}
+
 pub async fn player_open(
     state: &AppState,
     track: Track,
@@ -988,46 +1014,15 @@ pub async fn player_open(
                 || quality_rank(local_quality) >= quality_rank(q)
                 || state.provider(&track.provider).is_err()
             {
-                let (_, format) = s3_audio_format(&row.path);
-                let verified = format.codec != Codec::Unknown;
-                let mime = tinymusic_core::proxy::mime_for_path(&path);
-                let url = state
-                    .proxy
-                    .register_file(path, Some(mime.to_string()))
-                    .await;
-                return Ok(PlayerSource {
-                    url,
-                    quality: local_quality.as_str().to_string(),
-                    requested_quality: q.as_str().to_string(),
-                    format,
-                    bytes: Some(row.bytes.max(0) as u64),
-                    degraded: false,
-                    verified,
-                    via: "local".into(),
-                });
+                return open_audio_file(state, path, q, "local").await;
             }
         }
         if let Some(path) = playback_cache::cached_audio(state, &track.provider, &track.id) {
-            let (quality, format) = s3_audio_format(&track.id);
-            let mime = tinymusic_core::proxy::mime_for_path(&path);
-            let bytes = std::fs::metadata(&path).ok().map(|meta| meta.len());
-            let url = state.proxy.register_file(path, Some(mime.into())).await;
-            return Ok(PlayerSource {
-                url,
-                quality: quality.as_str().into(),
-                requested_quality: q.as_str().into(),
-                verified: format.codec != Codec::Unknown,
-                format,
-                bytes,
-                degraded: false,
-                via: "cache".into(),
-            });
+            return open_audio_file(state, path, q, "cache").await;
         }
     }
 
-    // 网盘里的歌：给一个 6 小时有效的签名直链，同样套一层本地代理 ——
-    // WebView 对跨域音视频的 Content-Type / HEAD 更挑，代理统一成 Range + 明确 MIME。
-    // 格式按文件后缀推断，UI 显示 FLAC/MP3，而不是笼统的“原文件”。
+    // 网盘播放先读取有限范围的文件头，代理使用识别出的 MIME 并继续支持 Range。
     if is_cloud_provider(&track.provider) {
         let info = resolve(state, track, q.as_str().into()).await?;
         return Ok(PlayerSource {
