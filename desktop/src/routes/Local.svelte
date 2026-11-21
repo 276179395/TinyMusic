@@ -44,16 +44,20 @@
     return () => window.clearInterval(timer);
   });
 
-  async function addFiles() {
+  async function addMusic(directory: boolean) {
     busy = true;
     error = '';
     try {
-      const paths = await open({
-        multiple: true,
-        filters: [{ name: t('音频文件'), extensions: ['mp3', 'flac', 'm4a', 'aac', 'ogg', 'wav'] }],
+      const defaultPath = await api.localMusicInputDir();
+      const selection = await open({
+        defaultPath,
+        directory,
+        multiple: !directory,
+        filters: directory ? undefined : [{ name: t('音频文件'), extensions: ['mp3', 'flac', 'm4a', 'aac', 'ogg', 'wav'] }],
       });
-      if (paths?.length) {
-        await api.localMusicAdd(paths);
+      if (selection) {
+        const added = await api.localMusicAdd(Array.isArray(selection) ? selection : [selection]);
+        if (!added.length) error = t('所选文件夹中没有支持的音频文件');
         await refresh();
       }
     } catch (err) {
@@ -108,9 +112,13 @@
   <div class="summary">
     {folder?.name ?? t('本地音乐')}
     {#if !folder}
-      <button class="mini primary" onclick={addFiles} disabled={loading || busy}>
+      <button class="mini primary" onclick={() => addMusic(false)} disabled={loading || busy}>
         <HugeiconsIcon icon={icons.folder} size={ICON_SIZE.inline} />
         {t('添加音乐文件')}
+      </button>
+      <button class="mini" onclick={() => addMusic(true)} disabled={loading || busy}>
+        <HugeiconsIcon icon={icons.folder} size={ICON_SIZE.inline} />
+        {t('添加文件夹')}
       </button>
     {/if}
     {#if tracks.length}

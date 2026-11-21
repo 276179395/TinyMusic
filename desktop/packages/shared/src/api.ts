@@ -37,6 +37,7 @@ export const api = {
     invoke<PlayerSource>('player_open', { track, quality, forceRefresh, allowLocal }),
 
   localMusicList: () => invoke<LocalMusicItem[]>('local_music_list'),
+  localMusicInputDir: () => shellInvoke<string>('local_music_input_dir'),
   localMusicAdd: (paths: string[]) => shellInvoke<Track[]>('local_music_add', { paths }),
   localMusicRemove: (id: string) => invoke<void>('local_music_remove', { id }),
   localMusicMigrate: (legacy: LocalFolder[]) => shellInvoke<LocalFolder[]>('local_music_migrate', { legacy }),

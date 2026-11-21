@@ -14,6 +14,8 @@ export const browse: Record<string, string> = {
   '从收藏夹移除 {title}': 'Remove {title} from this folder',
   '在「本地」选择曲目旁的收藏夹按钮来添加歌曲': 'Use the folder button beside a track in Local to add it here',
   '添加音乐文件': 'Add music files',
+  '添加文件夹': 'Add folder',
+  '所选文件夹中没有支持的音频文件': 'The selected folder has no supported audio files',
   '音频文件': 'Audio files',
   '添加本机上的音频文件以开始播放': 'Add audio files from this device to start playing',
   '从本地音乐移除 {title}': 'Remove {title} from local music',

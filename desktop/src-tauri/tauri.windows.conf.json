@@ -15,5 +15,10 @@
         "shadow": true
       }
     ]
+  },
+  "bundle": {
+    "resources": {
+      "input/README.txt": "input/README.txt"
+    }
   }
 }

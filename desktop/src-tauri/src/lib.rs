@@ -39,6 +39,20 @@ fn portable_directory(name: &str) -> Option<std::path::PathBuf> {
     Some(dir)
 }
 
+fn prepare_input_directory(config_dir: &std::path::Path) -> std::io::Result<std::path::PathBuf> {
+    if let Some(dir) = portable_directory("input") {
+        return Ok(dir);
+    }
+    let base = if tauri::is_dev() {
+        config_dir.join("dev")
+    } else {
+        config_dir.to_path_buf()
+    };
+    let dir = base.join("input");
+    std::fs::create_dir_all(&dir)?;
+    Ok(dir)
+}
+
 
 /// 把后端事件转发到前端：桌面用 Tauri 事件总线（前端 `listen` 收到）
 struct AppHost {
@@ -59,6 +73,13 @@ async fn tm_invoke(
     args: serde_json::Value,
 ) -> Result<serde_json::Value, String> {
     tinymusic_app::dispatch::dispatch(state.inner(), &cmd, args, None, None).await
+}
+
+#[tauri::command]
+fn local_music_input_dir(state: State<'_, Arc<AppState>>) -> Result<String, String> {
+    prepare_input_directory(state.config_dir())
+        .map(|dir| dir.to_string_lossy().into_owned())
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -387,6 +408,9 @@ pub fn run() {
             ))
             .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
             println!("[tinymusic] 流代理: {}", state.proxy.base_url());
+            if let Err(error) = prepare_input_directory(state.config_dir()) {
+                eprintln!("[tinymusic] 无法创建 input 目录: {error}");
+            }
             app.manage(state);
             if let Err(error) = theme_pack::prepare_directory(app.handle()) {
                 eprintln!("[tinymusic] 无法创建主题目录: {error}");
@@ -429,6 +453,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             tm_invoke,
+            local_music_input_dir,
             local_music_add,
             local_music_migrate,
             local_music_copy_library,

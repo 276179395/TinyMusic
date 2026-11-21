@@ -1,4 +1,5 @@
 use super::*;
+use std::collections::HashSet;
 use std::io::{ErrorKind, Write};
 use std::path::Component;
 
@@ -255,13 +256,41 @@ fn copy_song(
     Ok(id)
 }
 
+fn folder_audio_files(folder: PathBuf) -> Result<Vec<PathBuf>, String> {
+    let mut folders = vec![folder];
+    let mut files = Vec::new();
+    while let Some(folder) = folders.pop() {
+        for entry in std::fs::read_dir(folder).map_err(io_error)? {
+            let entry = entry.map_err(io_error)?;
+            let kind = entry.file_type().map_err(io_error)?;
+            if kind.is_dir() {
+                folders.push(entry.path());
+            } else if kind.is_file() && entry.file_name().to_str().is_some_and(is_audio_key) {
+                files.push(entry.path());
+            }
+        }
+    }
+    files.sort_unstable();
+    Ok(files)
+}
+
 pub fn add(state: &AppState, paths: Vec<String>) -> Result<Vec<Track>, String> {
     let _guard = state.music_lock.lock().unwrap();
     let local = ensure_root(&root(state))?;
+    let mut sources = Vec::new();
+    for path in paths {
+        let source = Path::new(&path).canonicalize().map_err(io_error)?;
+        if real_dir(&source) {
+            sources.extend(folder_audio_files(source)?);
+        } else {
+            sources.push(source);
+        }
+    }
+    let mut added = HashSet::new();
     let mut tracks = Vec::new();
-    for source in paths {
-        let id = copy_song(state, &local, Path::new(&source), None)?;
-        if !tracks.iter().any(|track: &Track| track.id == id) {
+    for source in sources {
+        let id = copy_song(state, &local, &source, None)?;
+        if added.insert(id.clone()) {
             tracks.push(song_track(id));
         }
     }

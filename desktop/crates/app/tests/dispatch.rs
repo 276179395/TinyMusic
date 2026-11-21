@@ -70,6 +70,38 @@ async fn local_music_is_persisted_and_only_registered_files_are_playable() {
 }
 
 #[tokio::test]
+async fn importing_a_folder_includes_nested_audio_and_preserves_sidecars() {
+    let app = state("local-music-folder").await;
+    let input = tempfile::tempdir_in(app.config_dir()).unwrap();
+    let nested = input.path().join("子目录");
+    std::fs::create_dir(&nested).unwrap();
+    let mp3 = input.path().join("第一首.MP3");
+    let flac = nested.join("第二首.flac");
+    std::fs::write(&mp3, b"mp3").unwrap();
+    std::fs::write(&flac, b"flac").unwrap();
+    std::fs::write(flac.with_extension("lrc"), b"lyrics").unwrap();
+    std::fs::write(flac.with_extension("png"), b"cover").unwrap();
+    let empty = nested.join("非音频");
+    std::fs::create_dir(&empty).unwrap();
+    std::fs::write(empty.join("README.txt"), b"ignore").unwrap();
+
+    let folder = input.path().to_str().unwrap().to_owned();
+    let added = local_music::add(&app, vec![folder.clone(), mp3.to_str().unwrap().to_owned()])
+        .unwrap();
+    assert_eq!(added.len(), 2);
+    let local = std::path::PathBuf::from(app.settings_snapshot().music_dir).join("Local");
+    assert_eq!(std::fs::read(local.join("第一首/第一首.mp3")).unwrap(), b"mp3");
+    let imported = local.join("第二首/第二首.flac");
+    assert_eq!(std::fs::read(&imported).unwrap(), b"flac");
+    assert_eq!(std::fs::read(imported.with_extension("lrc")).unwrap(), b"lyrics");
+    assert_eq!(std::fs::read(imported.with_extension("png")).unwrap(), b"cover");
+    assert!(mp3.is_file() && flac.is_file() && flac.with_extension("lrc").is_file());
+    local_music::add(&app, vec![folder]).unwrap();
+    assert_eq!(local_music::library(&app).unwrap().len(), 2);
+    assert!(local_music::add(&app, vec![empty.to_str().unwrap().to_owned()]).unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn legacy_music_and_folder_links_are_migrated_once() {
     let app = state("legacy-music").await;
     let audio = app.config_dir().join("老歌曲.wav");
