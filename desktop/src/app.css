@@ -396,6 +396,75 @@ body {
   background-attachment: fixed;
 }
 
+html[data-background='color'] body,
+html[data-background='image'] body,
+html[data-theme-pack='image'] body {
+  --theme-background-tint: rgb(0 0 0 / 64%);
+  background-image: linear-gradient(var(--theme-background-tint), var(--theme-background-tint));
+}
+
+html[data-theme='light'][data-background] body {
+  --theme-background-tint: rgb(255 255 255 / 65%);
+}
+
+html[data-background='color'] body {
+  background-color: var(--custom-theme-color);
+}
+
+html[data-background='image'] body {
+  background-image:
+    linear-gradient(var(--theme-background-tint), var(--theme-background-tint)),
+    var(--custom-theme-image);
+  background-size: cover;
+  background-position: center;
+}
+
+html[data-theme-pack][data-background] body {
+  background-color: var(--background);
+  background-image: none;
+}
+
+html[data-theme-pack='image'][data-background] body {
+  background-image: linear-gradient(var(--bg-tint, var(--theme-background-tint)), var(--bg-tint, var(--theme-background-tint))),
+    var(--theme-pack-image);
+  background-size: cover;
+  background-position: center;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html[data-theme-effect='petals'] body {
+    isolation: isolate;
+  }
+
+  html[data-theme-effect='petals'] body::before,
+  html[data-theme-effect='petals'] body::after {
+    content: '';
+    position: fixed;
+    inset: -320px -240px 0;
+    z-index: -1;
+    pointer-events: none;
+    background: url('./assets/theme-petals.svg') repeat;
+    animation: theme-petals 19s linear infinite;
+  }
+
+  html[data-theme-effect='petals'] body::after {
+    opacity: 0.5;
+    background-position: 152px 74px;
+    animation-duration: 31s;
+    animation-delay: -13s;
+  }
+
+  @keyframes theme-petals {
+    to { transform: translate(240px, 320px); }
+  }
+}
+
+:root[data-theme-pack][data-glass='flat'] {
+  /* The material setting takes precedence over imported translucent colors. */
+  --bg2: var(--solid-bg2) !important;
+  --popover: var(--solid-popover) !important;
+}
+
 ::selection {
   background: color-mix(in oklch, var(--ink) 26%, transparent);
   color: var(--fg);
@@ -707,16 +776,6 @@ button.primary,
 .tb.main,
 .lp-ctrls .c.main,
 .count,
-.logo {
-  background-color: color-mix(in oklch, var(--ink) var(--ink-solid), transparent);
-  background-clip: padding-box;
-  border: 0;
-  color: var(--ink-fg);
-  box-shadow: var(--ink-shadow);
-  -webkit-backdrop-filter: var(--glass-blur-control);
-  backdrop-filter: var(--glass-blur-control);
-}
-
 .searchbar button:hover:not(:disabled),
 .actions .primary:hover:not(:disabled),
 button.primary:hover:not(:disabled),
@@ -893,14 +952,6 @@ aside {
   width: 26px;
   height: 26px;
   flex: none;
-  display: grid;
-  place-items: center;
-  border-radius: 28%;
-  font-size: 15px;
-  font-weight: 900;
-  box-shadow:
-    inset 0 1px 0 var(--ink-rim), inset 0 -1px 0 var(--ink-under),
-    0 1px 2px var(--glass-contact);
 }
 
 aside nav {

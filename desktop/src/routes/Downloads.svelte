@@ -91,6 +91,15 @@
     void playTrack(track, [track]);
   }
 
+  async function openDownloadDir() {
+    try {
+      await api.openDownloadDir();
+      err = '';
+    } catch (e) {
+      err = String(e);
+    }
+  }
+
   function rowMenu(e: MouseEvent, r: DownloadRow) {
     e.preventDefault();
     e.stopPropagation();
@@ -105,7 +114,7 @@
             {
               label: t('打开下载目录'),
               icon: icons.folder,
-              run: () => api.openDownloadDir().catch(() => {}),
+              run: openDownloadDir,
             },
           ]),
       {
@@ -127,7 +136,7 @@
 <div class="page">
   <div class="summary">
     {t('下载记录')}
-    <button class="mini" onclick={() => api.openDownloadDir().catch(() => {})}>
+    <button class="mini" onclick={openDownloadDir}>
       <HugeiconsIcon icon={icons.folder} size={ICON_SIZE.inline} />
       {t('打开目录')}
     </button>

@@ -25,6 +25,12 @@
 - 缓存任务串行执行，不写下载记录。缓存文件放在所选目录下的 `TinyMusic-playback-cache` 子目录。清空取消当前和排队的缓存任务，只处理当前选定目录中的受管理文件。
 - 当前构建目标是 Windows 和 macOS 桌面端。旧音源数据用于兼容已有本地下载。
 
+## 外观与主题包
+
+- `desktop/src/lib/theme.svelte.ts` 控制主题模式和自定义背景。`themePacks.svelte.ts` 管理主题包、底板选择与 IndexedDB 持久化。
+- `desktop/src-tauri/src/theme_pack.rs` 读取 ZIP 并校验容量、条目和资源路径。前端只应用允许的颜色、包内图片及内置动效。格式见 [CSS 主题包](<desktop/docs/CSS 主题包.md>)。
+- 内置主题使用应用外观。切入「自定义」会恢复已选主题包，由包内 `appearance` 决定底板，缺省为深色。
+
 ## 常用命令
 
     cd desktop && pnpm install                 # desktop 是 pnpm workspace 根

@@ -1,0 +1,12 @@
+:root {
+  --background: #2a1a34;
+  --foreground: #fff4fa;
+  --fg2: #f2d2e8;
+  --fg3: #dfbad6;
+  --bg2: rgb(61 33 65 / 76%);
+  --popover: #422840;
+  --brand: #ffb2d0;
+  --line: rgb(255 219 242 / 20%);
+  --bg-image: url("@/imgs/background.webp");
+  --bg-effect: petals;
+}

@@ -1,0 +1,11 @@
+:root {
+  --background: #111731;
+  --foreground: #f5f2ff;
+  --fg2: #d5d1ee;
+  --fg3: #bbb6db;
+  --bg2: rgb(26 30 63 / 77%);
+  --popover: #24284a;
+  --brand: #c0b4ff;
+  --line: rgb(230 225 255 / 19%);
+  --bg-image: url("@/imgs/background.webp");
+}

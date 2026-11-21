@@ -3,6 +3,7 @@
 //! 业务逻辑不在这里：桌面与 mobile 共用 `tinymusic_app`（同一份命令实现与 dispatch）。
 
 use std::sync::Arc;
+mod theme_pack;
 use std::time::Duration;
 
 use tauri::ipc::Channel;
@@ -163,16 +164,21 @@ fn os_version() -> String {
 }
 
 #[tauri::command]
-fn open_download_dir(state: State<'_, AppState>) -> Result<(), String> {
-    let dir = state.settings_snapshot().download_dir;
+fn open_download_dir(state: State<'_, Arc<AppState>>) -> Result<(), String> {
+    let dir = std::path::absolute(state.settings_snapshot().download_dir)
+        .map_err(|e| e.to_string())?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     #[cfg(target_os = "macos")]
-    let _ = std::process::Command::new("open").arg(&dir).spawn();
+    let opener = "open";
     #[cfg(target_os = "windows")]
-    let _ = std::process::Command::new("explorer").arg(&dir).spawn();
+    let opener = "explorer.exe";
     #[cfg(target_os = "linux")]
-    let _ = std::process::Command::new("xdg-open").arg(&dir).spawn();
-    Ok(())
+    let opener = "xdg-open";
+    std::process::Command::new(opener)
+        .arg(&dir)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 // ---------- 网盘（S3）----------
@@ -239,9 +245,8 @@ fn build_tray(app: &mut tauri::App) -> tauri::Result<()> {
             _ => {}
         });
 
-    // 优先用打包内的 32x32 图标：dev 模式下 default_window_icon 有时是空的，
-    // 那样 macOS 菜单栏会看不到托盘入口。
-    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))
+    // 托盘使用简化的小尺寸图标，开发模式也直接加载内置资源。
+    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))
         .ok()
         .or_else(|| app.default_window_icon().cloned());
     if let Some(icon) = icon {
@@ -294,6 +299,13 @@ pub fn run() {
             println!("[tinymusic] 流代理: {}", state.proxy.base_url());
             app.manage(state);
 
+            #[cfg(target_os = "windows")]
+            if let Some(window) = app.get_webview_window("main") {
+                window.set_icon(tauri::image::Image::from_bytes(include_bytes!(
+                    "../icons/128x128.png"
+                ))?)?;
+            }
+
             // 托盘图标 + 右键菜单：关窗口后还能控制播放
             build_tray(app)?;
             Ok(())
@@ -330,6 +342,7 @@ pub fn run() {
             s3_download_batch,
             s3_integrity_fix,
             open_download_dir,
+            theme_pack::read_theme_pack,
             set_window_theme,
             set_ui_language,
             system_info,

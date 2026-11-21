@@ -4173,8 +4173,9 @@ dependencies = [
 
 [[package]]
 name = "tinymusic"
-version = "0.7.6"
+version = "0.7.7"
 dependencies = [
+ "base64 0.22.1",
  "serde",
  "serde_json",
  "tauri",
@@ -4185,11 +4186,12 @@ dependencies = [
  "tinymusic-app",
  "tinymusic-core",
  "tokio",
+ "zip",
 ]
 
 [[package]]
 name = "tinymusic-app"
-version = "0.7.6"
+version = "0.7.7"
 dependencies = [
  "serde",
  "serde_json",
@@ -4200,7 +4202,7 @@ dependencies = [
 
 [[package]]
 name = "tinymusic-core"
-version = "0.7.6"
+version = "0.7.7"
 dependencies = [
  "async-trait",
  "getrandom 0.4.3",
@@ -4220,7 +4222,7 @@ dependencies = [
 
 [[package]]
 name = "tinymusic-server"
-version = "0.7.6"
+version = "0.7.7"
 dependencies = [
  "axum",
  "serde",
@@ -5403,6 +5405,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "eaeb7f16d2605b49aef586996ded29e65642fab7259a3077e537351df6d80426"
 dependencies = [
  "crc32fast",
+ "flate2",
  "getrandom 0.4.3",
  "indexmap 2.14.2",
  "libc",

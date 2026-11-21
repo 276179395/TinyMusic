@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { t } from './lib/i18n.svelte';
   import { HugeiconsIcon } from '@hugeicons/svelte';
+  import appLogo from '../src-tauri/icons/128x128.png';
   import { listen } from '@tauri-apps/api/event';
   import { icons, ICON_SIZE } from './lib/icons';
   import { router, go } from './lib/router.svelte';
@@ -292,7 +293,7 @@
     <!-- macOS 使用 Overlay 标题栏：给红绿灯留位置，并让这块区域可以拖动窗口 -->
     <div class="titlebar-drag" data-tauri-drag-region aria-hidden="true"></div>
     <div class="brand">
-      <span class="logo"><HugeiconsIcon icon={icons.music} size={ICON_SIZE.inline} /></span>
+      <img class="logo" src={appLogo} alt="" width="26" height="26" />
       <span>TinyMusic</span>
     </div>
     <nav class="side-nav">

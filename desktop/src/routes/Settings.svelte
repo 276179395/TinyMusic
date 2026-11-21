@@ -6,7 +6,10 @@
   import { icons, ICON_SIZE } from '../lib/icons';
   import { refreshAppCfg } from '../lib/config.svelte';
   import { setPreferredQuality } from '../lib/player.svelte';
-  import { theme, setTheme, type ThemeMode } from '../lib/theme.svelte';
+  import {
+    theme, setTheme, themeBackground, setThemeBackground, importThemeImage,
+    type ThemeMode, type ThemeBackground,
+  } from '../lib/theme.svelte';
   import { glass, setGlassEnabled } from '../lib/glass.svelte';
   import { getVersion } from '@tauri-apps/api/app';
   import { check } from '@tauri-apps/plugin-updater';
@@ -23,6 +26,7 @@
     setEqualizerEnabled
   } from '../lib/equalizer.svelte';
   import { showToast } from '../lib/toast.svelte';
+  import { themePacks, importThemePack, selectThemePack } from '../lib/themePacks.svelte';
   import { t, i18n, setLanguage, type LanguageSetting } from '../lib/i18n.svelte';
 
   /** 关掉动画就别展开收起，直接跳 */
@@ -217,11 +221,82 @@
     }
   }
 
-  const themeOptions: { v: ThemeMode; label: string }[] = [
-    { v: 'auto', label: '跟随系统' },
-    { v: 'light', label: '浅色' },
-    { v: 'dark', label: '深色' }
-  ];
+  const themeOptions = $derived<{ value: ThemeMode; label: string }[]>([
+    { value: 'auto', label: t('跟随系统') },
+    { value: 'dark', label: t('深色') },
+    { value: 'light', label: t('浅色') },
+    { value: 'custom', label: t('自定义') },
+  ]);
+  const themePackOptions = $derived([
+    { value: '', label: t('应用外观') },
+    ...themePacks.items.map((pack) => ({ value: pack.id, label: pack.name })),
+  ]);
+  const backgroundOptions = $derived<{ value: ThemeBackground; label: string }[]>([
+    { value: 'default', label: t('默认背景') },
+    { value: 'color', label: t('纯色') },
+    { value: 'image', label: t('本地图片') },
+  ]);
+
+  let backgroundInput = $state<HTMLInputElement>();
+  let backgroundBusy = $state(false);
+  let backgroundError = $state('');
+  let themePackBusy = $state(false);
+  let themePackError = $state('');
+
+  async function chooseThemePack() {
+    if (themePackBusy) return;
+    themePackBusy = true;
+    themePackError = '';
+    try {
+      const path = await openDialog({
+        title: t('导入主题包'),
+        filters: [{ name: t('主题包'), extensions: ['zip'] }],
+      });
+      if (typeof path === 'string') {
+        await importThemePack(path);
+        showToast(t('主题包已应用'));
+      }
+    } catch (error) {
+      themePackError = error instanceof Error ? error.message : String(error);
+    } finally {
+      themePackBusy = false;
+    }
+  }
+
+  function changeThemePack(id: string) {
+    themePackError = '';
+    try {
+      selectThemePack(id);
+    } catch {
+      themePackError = t('无法保存主题设置');
+    }
+  }
+
+  function updateBackground(kind: ThemeBackground, color?: string) {
+    backgroundError = '';
+    try {
+      setThemeBackground(kind, color);
+    } catch {
+      backgroundError = t('无法保存主题设置');
+    }
+  }
+
+  async function selectBackgroundImage(event: Event) {
+    const input = event.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    backgroundError = '';
+    backgroundBusy = true;
+    try {
+      await importThemeImage(file);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      backgroundError = message.startsWith('请选择') ? t(message) : t('无法载入或保存背景图片');
+    } finally {
+      backgroundBusy = false;
+    }
+  }
 
   const languageOptions: { v: LanguageSetting; label: string }[] = [
     { v: 'auto', label: '跟随系统' },
@@ -263,18 +338,87 @@
       <div class="st-row">
         <div class="st-label">{t('主题')}</div>
         <div class="st-seg" role="group" aria-label={t('主题')}>
-          {#each themeOptions as opt (opt.v)}
-            <button
-              type="button"
-              class:on={theme.mode === opt.v}
-              aria-pressed={theme.mode === opt.v}
-              onclick={() => setTheme(opt.v)}
-            >
-              {t(opt.label)}
+          {#each themeOptions as opt (opt.value)}
+            <button type="button" class:on={theme.mode === opt.value}
+              aria-pressed={theme.mode === opt.value} onclick={() => setTheme(opt.value)}>
+              {opt.label}
             </button>
           {/each}
         </div>
       </div>
+
+      {#if theme.mode === 'custom'}
+        <div class="st-row">
+          <div class="st-label">
+            {t('主题包')}
+            {#if themePacks.activeId}
+              <span class="st-desc">{theme.resolved === 'light' ? t('浅色底板') : t('深色底板')}</span>
+            {/if}
+          </div>
+          <div class="st-control">
+            <select class="st-select" aria-label={t('主题包')} value={themePacks.activeId}
+              disabled={!themePacks.loaded || themePackBusy}
+              onchange={(e) => changeThemePack(e.currentTarget.value)}>
+              {#each themePackOptions as opt (opt.value)}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
+            </select>
+            <button type="button" class="st-btn" disabled={!themePacks.loaded || themePackBusy} onclick={chooseThemePack}>
+              {themePackBusy ? t('正在载入…') : t('导入主题包')}
+            </button>
+          </div>
+        </div>
+        {#if themePackError || themePacks.error}
+          <div class="st-row"><ErrorNotice text={themePackError || themePacks.error} /></div>
+        {/if}
+
+        {#if !themePacks.activeId}
+          <div class="st-row">
+            <div class="st-label">{t('自定义背景')}</div>
+            <select class="st-select" aria-label={t('自定义背景')} value={themeBackground.kind}
+              disabled={backgroundBusy} onchange={(e) => updateBackground(e.currentTarget.value as ThemeBackground)}>
+              {#each backgroundOptions as opt (opt.value)}
+                <option value={opt.value}>{opt.label}</option>
+              {/each}
+            </select>
+          </div>
+          {#if themeBackground.kind === 'color'}
+            <div class="st-row">
+              <div class="st-label">{t('背景颜色')}</div>
+              <div class="st-control">
+                <span class="st-value">{themeBackground.color.toUpperCase()}</span>
+                <input
+                  class="st-color"
+                  type="color"
+                  aria-label={t('背景颜色')}
+                  value={themeBackground.color}
+                  onchange={(e) => updateBackground('color', e.currentTarget.value)}
+                />
+              </div>
+            </div>
+          {:else if themeBackground.kind === 'image'}
+            <div class="st-row">
+              <div class="st-label">
+                {t('背景图片')}
+                {#if themeBackground.image}<span class="st-desc">{themeBackground.image.name}</span>{/if}
+              </div>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                bind:this={backgroundInput}
+                onchange={selectBackgroundImage}
+                hidden
+              />
+              <button type="button" class="st-btn" disabled={backgroundBusy} onclick={() => backgroundInput?.click()}>
+                {backgroundBusy ? t('正在载入…') : t('选择图片…')}
+              </button>
+            </div>
+          {/if}
+          {#if backgroundError}
+            <div class="st-row"><ErrorNotice text={backgroundError} /></div>
+          {/if}
+        {/if}
+      {/if}
 
       <div class="st-row">
         <div class="st-label">{t('语言')}</div>
@@ -291,28 +435,7 @@
       </div>
 
       <div class="st-row">
-        <div class="st-label">
-          {t('玻璃材质')}
-          <span class="st-desc">
-            {#if glass.forced}
-              {t('当前系统的 WebView 不支持毛玻璃，已改用边框材质')}
-            {:else if glass.mode === 'flat' && glass.reason === 'system'}
-              {t('系统版本较低{ver}，已改用边框材质', {
-                ver: glass.osVersion
-                  ? i18n.lang === 'zh'
-                    ? `（macOS ${glass.osVersion}）`
-                    : ` (macOS ${glass.osVersion})`
-                  : ''
-              })}
-            {:else if glass.mode === 'flat' && glass.reason === 'reduced'}
-              {t('系统要求减少透明，已改用边框材质')}
-            {:else if glass.mode === 'flat'}
-              {t('已关闭 · 卡片与浮层改用边框材质')}
-            {:else}
-              {t('已开启 · 卡片、播放条与歌词页是一层毛玻璃')}
-            {/if}
-          </span>
-        </div>
+        <div class="st-label">{t('玻璃材质')}</div>
         <span class="st-value">{glass.mode === 'glass' ? t('已开启') : t('已关闭')}</span>
         <label
           class="st-switch"
@@ -659,6 +782,16 @@
 </div>
 
 <style>
+  .st-color {
+    inline-size: 44px;
+    block-size: 30px;
+    padding: 2px;
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    background: var(--bg3);
+    cursor: pointer;
+  }
+
   .settings-page {
     max-width: 760px;
     padding-top: 26px;
@@ -840,9 +973,10 @@
     color: #fff;
   }
 
+
   .st-seg {
     display: inline-flex;
-    flex: none;
+    flex-wrap: wrap;
     gap: 2px;
     padding: 2px;
     border: 1px solid var(--field-edge);

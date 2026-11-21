@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="320" viewBox="0 0 240 320">
+  <defs>
+    <linearGradient id="pink" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#fff2f6"/>
+      <stop offset="1" stop-color="#ec80a6"/>
+    </linearGradient>
+    <path id="petal" d="M0 1C2-3 8-5 13-3L12 0 14 1C12 5 5 7 0 1Z" fill="url(#pink)"/>
+  </defs>
+  <use href="#petal" transform="translate(28 47) rotate(24)" opacity=".85"/>
+  <use href="#petal" transform="translate(178 25) rotate(64) scale(.54)" opacity=".56"/>
+  <use href="#petal" transform="translate(117 106) rotate(-21) scale(.64)" opacity=".76"/>
+  <use href="#petal" transform="translate(213 145) rotate(37)" opacity=".66"/>
+  <use href="#petal" transform="translate(47 199) rotate(72) scale(.52)" opacity=".5"/>
+  <use href="#petal" transform="translate(152 245) rotate(-16) scale(.83)" opacity=".77"/>
+  <use href="#petal" transform="translate(75 300) rotate(19) scale(.65)" opacity=".7"/>
+</svg>

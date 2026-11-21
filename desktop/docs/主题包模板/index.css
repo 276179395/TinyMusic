@@ -1,0 +1,11 @@
+:root {
+  --background: #171e31;
+  --foreground: #f5f3ff;
+  --fg2: #d5cdef;
+  --fg3: #c0b6dc;
+  --bg2: rgb(27 30 55 / 74%);
+  --popover: #252642;
+  --brand: #bdacf9;
+  --line: rgb(229 222 255 / 20%);
+  --bg-image: url("@/imgs/dusk.png");
+}

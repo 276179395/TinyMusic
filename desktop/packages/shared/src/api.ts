@@ -89,6 +89,9 @@ export const api = {
   playbackCacheQueue: (track: Track) => invoke<void>('playback_cache_queue', { track }),
   playbackCacheClear: (cacheDir: string) => invoke<void>('playback_cache_clear', { cacheDir }),
   openDownloadDir: () => shellInvoke<void>('open_download_dir'),
+  readThemePack: (path: string) => shellInvoke<{
+    config: unknown; css: string; images: Record<string, string>;
+  }>('read_theme_pack', { path }),
 
   // ---- 网盘（S3） ----
   s3Test: () => invoke<string>('s3_test'),
