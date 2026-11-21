@@ -4173,7 +4173,7 @@ dependencies = [
 
 [[package]]
 name = "tinymusic"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "serde",
  "serde_json",
@@ -4189,17 +4189,18 @@ dependencies = [
 
 [[package]]
 name = "tinymusic-app"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "serde",
  "serde_json",
+ "sha2",
  "tinymusic-core",
  "tokio",
 ]
 
 [[package]]
 name = "tinymusic-core"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "async-trait",
  "getrandom 0.4.3",
@@ -4219,7 +4220,7 @@ dependencies = [
 
 [[package]]
 name = "tinymusic-server"
-version = "0.7.5"
+version = "0.7.6"
 dependencies = [
  "axum",
  "serde",

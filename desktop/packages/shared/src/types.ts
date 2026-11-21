@@ -195,6 +195,7 @@ export interface FailedDownload {
 
 export interface Settings {
   download_dir: string;
+  cache_dir: string;
   default_quality: Quality;
   settings_version: number;
   concurrency: number;

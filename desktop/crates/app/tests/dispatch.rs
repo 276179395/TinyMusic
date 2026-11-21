@@ -9,6 +9,34 @@ fn tmpdir(name: &str) -> std::path::PathBuf {
     std::env::temp_dir().join(format!("tm-test-{name}-{}", std::process::id()))
 }
 
+#[tokio::test]
+async fn clearing_playback_cache_only_removes_managed_files() {
+    let app = state("clear-cache").await;
+    let settings = app.settings_snapshot();
+    let cache = std::path::Path::new(&settings.cache_dir).join("TinyMusic-playback-cache");
+    std::fs::create_dir_all(&cache).unwrap();
+    let name = format!("{}.flac", "a".repeat(64));
+    let cached = cache.join(&name);
+    let unrelated = cache.join("keep.txt");
+    let download = std::path::Path::new(&settings.download_dir).join(name);
+    for path in [&cached, &unrelated, &download] {
+        std::fs::write(path, b"fixture").unwrap();
+    }
+
+    assert!(dispatch::dispatch(
+        &app, "playback_cache_clear", json!({"cacheDir": "old-directory"}), None, None,
+    ).await.is_err());
+    assert!(cached.is_file());
+
+    dispatch::dispatch(&app, "playback_cache_clear", json!({"cacheDir": settings.cache_dir}), None, None)
+        .await
+        .unwrap();
+
+    assert!(!cached.exists());
+    assert!(unrelated.is_file());
+    assert!(download.is_file());
+}
+
 async fn state(name: &str) -> Arc<AppState> {
     let dir = tmpdir(name);
     let _ = std::fs::remove_dir_all(&dir);

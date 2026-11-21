@@ -24,6 +24,7 @@
     consumePendingSeek,
     clearPendingSeek,
     recoverSource,
+    maybeCachePlayback,
   } from './lib/player.svelte';
   import PlayerBar from './components/PlayerBar.svelte';
   import EqualizerDialog from './components/EqualizerDialog.svelte';
@@ -361,6 +362,7 @@
     ontimeupdate={(e) => {
       const a = e.currentTarget as HTMLAudioElement;
       player.progress = a.currentTime;
+      maybeCachePlayback(a);
       persistPlayback();
     }}
     onloadedmetadata={(e) => {

@@ -86,6 +86,8 @@ export const api = {
     shellInvoke<void>('set_window_theme', { theme: mode === 'auto' ? null : mode }),
   settingsGet: () => invoke<Settings>('settings_get'),
   settingsSet: (settings: Settings) => invoke<void>('settings_set', { settings }),
+  playbackCacheQueue: (track: Track) => invoke<void>('playback_cache_queue', { track }),
+  playbackCacheClear: (cacheDir: string) => invoke<void>('playback_cache_clear', { cacheDir }),
   openDownloadDir: () => shellInvoke<void>('open_download_dir'),
 
   // ---- 网盘（S3） ----

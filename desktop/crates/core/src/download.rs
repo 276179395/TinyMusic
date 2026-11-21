@@ -51,6 +51,40 @@ pub(crate) async fn save_cloud_object(
     }
     file.flush().await?;
     drop(file);
+    let path = publish_cloud_file(temp_path, path, replace)?;
+    on_progress(written, Some(written));
+    Ok(path)
+}
+
+pub async fn copy_cached_file(source: &Path, path: &Path, replace: bool) -> Result<PathBuf> {
+    let dir = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    tokio::fs::create_dir_all(dir).await?;
+    let mut source = tokio::fs::File::open(source).await?;
+    let expected = source.metadata().await?.len();
+    let temp = tempfile::Builder::new()
+        .prefix(".tinymusic-")
+        .suffix(".part")
+        .tempfile_in(dir)?;
+    let (file, temp_path) = temp.into_parts();
+    let mut file = tokio::fs::File::from_std(file);
+    let written = tokio::io::copy(&mut source, &mut file).await?;
+    if written == 0 || written != expected {
+        return Err(Error::Http("缓存文件不完整".into()));
+    }
+    file.flush().await?;
+    drop(file);
+    publish_cloud_file(temp_path, path, replace)
+}
+
+fn publish_cloud_file(
+    temp_path: tempfile::TempPath,
+    path: &Path,
+    replace: bool,
+) -> Result<PathBuf> {
+    let dir = path.parent().unwrap_or(Path::new("."));
     let path = if replace {
         temp_path.persist(path).map_err(|e| e.error)?;
         path.to_owned()
@@ -86,7 +120,6 @@ pub(crate) async fn save_cloud_object(
             }
         }
     };
-    on_progress(written, Some(written));
     Ok(path)
 }
 

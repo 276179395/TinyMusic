@@ -17,6 +17,13 @@ export const shell: Record<string, string> = {
   '向下还原': 'Restore down',
   '最大化': 'Maximize',
   '关闭': 'Close',
+  '播放缓存': 'Playback cache',
+  '缓存目录': 'Cache folder',
+  '选择缓存目录': 'Choose cache folder',
+  '清空播放缓存': 'Clear playback cache',
+  '删除当前缓存目录中的播放缓存？手动下载的文件会保留。': 'Clear the playback cache in this folder? Manual downloads will be kept.',
+  '播放缓存已清空': 'Playback cache cleared',
+  '正在清空…': 'Clearing…',
 
   // ---- 播放失败 / 音频 ----
   '当前系统不支持 FLAC，已切到 320k': "FLAC isn't supported on this system. Switched to 320k",

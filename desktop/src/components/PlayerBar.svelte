@@ -57,6 +57,7 @@
     const via = player.via;
     const provider = player.current?.provider ?? '';
     if (via === 'local') return t('本地');
+    if (via === 'cache') return t('播放缓存');
     if (isCloudProvider(via) || isCloudProvider(provider)) return t('网盘');
     if (via.startsWith('kuwo-bridge')) return t('酷我');
     return '';

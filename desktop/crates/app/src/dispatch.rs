@@ -15,6 +15,26 @@ pub async fn dispatch(
     s3_sink: Option<S3FixFn>,
 ) -> Result<Value, String> {
     match cmd {
+        "playback_cache_queue" => {
+            #[derive(serde::Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct A {
+                track: Track,
+            }
+            let args: A = serde_json::from_value(args).map_err(|e| format!("参数错误: {e}"))?;
+            playback_cache::queue(state, args.track);
+            Ok(Value::Null)
+        }
+        "playback_cache_clear" => {
+            #[derive(serde::Deserialize)]
+            #[serde(rename_all = "camelCase", deny_unknown_fields)]
+            struct A {
+                cache_dir: Option<String>,
+            }
+            let args: A = serde_json::from_value(args).map_err(|e| format!("参数错误: {e}"))?;
+            playback_cache::clear(state, args.cache_dir.as_deref()).await?;
+            Ok(Value::Null)
+        }
         "resolve" => {
             #[derive(serde::Deserialize)]
             #[serde(rename_all = "camelCase", deny_unknown_fields)]

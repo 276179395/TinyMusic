@@ -12,7 +12,7 @@
   import { check } from '@tauri-apps/plugin-updater';
   import ProgressBar from '../components/ProgressBar.svelte';
   import { relaunch } from '@tauri-apps/plugin-process';
-  import { open as openDialog } from '@tauri-apps/plugin-dialog';
+  import { ask, open as openDialog } from '@tauri-apps/plugin-dialog';
   import { slide } from 'svelte/transition';
   import { pendingUpdate, setPendingUpdate, updateState } from '../lib/update.svelte';
   import {
@@ -89,6 +89,7 @@
   // ---- 设置（改动即保存） ----
   let s = $state<Settings>({
     download_dir: '',
+    cache_dir: '',
     default_quality: 'super',
     settings_version: 2,
     concurrency: 2,
@@ -143,20 +144,40 @@
   }
 
   /** 调系统目录选择框；取消或非 Tauri 环境（浏览器调试）就原样不动 */
-  async function pickDir() {
+  async function pickDir(field: 'download_dir' | 'cache_dir' = 'download_dir') {
     try {
       const picked = await openDialog({
         directory: true,
         multiple: false,
-        title: t('选择下载目录'),
-        defaultPath: s.download_dir || undefined
+        title: field === 'cache_dir' ? t('选择缓存目录') : t('选择下载目录'),
+        defaultPath: s[field] || undefined
       });
       if (typeof picked === 'string' && picked) {
-        s.download_dir = picked;
+        s[field] = picked;
         await saveNow();
       }
     } catch {
       /* 浏览器里没有原生对话框，忽略 */
+    }
+  }
+
+  let cacheClearing = $state(false);
+
+  async function clearPlaybackCache() {
+    if (cacheClearing) return;
+    cacheClearing = true;
+    const cacheDir = s.cache_dir;
+    try {
+      const confirmed = await ask(t('删除当前缓存目录中的播放缓存？手动下载的文件会保留。'), {
+        title: t('清空播放缓存'),
+      });
+      if (!confirmed) return;
+      await api.playbackCacheClear(cacheDir);
+      showToast(t('播放缓存已清空'));
+    } catch (e) {
+      err = String(e);
+    } finally {
+      cacheClearing = false;
     }
   }
 
@@ -365,7 +386,7 @@
             spellcheck="false"
             placeholder="~/Music/TinyMusic"
           />
-          <button class="st-btn" onclick={pickDir} title={t('选择下载目录')}>{t('选择…')}</button>
+          <button class="st-btn" onclick={() => pickDir()} title={t('选择下载目录')}>{t('选择…')}</button>
         </div>
       </div>
 
@@ -398,6 +419,26 @@
             <option value={n}>{n}</option>
           {/each}
         </select>
+      </div>
+    </div>
+  </section>
+
+  <section class="st-section">
+    <div class="st-section-title">{t('播放缓存')}</div>
+    <div class="st-card">
+      <div class="st-row">
+        <div class="st-label">{t('缓存目录')}</div>
+        <div class="st-control st-grow">
+          <input class="st-input" value={s.cache_dir} aria-label={t('缓存目录')} readonly />
+          <button class="st-btn" onclick={() => pickDir('cache_dir')} disabled={cacheClearing}
+            title={t('选择缓存目录')}>{t('选择…')}</button>
+        </div>
+      </div>
+      <div class="st-row">
+        <div class="st-label">{t('清空播放缓存')}</div>
+        <button class="st-btn" onclick={clearPlaybackCache} disabled={cacheClearing || !loaded}>
+          {cacheClearing ? t('正在清空…') : t('清空')}
+        </button>
       </div>
     </div>
   </section>

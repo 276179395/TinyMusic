@@ -133,6 +133,22 @@ function applySource(src: PlayerSource) {
   player.degraded = src.degraded;
 }
 
+let requestedCacheSource = '';
+
+export function maybeCachePlayback(audio: HTMLAudioElement) {
+  const track = player.current;
+  if (!track || !isCloudProvider(player.via) || audio.currentSrc !== player.src
+    || !Number.isFinite(audio.duration) || audio.duration <= 0
+    || audio.seeking || audio.paused || requestedCacheSource === player.src) return;
+  let playedSeconds = 0;
+  for (let i = 0; i < audio.played.length; i++) {
+    playedSeconds += audio.played.end(i) - audio.played.start(i);
+  }
+  if (playedSeconds < audio.duration / 3) return;
+  requestedCacheSource = player.src;
+  void api.playbackCacheQueue(track).catch(() => {});
+}
+
 /**
  * 当前实际档位的展示文案。
  *
@@ -541,7 +557,7 @@ async function startAt(i: number, fromSec = 0, force = false, retry = false) {
     }
     if (token !== playToken) return; // 已经被更新的点击顶替
     applySource(src);
-    void refreshS3Cover(track, src.via === 'local');
+    void refreshS3Cover(track, src.via === 'local' || src.via === 'cache');
     pendingSeek = resume ? fromSec : null;
     listener?.('load');
     if (resume) {

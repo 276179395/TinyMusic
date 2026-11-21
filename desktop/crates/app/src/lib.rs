@@ -51,6 +51,8 @@ use tinymusic_core::Error as CoreError;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Settings {
     pub download_dir: String,
+    #[serde(default)]
+    pub cache_dir: String,
     pub default_quality: String,
     /// 配置结构版本：用于一次性迁移旧的 high 档语义
     #[serde(default = "default_settings_version")]
@@ -137,6 +139,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             download_dir: dirs_download(),
+            cache_dir: String::new(),
             default_quality: "super".into(),
             settings_version: 2,
             concurrency: 2,
@@ -196,6 +199,8 @@ pub fn dirs_download() -> String {
 // ---------- 应用状态 ----------
 
 
+mod playback_cache;
+
 pub struct AppState {
     pub http: Arc<HttpClient>,
     pub providers: Vec<Arc<dyn MusicProvider>>,
@@ -205,6 +210,7 @@ pub struct AppState {
     pub settings: Mutex<Settings>,
     pub config_dir: PathBuf,
     pub task_seq: AtomicU64,
+    playback_cache: playback_cache::PlaybackCache,
     /// 事件出口：桌面走 Tauri emit，mobile 走进度/失败队列
     pub host: Arc<dyn Host>,
     /// 装配时写入的自引用，后台任务用它拿到 Arc<AppState>
@@ -276,7 +282,10 @@ pub fn save_settings(dir: &std::path::Path, s: &Settings) {
 
 
 pub fn s3_client(state: &AppState) -> Result<CloudLibrary, String> {
-    let s = state.settings_snapshot();
+    cloud_client_for_settings(state, state.settings_snapshot())
+}
+
+fn cloud_client_for_settings(state: &AppState, s: Settings) -> Result<CloudLibrary, String> {
     if s.webdav_enabled {
         let client = WebDav::new(
             &s.webdav_endpoint,
@@ -881,7 +890,7 @@ pub async fn track_detail(
     provider: String,
     track: Track,
 ) -> Result<TrackDetail, String> {
-    if let Some((_, path)) = local_download(state, &provider, &track.id) {
+    if let Some(path) = local_audio_path(state, &provider, &track.id) {
         let lyrics = std::fs::read_to_string(path.with_extension("lrc"))
             .map(|text| parse_lrc(text.trim_start_matches('\u{feff}')))
             .unwrap_or_default();
@@ -974,6 +983,22 @@ pub async fn player_open(
                     via: "local".into(),
                 });
             }
+        }
+        if let Some(path) = playback_cache::cached_audio(state, &track.provider, &track.id) {
+            let (quality, format) = s3_audio_format(&track.id);
+            let mime = tinymusic_core::proxy::mime_for_path(&path);
+            let bytes = std::fs::metadata(&path).ok().map(|meta| meta.len());
+            let url = state.proxy.register_file(path, Some(mime.into())).await;
+            return Ok(PlayerSource {
+                url,
+                quality: quality.as_str().into(),
+                requested_quality: q.as_str().into(),
+                verified: format.codec != Codec::Unknown,
+                format,
+                bytes,
+                degraded: false,
+                via: "cache".into(),
+            });
         }
     }
 
@@ -1108,6 +1133,8 @@ async fn download_cloud_track(
     on_progress: Option<ProgressFn>,
 ) -> TrackOutcome {
     let (quality, _) = s3_audio_format(&track.id);
+    let _manual_download = playback_cache::manual_download(state, track);
+    let mut cached = None;
     let result = if let Some(path) = existing {
         Ok(path)
     } else {
@@ -1116,19 +1143,34 @@ async fn download_cloud_track(
         match ext.filter(|_| is_audio_key(&track.id)) {
             Some(ext) => {
                 let path = PathBuf::from(state.settings_snapshot().download_dir).join(build_filename(track, &ext));
-                let id = task_id.to_owned();
-                client.download_object(&track.id, &path, false, Box::new(move |downloaded, total| {
-                    if let Some(progress) = &on_progress {
-                        let _ = progress(Progress { task_id: id.clone(), downloaded, total });
+                if let Some(source) = playback_cache::wait_for_audio(state, track).await {
+                    if let Ok(copy) = tinymusic_core::download::copy_cached_file(&source, &path, false).await {
+                        cached = Some((source, copy));
                     }
-                })).await.map_err(|e| e.to_string())
+                }
+                if let Some((_, copy)) = &cached {
+                    Ok(copy.clone())
+                } else {
+                    let id = task_id.to_owned();
+                    client
+                        .download_object(&track.id, &path, false, Box::new(move |downloaded, total| {
+                            if let Some(progress) = &on_progress {
+                                let _ = progress(Progress { task_id: id.clone(), downloaded, total });
+                            }
+                        }))
+                        .await
+                        .map_err(|e| e.to_string())
+                }
             }
             None => Err("曲目路径必须指向音频文件".into()),
         }
     };
     let (location, parts) = match result {
         Ok(path) => {
-            let parts = download_cloud_sidecars(client, &track.id, &path).await;
+            let parts = match cached {
+                Some((source, _)) => copy_cached_sidecars(&source, &path).await,
+                None => download_cloud_sidecars(client, &track.id, &path).await,
+            };
             let location = path.to_string_lossy().into_owned();
             let bytes = std::fs::metadata(&path).map(|m| m.len() as i64).unwrap_or(0);
             let _ = state.storage.insert_download(task_id, track, quality, &location, bytes, "done");
@@ -1148,6 +1190,22 @@ async fn download_cloud_track(
         Some(failure)
     };
     TrackOutcome { ok: !location.is_empty(), location, failure }
+}
+
+async fn copy_cached_sidecars(source: &Path, target: &Path) -> Vec<FailedPart> {
+    let mut failed = Vec::new();
+    for (part, extensions) in [("lyrics", &["lrc"][..]), ("cover", &["jpg", "jpeg", "png", "webp"][..])] {
+        for ext in extensions {
+            let source = source.with_extension(ext);
+            if source.is_file() {
+                if let Err(error) = tinymusic_core::download::copy_cached_file(&source, &target.with_extension(ext), true).await {
+                    failed.push(FailedPart { part: part.into(), error: error.to_string() });
+                }
+                break;
+            }
+        }
+    }
+    failed
 }
 
 async fn download_cloud_sidecars(client: &CloudLibrary, key: &str, path: &Path) -> Vec<FailedPart> {
@@ -1271,6 +1329,11 @@ fn local_download(state: &AppState, provider: &str, id: &str) -> Option<(Downloa
     let dir = PathBuf::from(state.settings_snapshot().download_dir);
     let path = PathBuf::from(resolve_download_path(&row.path, &dir));
     path.is_file().then_some((row, path))
+}
+
+fn local_audio_path(state: &AppState, provider: &str, id: &str) -> Option<PathBuf> {
+    local_download(state, provider, id).map(|(_, path)| path)
+        .or_else(|| playback_cache::cached_audio(state, provider, id))
 }
 
 
@@ -1751,6 +1814,12 @@ pub fn settings_get(state: &AppState) -> Settings {
 
 pub fn settings_set(state: &AppState, mut settings: Settings) -> Result<(), String> {
     normalize_settings(&mut settings);
+    if settings.cache_dir.trim().is_empty() {
+        settings.cache_dir = playback_cache::default_dir(&state.config_dir);
+    }
+    if !Path::new(&settings.cache_dir).is_absolute() {
+        return Err("缓存目录必须是绝对路径".into());
+    }
     match Quality::parse(&settings.default_quality) {
         Some(q) if !q.is_advanced() => {}
         Some(q) => return Err(format!("{} 当前未接入", q.label())),
@@ -2036,7 +2105,7 @@ pub async fn s3_playlist_rename(
 /// 队列里的 s3 曲目可能来自几小时前的列表，内嵌的封面直链已经过期；
 /// 播放时重签一次，避免播放条/歌词页显示裂图。
 pub async fn s3_cover(state: &AppState, key: String, provider: Option<String>) -> Result<Option<String>, String> {
-    if let Some((_, path)) = provider.as_deref().and_then(|provider| local_download(state, provider, &key)) {
+    if let Some(path) = provider.as_deref().and_then(|provider| local_audio_path(state, provider, &key)) {
         for (ext, mime) in [("jpg", "image/jpeg"), ("jpeg", "image/jpeg"), ("png", "image/png"), ("webp", "image/webp")] {
             let cover = path.with_extension(ext);
             if cover.is_file() {
@@ -3087,6 +3156,9 @@ impl AppState {
         );
         let has_settings_file = config_dir.join("settings.json").exists();
         let mut settings = load_settings(&config_dir);
+        if settings.cache_dir.trim().is_empty() {
+            settings.cache_dir = playback_cache::default_dir(&config_dir);
+        }
         // 第一次启动（没有 settings.json）时用平台约定的下载目录：
         // 桌面是 ~/Music/TinyMusic，mobile 是 App 容器里的 Documents/TinyMusic。
         if !has_settings_file || settings.download_dir.trim().is_empty() {
@@ -3109,6 +3181,7 @@ impl AppState {
             settings: Mutex::new(settings),
             config_dir,
             task_seq: AtomicU64::new(1),
+            playback_cache: playback_cache::PlaybackCache::default(),
             host,
             me: std::sync::OnceLock::new(),
         });
