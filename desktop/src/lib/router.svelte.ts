@@ -5,7 +5,6 @@ export type Route =
   | { name: 'downloads' }
   | { name: 'local'; folderId?: string }
   | { name: 'cloud' }
-  | { name: 'library' }
   | { name: 'settings' };
 
 /** 侧边栏一级页面：进入时清空返回栈 */
@@ -13,7 +12,6 @@ const TOP_LEVEL: ReadonlySet<Route['name']> = new Set([
   'downloads',
   'local',
   'cloud',
-  'library',
   'settings'
 ]);
 

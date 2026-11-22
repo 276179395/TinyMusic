@@ -1,4 +1,5 @@
 <script lang="ts">
+  import FavoriteButton from './FavoriteButton.svelte';
   import { isCloudProvider } from '../lib/config.svelte';
   import { fly } from 'svelte/transition';
   import { HugeiconsIcon } from '@hugeicons/svelte';
@@ -281,7 +282,7 @@
       title={playButtonLabel()}
       aria-label={playButtonLabel()}
     >
-      {#if player.status === 'loading'}
+      {#if player.loading}
         <span class="spin"><HugeiconsIcon icon={icons.loading} size={22} /></span>
       {:else}
         <MorphIcon icon={player.status === 'playing' ? icons.pause : icons.play} size={22} />
@@ -381,6 +382,9 @@
   </div>
 
   <div class="utils">
+    {#if player.current}
+      <FavoriteButton track={player.current} />
+    {/if}
     <button
       class="ub"
       onclick={openLyrics}

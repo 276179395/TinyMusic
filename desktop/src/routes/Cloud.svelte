@@ -9,6 +9,7 @@
   import { openMenuAt } from '../lib/contextmenu.svelte';
   import { player, playTrack, playNext, toggle } from '../lib/player.svelte';
   import CloudSkeleton from '../components/CloudSkeleton.svelte';
+  import FavoriteButton from '../components/FavoriteButton.svelte';
   import MorphIcon from '../components/MorphIcon.svelte';
   import { delayedVisible } from '../lib/loading.svelte';
   import { openIntegrity, integrityUi } from '../lib/s3Integrity.svelte';
@@ -149,17 +150,7 @@
 
   const isPlaying = (key: string) => player.current?.id === key && player.status === 'playing';
 
-  const PART_LABEL: Record<string, string> = { lyrics: '歌词', cover: '封面', audio: '音频' };
-  function partLabel(part: string): string {
-    const label = PART_LABEL[part];
-    return label ? t(label) : part;
-  }
-  function partsText(list: string[]): string {
-    return list.map((p) => partLabel(p)).join(t('、'));
-  }
-  const missingCount = $derived(rows.filter((r) => (r.missing?.length ?? 0) > 0).length);
-
-  /** 补齐结束后静默刷新当前歌单，让角标 / 封面立刻跟上 */
+  // 补齐结束后静默刷新当前歌单。
   $effect(() => {
     const at = integrityUi.finishedAt;
     if (!at) return;
@@ -454,15 +445,6 @@
       </button>
       <h1>{current}</h1>
       <span class="muted">{t('{n} 首', { n: rows.length })}</span>
-      {#if !currentRoot && missingCount > 0}
-        <button
-          class="mini warn"
-          title={t('这些歌缺歌词或封面，点开可以补齐')}
-          onclick={() => openIntegrity(current!)}
-        >
-          {t('{n} 首缺内容', { n: missingCount })}
-        </button>
-      {/if}
       <div class="cloud-top-actions">
         <button class="mini btn-ico" disabled={!rows.length || downloadUi.busy} onclick={() => requestDownload(tracks())}>
           <HugeiconsIcon icon={icons.download} size={ICON_SIZE.inline} />
@@ -531,14 +513,6 @@
                 {#if r.track.available_qualities?.includes('lossless')}
                   <span class="badge sq">{t('无损')}</span>
                 {/if}
-                {#if r.missing?.length}
-                  <span
-                    class="badge warn"
-                    title={t('缺{parts}', { parts: partsText(r.missing) })}
-                  >
-                    {t('缺{parts}', { parts: partsText(r.missing) })}
-                  </span>
-                {/if}
               </span>
               <span class="s3sub">{r.track.artist || t('未知歌手')}</span>
             </span>
@@ -561,6 +535,7 @@
             >
               <HugeiconsIcon icon={icons.download} size={ICON_SIZE.inline} />
             </button>
+            <FavoriteButton track={r.track} />
             {#if canManage(current, currentRoot)}
               <button
                 class="icon-btn danger"

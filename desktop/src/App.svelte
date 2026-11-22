@@ -6,7 +6,6 @@
   import { listen } from '@tauri-apps/api/event';
   import { icons, ICON_SIZE } from './lib/icons';
   import { router, go } from './lib/router.svelte';
-  import { api } from './lib/api';
   import { updateState, checkUpdatesSilently } from './lib/update.svelte';
   import {
     player,
@@ -42,12 +41,11 @@
   import Track from './routes/Track.svelte';
   import Downloads from './routes/Downloads.svelte';
   import Local from './routes/Local.svelte';
-  import { createLocalFolder, deleteLocalFolder, initializeLocalFolders, localFolders, renameLocalFolder } from './lib/localFolders.svelte';
-  import Library from './routes/Library.svelte';
+  import { createLocalFolder, deleteLocalFolder, initializeLocalFolders, FAVORITES_FOLDER, localFolders, renameLocalFolder } from './lib/localFolders.svelte';
   import Settings from './routes/Settings.svelte';
   import Cloud from './routes/Cloud.svelte';
   import Lyrics from './routes/Lyrics.svelte';
-  import { appCfg, isCloudProvider, refreshAppCfg } from './lib/config.svelte';
+  import { isCloudProvider, refreshAppCfg } from './lib/config.svelte';
   import {
     bindEqualizerAudio,
     equalizer,
@@ -92,9 +90,7 @@
   }
 
   $effect(() => {
-    // 依赖当前菜单和「喜欢」是否出现（导航项数量会变）
     activeNav;
-    appCfg.s3Enabled;
     localFolders.items.length;
     creatingFolder;
     editingFolder;
@@ -127,8 +123,7 @@
       return;
     }
     player.error = t('播放失败：{err}', { err: String(err) });
-    player.status = 'error';
-    player.playing = false;
+    syncPlayback('error');
   }
 
   onMount(() => {
@@ -158,9 +153,7 @@
       }
     });
     if (player.current) void refreshTrackQualities(player.current);
-    refreshAppCfg().then(() => {
-      if (appCfg.s3Enabled) api.favoritesPull().catch(() => {});
-    });
+    void refreshAppCfg();
     // 「页面里已经出现过真实手势」：托盘 / 自动播放不能用来建 AudioContext
     let eqGesture = false;
     bindAudio((action, value) => {
@@ -278,10 +271,7 @@
   });
 
   // 侧边栏按 Apple Music 的分组方式排：顶部单项、资料库、其他、底部账号
-  //
-  // 「喜欢」存到网盘，只有网盘启用时才出现
   const navLibrary = $derived([
-    ...(appCfg.s3Enabled ? [{ name: 'library', label: t('喜欢'), icon: icons.favorite }] : []),
     { name: 'downloads', label: t('下载'), icon: icons.downloadDir },
   ]);
   const navOther = $derived([{ name: 'settings', label: t('设置'), icon: icons.settings }]);
@@ -435,26 +425,28 @@
                     onkeydown={(event) => { if (event.key === 'Escape') editingFolder = undefined; }} />
                 </form>
               {:else}
-                <button class="local-folder" class:on={activeNav === folder.id} title={folder.name}
+                <button class="local-folder" class:on={activeNav === folder.id} title={folder.id === FAVORITES_FOLDER ? t('喜欢') : folder.name}
                   aria-current={activeNav === folder.id ? 'page' : undefined}
                   onclick={() => go({ name: 'local', folderId: folder.id })}
-                  ondblclick={() => editFolder(folder.id, folder.name)}
+                  ondblclick={() => folder.id !== FAVORITES_FOLDER && editFolder(folder.id, folder.name)}
                   onkeydown={(event) => {
-                    if (event.key === 'F2') {
+                    if (event.key === 'F2' && folder.id !== FAVORITES_FOLDER) {
                       event.preventDefault();
                       editFolder(folder.id, folder.name);
                     }
                   }}>
-                  <span class="ico"><HugeiconsIcon icon={icons.folder} size={ICON_SIZE.control} /></span>
-                  <span class="folder-name">{folder.name}</span>
+                  <span class="ico"><HugeiconsIcon icon={folder.id === FAVORITES_FOLDER ? icons.favorite : icons.folder} size={ICON_SIZE.control} /></span>
+                  <span class="folder-name">{folder.id === FAVORITES_FOLDER ? t('喜欢') : folder.name}</span>
                 </button>
               {/if}
-              <button class="folder-delete" type="button" disabled={savingFolder}
-                title={t('删除收藏夹 {name}', { name: folder.name })}
-                aria-label={t('删除收藏夹 {name}', { name: folder.name })}
-                onclick={() => removeFolder(folder.id)}>
-                <HugeiconsIcon icon={icons.trash} size={ICON_SIZE.inline} />
-              </button>
+              {#if folder.id !== FAVORITES_FOLDER}
+                <button class="folder-delete" type="button" disabled={savingFolder}
+                  title={t('删除收藏夹 {name}', { name: folder.name })}
+                  aria-label={t('删除收藏夹 {name}', { name: folder.name })}
+                  onclick={() => removeFolder(folder.id)}>
+                  <HugeiconsIcon icon={icons.trash} size={ICON_SIZE.inline} />
+                </button>
+              {/if}
             </div>
           {/each}
         </div>
@@ -484,8 +476,6 @@
       <Downloads />
     {:else if router.route.name === 'local'}
       <Local folderId={router.route.folderId} />
-    {:else if router.route.name === 'library'}
-      <Library />
     {:else if router.route.name === 'settings'}
       <Settings />
     {:else if router.route.name === 'cloud'}
@@ -559,11 +549,23 @@
             ? t('网盘文件可能已被删除或直链过期')
             : t('直链可能已过期');
         if (player.src) player.error = t('音频加载失败（{what}）', { what });
-        player.status = 'error';
-        player.playing = false;
+        syncPlayback('error');
       });
     }}
-    onplay={() => syncPlayback('playing')}
+    onplay={(e) => {
+      const a = e.currentTarget;
+      if (!a.paused && !a.ended && a.readyState < a.HAVE_FUTURE_DATA) {
+        syncPlayback('buffering');
+      }
+    }}
+    onwaiting={(e) => {
+      const a = e.currentTarget;
+      if (!a.paused && !a.ended) syncPlayback('buffering');
+    }}
+    onplaying={(e) => {
+      const a = e.currentTarget;
+      if (!a.paused && !a.ended) syncPlayback('playing');
+    }}
     onpause={(e) => {
       player.progress = (e.currentTarget as HTMLAudioElement).currentTime;
       syncPlayback('paused');

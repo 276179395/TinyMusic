@@ -39,6 +39,17 @@ pub async fn dispatch(
             serde_json::to_value(local_music::set_folder_track(state, &args.folder, &args.id, args.included)?)
                 .map_err(|e| e.to_string())
         }
+        "local_music_set_favorite" => {
+            #[derive(serde::Deserialize)]
+            #[serde(deny_unknown_fields)]
+            struct A {
+                track: Track,
+                included: bool,
+            }
+            let args: A = serde_json::from_value(args).map_err(|e| format!("参数错误: {e}"))?;
+            serde_json::to_value(local_music::set_favorite(state, &args.track, args.included)?)
+                .map_err(|e| e.to_string())
+        }
         "local_music_change_folder" => {
             #[derive(serde::Deserialize)]
             #[serde(deny_unknown_fields)]

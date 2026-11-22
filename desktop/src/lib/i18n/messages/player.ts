@@ -74,6 +74,7 @@ export const player: Record<string, string> = {
   '已在播放列表': 'Already in queue',
   '下载（含歌词与封面）': 'Download (with lyrics & cover)',
   '查看歌曲详情': 'View track details',
+  '添加到喜欢': 'Add to Favorites',
   '取消喜欢': 'Remove from Favorites',
   '喜欢（收藏到网盘）': 'Favorite (save to cloud)',
   '播放全部': 'Play all',

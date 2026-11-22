@@ -40,6 +40,7 @@ export interface LocalFolder {
   id: string;
   name: string;
   tracks: string[];
+  cloud_tracks?: Track[];
 }
 
 export interface AudioFormat {

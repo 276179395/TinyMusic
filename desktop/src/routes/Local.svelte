@@ -1,6 +1,7 @@
 <script lang="ts">
   import { HugeiconsIcon } from '@hugeicons/svelte';
   import { open } from '@tauri-apps/plugin-dialog';
+  import FavoriteButton from '../components/FavoriteButton.svelte';
   import ErrorNotice from '../components/ErrorNotice.svelte';
   import { api, type LocalMusicItem, type Track } from '../lib/api';
   import { icons, ICON_SIZE } from '../lib/icons';
@@ -8,14 +9,20 @@
   import { player, playTrack, removeAt } from '../lib/player.svelte';
   import { openTrackMenu } from '../lib/trackMenu.svelte';
   import { openMenuAt } from '../lib/contextmenu.svelte';
-  import { initializeLocalFolders, localFolders, localTrackKey, setLocalFolderTrack } from '../lib/localFolders.svelte';
+  import { FAVORITES_FOLDER, initializeLocalFolders, localFolders, localTrackKey, refreshLocalFolders, setLocalFolderTrack } from '../lib/localFolders.svelte';
 
   let { folderId }: { folderId?: string } = $props();
   let items = $state<LocalMusicItem[]>([]);
   const folder = $derived(localFolders.items.find((item) => item.id === folderId));
+  const favorites = $derived(folderId === FAVORITES_FOLDER);
+  const folderTitle = $derived(favorites ? t('喜欢') : folder?.name ?? t('本地音乐'));
+  const customFolders = $derived(localFolders.items.filter(({ id }) => id !== FAVORITES_FOLDER));
   const visibleItems = $derived(folderId === undefined
     ? items
-    : items.filter(({ track }) => folder?.tracks.includes(localTrackKey(track))));
+    : [
+        ...items.filter(({ track }) => folder?.tracks.includes(localTrackKey(track))),
+        ...(folder?.cloud_tracks ?? []).map((track) => ({ track, source: 'cloud' as const })),
+      ]);
   const tracks = $derived(visibleItems.map(({ track }) => track));
   let loading = $state(true);
   let busy = $state(false);
@@ -77,6 +84,7 @@
         return;
       }
       await api.localMusicRemove(track.id);
+      await refreshLocalFolders();
       await refresh();
       const index = player.queue.findIndex(
         (item) => item.provider === track.provider && item.id === track.id
@@ -91,7 +99,7 @@
 
   function chooseFolder(event: MouseEvent, track: Track) {
     const button = (event.currentTarget as HTMLButtonElement).getBoundingClientRect();
-    openMenuAt(button.left, button.bottom, localFolders.items.map((item) => {
+    openMenuAt(button.left, button.bottom, customFolders.map((item) => {
       const included = item.tracks.includes(localTrackKey(track));
       return {
         label: item.name,
@@ -110,7 +118,7 @@
 
 <div class="page">
   <div class="summary">
-    {folder?.name ?? t('本地音乐')}
+    {folderTitle}
     {#if !folder}
       <button class="mini primary" onclick={() => addMusic(false)} disabled={loading || busy}>
         <HugeiconsIcon icon={icons.folder} size={ICON_SIZE.inline} />
@@ -137,10 +145,10 @@
   {:else if tracks.length === 0}
     <div class="empty">
       <div class="big" aria-hidden="true"><HugeiconsIcon icon={icons.music} size={32} /></div>
-      {folder ? t('在「本地」选择曲目旁的收藏夹按钮来添加歌曲') : t('添加本机上的音频文件以开始播放')}
+      {favorites ? t('还没有喜欢的歌曲') : folder ? t('在「本地」选择曲目旁的收藏夹按钮来添加歌曲') : t('添加本机上的音频文件以开始播放')}
     </div>
   {:else}
-    <ul aria-label={folder?.name ?? t('本地音乐')}>
+    <ul aria-label={folderTitle}>
       {#each visibleItems as { track, source } (localTrackKey(track))}
         {@const current = player.current?.provider === track.provider && player.current.id === track.id}
         <li>
@@ -155,17 +163,18 @@
           >
             <HugeiconsIcon icon={current && player.playing ? icons.music : icons.play} size={ICON_SIZE.inline} />
             <span>{track.title}</span>
-            {#if source !== 'imported'}
+            {#if source === 'download'}
               <small>{t('已下载')}</small>
             {/if}
           </button>
-          {#if localFolders.items.length && !folder}
+          <FavoriteButton {track} />
+          {#if customFolders.length && !folder}
             <button class="song-action" title={t('选择收藏夹')} aria-label={t('选择收藏夹')}
               disabled={busy} onclick={(event) => chooseFolder(event, track)}>
               <HugeiconsIcon icon={icons.star} size={ICON_SIZE.inline} />
             </button>
           {/if}
-          {#if folder || source === 'imported'}
+          {#if !favorites && (folder || source === 'imported')}
             <button
             class="song-action delete"
             title={t(folder ? '从收藏夹移除 {title}' : '从本地音乐移除 {title}', { title: track.title })}

@@ -730,7 +730,6 @@ input[type='range']::-moz-range-thumb {
 .chips button,
 .pager button,
 .actions button,
-.playbtn,
 .backlink,
 .hchip,
 .loc-tag,
@@ -752,7 +751,6 @@ input[type='range']::-moz-range-thumb {
 .mini:hover,
 .pager button:hover:not(:disabled),
 .actions button:hover:not(:disabled),
-.playbtn:hover,
 .backlink:hover,
 .ly-back:hover,
 .ly-retry:hover,
@@ -4170,7 +4168,6 @@ button.primary {
   flex: none;
   display: grid;
   place-items: center;
-  border-radius: 50%;
   color: var(--fg2);
 }
 
@@ -5089,9 +5086,14 @@ aside .foot {
 }
 
 .sk-s3cover,
-.sk-playbtn,
 .sk-plrow .plicon {
   overflow: hidden;
+}
+
+.sk-playbtn .sk-fill {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
 }
 
 .sk-name {

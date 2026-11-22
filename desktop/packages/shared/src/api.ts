@@ -47,6 +47,8 @@ export const api = {
   localMusicDeleteFolder: (id: string) => invoke<LocalFolder[]>('local_music_delete_folder', { id }),
   localMusicSetFolderTrack: (folder: string, id: string, included: boolean) =>
     invoke<LocalFolder[]>('local_music_set_folder_track', { folder, id, included }),
+  localMusicSetFavorite: (track: Track, included: boolean) =>
+    invoke<LocalFolder[]>('local_music_set_favorite', { track, included }),
   localMusicCopyLibrary: (destination: string) => shellInvoke<string>('local_music_copy_library', { destination }),
 
   downloadStart: (track: Track, quality: Quality, onProgress: (p: Progress) => void) => {

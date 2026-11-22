@@ -257,10 +257,10 @@
           class="c main"
           onclick={toggle}
           disabled={player.status === 'loading'}
-          title={player.status === 'playing' ? t('暂停') : t('继续播放')}
-          aria-label={player.status === 'playing' ? t('暂停') : t('继续播放')}
+          title={player.status === 'playing' || player.status === 'buffering' ? t('暂停') : t('继续播放')}
+          aria-label={player.status === 'playing' || player.status === 'buffering' ? t('暂停') : t('继续播放')}
         >
-          {#if player.status === 'loading'}
+          {#if player.loading}
             <span class="spin"><HugeiconsIcon icon={icons.loading} size={ICON_SIZE.control} /></span>
           {:else}
             <MorphIcon

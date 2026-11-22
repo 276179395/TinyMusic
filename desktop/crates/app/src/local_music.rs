@@ -4,6 +4,7 @@ use std::io::{ErrorKind, Write};
 use std::path::Component;
 
 pub const PROVIDER: &str = "local";
+const FAVORITES: &str = "喜欢";
 const LOCAL: &str = "Local";
 const LINK: &str = "track.json";
 const HIDDEN: &str = ".tinymusic-hidden";
@@ -20,6 +21,8 @@ pub struct Folder {
     pub id: String,
     pub name: String,
     pub tracks: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub cloud_tracks: Vec<Track>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -406,7 +409,12 @@ fn folder_path(root: &Path, id: &str) -> Result<PathBuf, String> {
 
 pub fn folders(state: &AppState) -> Result<Vec<Folder>, String> {
     let root = root(state);
-    let mut folders = Vec::new();
+    let mut folders = vec![Folder {
+        id: FAVORITES.into(),
+        name: FAVORITES.into(),
+        tracks: Vec::new(),
+        cloud_tracks: Vec::new(),
+    }];
     for dir in children(&root)? {
         let Some(name) = dir.file_name().and_then(|name| name.to_str()) else {
             continue;
@@ -415,7 +423,21 @@ pub fn folders(state: &AppState) -> Result<Vec<Folder>, String> {
             continue;
         }
         let mut tracks = Vec::new();
+        let mut cloud_tracks = Vec::new();
         for entry in children(&dir)? {
+            if name == FAVORITES && real_file(&entry)
+                && entry.extension().is_some_and(|ext| ext == "json")
+            {
+                if let Some(track) = std::fs::read(&entry)
+                    .ok()
+                    .and_then(|bytes| serde_json::from_slice::<Track>(&bytes).ok())
+                    .filter(|track| is_cloud_provider(&track.provider))
+                {
+                    tracks.push(serde_json::json!([track.provider, track.id]).to_string());
+                    cloud_tracks.push(track);
+                }
+                continue;
+            }
             let link = entry.join(LINK);
             if !real_dir(&entry) || !real_file(&link) {
                 continue;
@@ -424,22 +446,35 @@ pub fn folders(state: &AppState) -> Result<Vec<Folder>, String> {
                 .ok()
                 .and_then(|bytes| serde_json::from_slice::<Link>(&bytes).ok())
                 .and_then(|link| link.path.strip_prefix("Local/").map(str::to_owned))
-                .filter(|id| relative(id).is_some())
+                .filter(|id| {
+                    relative(id).is_some()
+                        && (name != FAVORITES || audio_path(&root.join(LOCAL), id).is_some())
+                })
             {
                 tracks.push(serde_json::json!([PROVIDER, id]).to_string());
             }
         }
-        folders.push(Folder {
-            id: name.into(),
-            name: name.into(),
-            tracks,
-        });
+        if name == FAVORITES {
+            cloud_tracks.sort_by(|a, b| a.title.cmp(&b.title).then(a.id.cmp(&b.id)));
+            folders[0].tracks = tracks;
+            folders[0].cloud_tracks = cloud_tracks;
+        } else {
+            folders.push(Folder {
+                id: name.into(),
+                name: name.into(),
+                tracks,
+                cloud_tracks,
+            });
+        }
     }
-    folders.sort_by(|a, b| a.name.cmp(&b.name));
+    folders[1..].sort_by(|a, b| a.name.cmp(&b.name));
     Ok(folders)
 }
 
 pub fn create_folder(state: &AppState, name: &str) -> Result<Vec<Folder>, String> {
+    if name == FAVORITES {
+        return Err("「喜欢」是固定收藏夹".into());
+    }
     let _guard = state.music_lock.lock().unwrap();
     let root = root(state);
     ensure_root(&root)?;
@@ -455,6 +490,9 @@ pub fn change_folder(
 ) -> Result<Vec<Folder>, String> {
     let _guard = state.music_lock.lock().unwrap();
     let root = root(state);
+    if id == FAVORITES || name == Some(FAVORITES) {
+        return Err("「喜欢」是固定收藏夹".into());
+    }
     let source = folder_path(&root, id)?;
     if !real_dir(&source) {
         return Err("收藏夹不存在".into());
@@ -536,6 +574,39 @@ pub fn set_folder_track(
     let _guard = state.music_lock.lock().unwrap();
     let root = root(state);
     write_link(&root, folder, id, included)?;
+    folders(state)
+}
+
+pub fn set_favorite(state: &AppState, track: &Track, included: bool) -> Result<Vec<Folder>, String> {
+    let _guard = state.music_lock.lock().unwrap();
+    let root = root(state);
+    ensure_root(&root)?;
+    let folder = root.join(FAVORITES);
+    match std::fs::create_dir(&folder) {
+        Ok(()) => {}
+        Err(err) if err.kind() == ErrorKind::AlreadyExists && real_dir(&folder) => {}
+        Err(err) => return Err(io_error(err)),
+    }
+    if track.provider == PROVIDER {
+        write_link(&root, FAVORITES, &track.id, included)?;
+    } else if is_cloud_provider(&track.provider) {
+        use sha2::{Digest, Sha256};
+        let key = serde_json::json!([track.provider, track.id]);
+        let file = folder.join(format!("{:x}.json", Sha256::digest(key.to_string())));
+        if included {
+            let mut temp = tempfile::NamedTempFile::new_in(&folder).map_err(io_error)?;
+            serde_json::to_writer(&mut temp, track).map_err(|err| err.to_string())?;
+            temp.persist(file).map_err(|err| io_error(err.error))?;
+        } else {
+            match std::fs::remove_file(file) {
+                Ok(()) => {}
+                Err(err) if err.kind() == ErrorKind::NotFound => {}
+                Err(err) => return Err(io_error(err)),
+            }
+        }
+    } else {
+        return Err("不支持收藏这首歌曲".into());
+    }
     folders(state)
 }
 

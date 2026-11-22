@@ -78,7 +78,7 @@ async fn local_music_is_persisted_and_only_registered_files_are_playable() {
     let folders = local_music::change_folder(&app, "通勤", Some("路上")).unwrap();
     assert_eq!(folders.iter().find(|folder| folder.id == "路上").unwrap().tracks.len(), 1);
     let folders = local_music::change_folder(&app, "路上", None).unwrap();
-    assert_eq!(folders.len(), 1);
+    assert_eq!(folders.iter().map(|folder| folder.id.as_str()).collect::<Vec<_>>(), ["喜欢", "工作"]);
     assert!(!copy.join("路上").exists());
     let archived = std::fs::read_dir(copy.join(".tinymusic-trash")).unwrap()
         .next().unwrap().unwrap().path();
@@ -125,6 +125,42 @@ async fn importing_a_folder_includes_nested_audio_and_preserves_sidecars() {
 }
 
 #[tokio::test]
+async fn fixed_local_favorites_keep_local_links_and_cloud_references() {
+    let app = state("local-favorites").await;
+    let source = app.config_dir().join("song.mp3");
+    std::fs::write(&source, b"audio").unwrap();
+    let local = local_music::add(&app, vec![source.to_string_lossy().into_owned()])
+        .unwrap()
+        .remove(0);
+    let cloud = tinymusic_core::model::Track {
+        provider: "webdav".into(),
+        id: "album/song.mp3".into(),
+        title: "song".into(),
+        ..Default::default()
+    };
+
+    let favorites = local_music::folders(&app).unwrap().remove(0);
+    assert_eq!(favorites.name, "喜欢");
+    assert!(favorites.tracks.is_empty());
+    assert!(local_music::create_folder(&app, "喜欢").is_err());
+    assert!(local_music::change_folder(&app, "喜欢", Some("Other")).is_err());
+    assert!(local_music::change_folder(&app, "喜欢", None).is_err());
+
+    local_music::set_favorite(&app, &local, true).unwrap();
+    local_music::set_favorite(&app, &cloud, true).unwrap();
+    let favorites = local_music::set_favorite(&app, &cloud, true).unwrap().remove(0);
+    assert_eq!(favorites.tracks.len(), 2);
+    assert_eq!(favorites.cloud_tracks[0].id, cloud.id);
+    assert_eq!(local_music::library(&app).unwrap().len(), 1);
+
+    local_music::set_favorite(&app, &local, false).unwrap();
+    let favorites = local_music::set_favorite(&app, &cloud, false).unwrap().remove(0);
+    assert!(favorites.tracks.is_empty());
+    assert!(favorites.cloud_tracks.is_empty());
+    assert_eq!(local_music::library(&app).unwrap().len(), 1);
+}
+
+#[tokio::test]
 async fn legacy_music_and_folder_links_are_migrated_once() {
     let app = state("legacy-music").await;
     let audio = app.config_dir().join("老歌曲.wav");
@@ -135,6 +171,7 @@ async fn legacy_music_and_folder_links_are_migrated_once() {
         id: "old-folder".into(),
         name: "通勤".into(),
         tracks: vec![json!(["local", id]).to_string()],
+        cloud_tracks: Vec::new(),
     };
     local_music::migrate(&app, vec![legacy.clone()], false).unwrap();
     local_music::migrate(&app, vec![legacy], false).unwrap();

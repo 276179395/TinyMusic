@@ -12,7 +12,7 @@ import { QUALITY_ORDER, qualityChoices } from './quality';
 import { t } from './i18n.svelte';
 
 /** 播放状态：播放按钮据此显示「播放 / 暂停 / 继续播放 / 加载中」 */
-export type PlayStatus = 'idle' | 'loading' | 'playing' | 'paused' | 'ended' | 'error';
+export type PlayStatus = 'idle' | 'loading' | 'buffering' | 'playing' | 'paused' | 'ended' | 'error';
 
 /** 循环方式：不循环 / 列表循环 / 单曲循环 */
 export type RepeatMode = 'off' | 'all' | 'one';
@@ -226,7 +226,7 @@ export async function fallbackFromLossless(): Promise<boolean> {
 function setStatus(s: PlayStatus) {
   player.status = s;
   player.playing = s === 'playing';
-  player.loading = s === 'loading';
+  player.loading = s === 'loading' || s === 'buffering';
 }
 
 function sameTrack(a: Track | null, b: Track | null): boolean {
@@ -354,10 +354,10 @@ export function clearPendingSeek() {
 restorePlayback();
 
 /** 由真实 <audio> 事件回写状态：不要在别处硬写 playing */
-export function syncPlayback(state: 'playing' | 'paused') {
-  if (state === 'playing') {
-    if (player.status !== 'playing') setStatus('playing');
-  } else if (player.status === 'playing' || player.status === 'loading') {
+export function syncPlayback(state: 'playing' | 'buffering' | 'paused' | 'error') {
+  if (state !== 'paused') {
+    if (player.status !== state) setStatus(state);
+  } else if (player.status === 'playing' || player.loading) {
     setStatus('paused');
   }
 }
@@ -382,6 +382,7 @@ export function playButtonLabel(): string {
     case 'loading':
       return t('加载中');
     case 'playing':
+    case 'buffering':
       return t('暂停');
     case 'paused':
       return t('继续播放');
@@ -429,7 +430,7 @@ export async function setQuality(q: Quality) {
   const t = player.current;
   if (!t) return;
   const at = player.progress;
-  const wasPlaying = player.status === 'playing';
+  const wasPlaying = player.status === 'playing' || player.status === 'buffering';
   try {
     setStatus('loading');
     const src = await api.playerOpen(t, q, false);
@@ -439,7 +440,6 @@ export async function setQuality(q: Quality) {
       listener?.('seek', at);
       if (wasPlaying) {
         listener?.('play');
-        setStatus('playing');
       } else {
         setStatus('paused');
       }
@@ -455,7 +455,6 @@ export async function setQuality(q: Quality) {
         listener?.('seek', at);
         if (wasPlaying) {
           listener?.('play');
-          setStatus('playing');
         } else {
           setStatus('paused');
         }
@@ -569,7 +568,6 @@ async function startAt(i: number, fromSec = 0, force = false, retry = false) {
     setTimeout(() => {
       if (token !== playToken) return;
       listener?.('play');
-      setStatus('playing');
     }, 30);
   } catch (e) {
     if (token !== playToken) return;
@@ -627,7 +625,7 @@ export async function playTrack(track: Track, queue?: Track[]) {
 export function toggle() {
   if (!player.current) return;
   if (player.status === 'loading') return;
-  if (player.status === 'playing') {
+  if (player.status === 'playing' || player.status === 'buffering') {
     listener?.('pause');
     setStatus('paused');
     return;
@@ -643,7 +641,6 @@ export function toggle() {
     player.progress = 0;
   }
   listener?.('play');
-  setStatus('playing');
 }
 
 export function seek(sec: number) {
@@ -711,7 +708,6 @@ export function onEnded() {
     listener?.('seek', 0);
     player.progress = 0;
     listener?.('play');
-    setStatus('playing');
     return;
   }
   const i = nextIndex();
